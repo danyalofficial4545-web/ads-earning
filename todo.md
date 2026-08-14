@@ -28,5 +28,5 @@
 - [x] Replace only the existing public sign-in screen with bilingual Sign In and Sign Up forms while preserving the current colors, layout, and non-authentication pages.
 - [x] Support referral codes from direct entry and prefilled referral links during custom registration.
 - [x] Add tests and browser checks for successful and invalid custom authentication flows, then verify that the existing visual system is unchanged.
-- [ ] Exercise a successful custom sign-up and subsequent custom email/password sign-in without changing production user data.
+- [x] Exercise a successful custom sign-up and subsequent custom email/password sign-in without changing production user data.
 - [x] Add router-level tests for custom registration and sign-in success, duplicate identities, reserved admin identity, invalid referral, and wrong-password rejection.

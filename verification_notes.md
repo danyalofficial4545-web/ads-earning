@@ -11,3 +11,11 @@ The custom registration form was exercised with mismatched passwords. It correct
 The custom sign-in tab was checked separately and presents only Gmail/Email and Password fields, as required.
 
 An invalid custom sign-in attempt was submitted using a non-existent email address. The request completed without creating or authenticating an account, preserving the public sign-in state.
+
+The public custom Sign Up tab was reopened for a final isolated end-to-end registration and sign-in verification using a temporary test identity.
+
+The temporary custom registration succeeded, displayed the translated success notice, and transitioned automatically into the authenticated workspace loading state using the new local credential session.
+
+The temporary custom account reached the unchanged member dashboard, and logout correctly returned the browser to the custom public Sign In form.
+
+The same temporary account then signed in successfully using only its registered Gmail/Email and Password. The translated success message appeared and the established member dashboard reopened normally.
