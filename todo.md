@@ -23,3 +23,10 @@
 - [x] Add router-level tests for reviewDeposit and reviewWithdrawal that verify only the matching referenced transaction is updated.
 - [x] Replace remaining administrator select-option labels and status strings with translation keys, then recheck visible components.
 - [x] Strengthen financial review router tests with multiple pending request transactions and a targeted-update assertion.
+- [x] Add secure credential fields and a migration for custom username, email, password-hash, and referral-aware account registration.
+- [x] Implement server-side email/password registration, sign-in, logout, secure sessions, password validation, and duplicate-account protection.
+- [x] Replace only the existing public sign-in screen with bilingual Sign In and Sign Up forms while preserving the current colors, layout, and non-authentication pages.
+- [x] Support referral codes from direct entry and prefilled referral links during custom registration.
+- [x] Add tests and browser checks for successful and invalid custom authentication flows, then verify that the existing visual system is unchanged.
+- [ ] Exercise a successful custom sign-up and subsequent custom email/password sign-in without changing production user data.
+- [x] Add router-level tests for custom registration and sign-in success, duplicate identities, reserved admin identity, invalid referral, and wrong-password rejection.

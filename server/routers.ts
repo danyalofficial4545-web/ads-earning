@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   adSessions,
@@ -31,10 +32,16 @@ import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { systemRouter } from "./_core/systemRouter";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { createLocalSession, hashPassword, LOCAL_SESSION_COOKIE, verifyPassword } from "./localAuth";
 import { AD_TIMER_MESSAGE, canClaimAd, canUseMemberWorkspace, fromPkr, referralLimitCredit, toPkr, validateWithdrawalRequest } from "./rules";
 
 function fail(message: string, code: TRPCError["code"] = "BAD_REQUEST"): never {
   throw new TRPCError({ code, message });
+}
+
+function publicUser(user: typeof users.$inferSelect) {
+  const { passwordHash: _passwordHash, ...safeUser } = user;
+  return safeUser;
 }
 
 async function getActor(ctx: { user: NonNullable<unknown> }) {
@@ -87,9 +94,65 @@ async function buildOverview(userId: number) {
 export const appRouter = router({
   system: systemRouter,
   auth: router({
-    me: publicProcedure.query((opts) => opts.ctx.user ?? null),
+    me: publicProcedure.query((opts) => opts.ctx.user ? publicUser(opts.ctx.user) : null),
+    register: publicProcedure.input(z.object({
+      username: z.string().trim().min(3).max(32).regex(/^[a-zA-Z0-9_]+$/, "Use letters, numbers, and underscores only."),
+      email: z.string().trim().email("Enter a valid Gmail or email address.").max(320),
+      password: z.string().min(8, "Password must be at least 8 characters.").max(128),
+      referralCode: z.string().trim().max(32).optional(),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const email = input.email.toLowerCase();
+      const username = input.username.toLowerCase();
+      const isDesignated = email === ADMIN_EMAIL && username === "danyal955163";
+      if (username === "danyal955163" && !isDesignated) fail("This username is reserved for the designated administrator.", "FORBIDDEN");
+      if (email === ADMIN_EMAIL && !isDesignated) fail("This email must use the designated administrator username.", "FORBIDDEN");
+      const [emailMatch, usernameMatch] = await Promise.all([
+        db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1),
+        db.select({ id: profiles.id }).from(profiles).where(eq(profiles.username, username)).limit(1),
+      ]);
+      if (emailMatch[0]) fail("An account already exists for this email address.", "CONFLICT");
+      if (usernameMatch[0]) fail("That username is already in use.", "CONFLICT");
+      let referredByUserId: number | null = null;
+      if (input.referralCode) {
+        const referrer = await db.select().from(profiles).where(eq(profiles.referralCode, input.referralCode.toUpperCase())).limit(1);
+        if (!referrer[0]) fail("Referral code was not found.");
+        referredByUserId = referrer[0].userId;
+      }
+      const created = await db.insert(users).values({
+        openId: `local_${randomUUID()}`,
+        name: username,
+        email,
+        passwordHash: await hashPassword(input.password),
+        loginMethod: "password",
+        role: isDesignated ? "admin" : "user",
+        lastSignedIn: new Date(),
+      });
+      const userId = Number(created[0].insertId);
+      await db.insert(profiles).values({ userId, username, referralCode: `PEP${userId.toString(36).toUpperCase()}`, referredByUserId, balancePkr: 0, withdrawalLimitPkr: 0, preferredCurrency: "PKR" });
+      const user = (await db.select().from(users).where(eq(users.id, userId)).limit(1))[0];
+      if (!user) fail("Account creation failed.", "INTERNAL_SERVER_ERROR");
+      ctx.res.cookie(LOCAL_SESSION_COOKIE, await createLocalSession(user.id), { ...getSessionCookieOptions(ctx.req), maxAge: 7 * 24 * 60 * 60 * 1000 });
+      return { user: publicUser(user) };
+    }),
+    signIn: publicProcedure.input(z.object({
+      email: z.string().trim().email("Enter a valid Gmail or email address.").max(320),
+      password: z.string().min(1, "Enter your password."),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const user = (await db.select().from(users).where(eq(users.email, input.email.toLowerCase())).limit(1))[0];
+      if (!user || !await verifyPassword(input.password, user.passwordHash)) fail("Incorrect email or password.", "UNAUTHORIZED");
+      const profile = await ensureProfile(user);
+      if (profile.isBlocked) fail("Your account is currently restricted. Please contact support.", "FORBIDDEN");
+      await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, user.id));
+      ctx.res.cookie(LOCAL_SESSION_COOKIE, await createLocalSession(user.id), { ...getSessionCookieOptions(ctx.req), maxAge: 7 * 24 * 60 * 60 * 1000 });
+      return { user: publicUser(user) };
+    }),
     logout: publicProcedure.mutation(({ ctx }) => {
       ctx.res.clearCookie(COOKIE_NAME, { ...getSessionCookieOptions(ctx.req), maxAge: -1 });
+      ctx.res.clearCookie(LOCAL_SESSION_COOKIE, { ...getSessionCookieOptions(ctx.req), maxAge: -1 });
       return { success: true } as const;
     }),
   }),
