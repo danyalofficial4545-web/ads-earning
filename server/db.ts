@@ -77,6 +77,30 @@ export async function getUserById(id: number) {
   return (await db.select().from(users).where(eq(users.id, id)).limit(1))[0];
 }
 
+export async function linkOAuthUser(user: InsertUser & { emailVerified?: boolean }) {
+  if (!user.openId) throw new Error("OAuth openId is required");
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const email = user.email && user.emailVerified ? user.email.toLowerCase() : null;
+  const existingByOpenId = (await db.select().from(users).where(eq(users.openId, user.openId)).limit(1))[0];
+  const existingByEmail = email ? (await db.select().from(users).where(eq(users.email, email)).limit(1))[0] : undefined;
+  const existing = existingByOpenId ?? existingByEmail;
+  if (existing) {
+    await db.update(users).set({
+      openId: user.openId,
+      name: user.name ?? existing.name,
+      email: email ?? existing.email,
+      loginMethod: user.loginMethod ?? existing.loginMethod,
+      lastSignedIn: new Date(),
+    }).where(eq(users.id, existing.id));
+    return existing.id;
+  }
+  await upsertUser({ ...user, email, lastSignedIn: new Date() });
+  const created = (await db.select().from(users).where(eq(users.openId, user.openId)).limit(1))[0];
+  if (!created) throw new Error("OAuth account linking failed");
+  return created.id;
+}
+
 export async function ensurePlatformData() {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");

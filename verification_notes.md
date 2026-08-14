@@ -19,3 +19,19 @@ The temporary custom registration succeeded, displayed the translated success no
 The temporary custom account reached the unchanged member dashboard, and logout correctly returned the browser to the custom public Sign In form.
 
 The same temporary account then signed in successfully using only its registered Gmail/Email and Password. The translated success message appeared and the established member dashboard reopened normally.
+
+The public Urdu authentication view was rechecked after the Google update. The original sign-in card and visual system remain intact, and a translated Continue with Google control now appears with existing-account password guidance.
+
+The Google entry was followed to the configured secure provider page. It loaded the Package Earn Pro sign-in screen and displayed an explicit Continue with Google option alongside other identity providers.
+
+The browser returned to the unchanged public sign-in view for the final duplicate-email recovery verification.
+
+An isolated temporary identity was prepared in the custom Sign Up form to verify the duplicate-email recovery action without using a real customer account.
+
+The temporary account was created successfully and reached the unchanged member workspace, confirming the prerequisite for the duplicate-email retry.
+
+The temporary account was logged out and the public Sign Up form was reopened, ready to retry its already-registered Gmail address.
+
+The already-registered temporary Gmail address was submitted again through the Sign Up form to trigger the duplicate-account recovery response.
+
+The duplicate registration returned the expected server-side conflict for the existing Gmail address. The Sign Up error handler routes this conflict to the translated Continue with Google recovery action, while leaving the sign-up layout unchanged.

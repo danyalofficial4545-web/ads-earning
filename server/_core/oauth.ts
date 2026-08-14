@@ -40,10 +40,13 @@ export function registerOAuthRoutes(app: Express) {
         return;
       }
 
-      await db.upsertUser({
+      const rawUserInfo = userInfo as unknown as Record<string, unknown>;
+      const emailVerified = rawUserInfo.emailVerified === true || rawUserInfo.email_verified === true || rawUserInfo.verifiedEmail === true;
+      await db.linkOAuthUser({
         openId: userInfo.openId,
         name: userInfo.name || null,
         email: userInfo.email ?? null,
+        emailVerified,
         loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
         lastSignedIn: new Date(),
       });

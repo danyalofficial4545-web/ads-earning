@@ -30,3 +30,13 @@
 - [x] Add tests and browser checks for successful and invalid custom authentication flows, then verify that the existing visual system is unchanged.
 - [x] Exercise a successful custom sign-up and subsequent custom email/password sign-in without changing production user data.
 - [x] Add router-level tests for custom registration and sign-in success, duplicate identities, reserved admin identity, invalid referral, and wrong-password rejection.
+- [x] Preserve the existing website layout, colors, pages, packages, wallet, and admin features while changing only authentication controls.
+- [x] Add a bilingual Continue with Google sign-in/sign-up option to the existing authentication screen.
+- [x] Link Google-authenticated identities to existing accounts by verified email and retain all server-side admin protections.
+- [x] Add a secure authenticated Set Password flow so existing Google accounts, including the designated admin account, can create an email/password login method.
+- [x] Show an existing-account recovery prompt rather than permitting duplicate registration for an existing Gmail address.
+- [x] Add automated and browser validation for Google account linking and existing-account password setup without altering non-authentication visual design.
+- [ ] Confirm the available OAuth provider is Google-backed, label it accurately, and retain the existing secure provider entry flow.
+- [ ] Require an explicit verified email signal before linking an OAuth identity to an existing email account.
+- [ ] Show a duplicate-email-specific recovery action in Sign Up that directs the user to Continue with Google or password setup.
+- [ ] Verify Google-linked existing-account password setup with the designated administrator account in the browser when the user is available to complete Google sign-in.

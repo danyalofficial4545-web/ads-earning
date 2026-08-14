@@ -10,7 +10,7 @@ vi.mock("./db", () => ({ ADMIN_EMAIL: "muhammaddanyal4545@gmail.com", ...mocks }
 
 import { appRouter } from "./routers";
 
-const context = () => ({ user: null, req: { protocol: "https", headers: {} }, res: { cookie: vi.fn(), clearCookie: vi.fn() } } as unknown as TrpcContext);
+const context = (user: unknown = null) => ({ user, req: { protocol: "https", headers: {} }, res: { cookie: vi.fn(), clearCookie: vi.fn() } } as unknown as TrpcContext);
 const baseProfile = { id: 1, userId: 301, username: "newmember", referralCode: "PEP89", referredByUserId: null, balancePkr: 0, withdrawalLimitPkr: 0, preferredCurrency: "PKR" as const, isBlocked: false, createdAt: new Date(), updatedAt: new Date() };
 
 function registrationDatabase(options?: { emailExists?: boolean; usernameExists?: boolean; referralExists?: boolean }) {
@@ -73,6 +73,19 @@ describe("custom credential router", () => {
     await expect(appRouter.createCaller(ctx).auth.signIn({ email: "newmember@example.com", password: "WrongPass123" })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     const success = await appRouter.createCaller(ctx).auth.signIn({ email: "newmember@example.com", password: "StrongPass123" });
     expect(success.user).toMatchObject({ id: 301, email: "newmember@example.com" });
+    expect((ctx.res.cookie as any)).toHaveBeenCalledOnce();
+  });
+
+  it("lets an authenticated Google-style account set a hashed password for later email sign-in", async () => {
+    const updates: any[] = [];
+    const db = { update: vi.fn(() => ({ set: (values: any) => { updates.push(values); return { where: async () => undefined }; } })) };
+    mocks.getDb.mockResolvedValue(db);
+    const googleUser = { id: 301, openId: "google-open-id", name: "Danyal", email: "muhammaddanyal4545@gmail.com", passwordHash: null, loginMethod: "google", role: "admin" as const, createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() };
+    const ctx = context(googleUser);
+    const result = await appRouter.createCaller(ctx).auth.setPassword({ password: "StrongPass123" });
+    expect(result).toEqual({ success: true });
+    expect(updates[0].passwordHash).not.toContain("StrongPass123");
+    expect(updates[0]).toMatchObject({ loginMethod: "password" });
     expect((ctx.res.cookie as any)).toHaveBeenCalledOnce();
   });
 });

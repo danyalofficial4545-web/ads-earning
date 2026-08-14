@@ -41,7 +41,7 @@ function fail(message: string, code: TRPCError["code"] = "BAD_REQUEST"): never {
 
 function publicUser(user: typeof users.$inferSelect) {
   const { passwordHash: _passwordHash, ...safeUser } = user;
-  return safeUser;
+  return { ...safeUser, hasPassword: Boolean(_passwordHash) };
 }
 
 async function getActor(ctx: { user: NonNullable<unknown> }) {
@@ -150,6 +150,15 @@ export const appRouter = router({
       ctx.res.cookie(LOCAL_SESSION_COOKIE, await createLocalSession(user.id), { ...getSessionCookieOptions(ctx.req), maxAge: 7 * 24 * 60 * 60 * 1000 });
       return { user: publicUser(user) };
     }),
+    setPassword: protectedProcedure.input(z.object({
+      password: z.string().min(8, "Password must be at least 8 characters.").max(128),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      await db.update(users).set({ passwordHash: await hashPassword(input.password), loginMethod: "password" }).where(eq(users.id, ctx.user.id));
+      ctx.res.cookie(LOCAL_SESSION_COOKIE, await createLocalSession(ctx.user.id), { ...getSessionCookieOptions(ctx.req), maxAge: 7 * 24 * 60 * 60 * 1000 });
+      return { success: true } as const;
+    }),
     logout: publicProcedure.mutation(({ ctx }) => {
       ctx.res.clearCookie(COOKIE_NAME, { ...getSessionCookieOptions(ctx.req), maxAge: -1 });
       ctx.res.clearCookie(LOCAL_SESSION_COOKIE, { ...getSessionCookieOptions(ctx.req), maxAge: -1 });
@@ -159,7 +168,7 @@ export const appRouter = router({
   account: router({
     bootstrap: protectedProcedure.query(async ({ ctx }) => {
       const { user, profile } = await getActor(ctx);
-      return { user, profile, isAdmin: isDesignatedAdmin(user, profile) };
+      return { user: publicUser(user), profile, isAdmin: isDesignatedAdmin(user, profile) };
     }),
     saveProfile: protectedProcedure.input(z.object({
       username: z.string().trim().min(3).max(32).regex(/^[a-zA-Z0-9_]+$/, "Use letters, numbers, and underscores only."),
