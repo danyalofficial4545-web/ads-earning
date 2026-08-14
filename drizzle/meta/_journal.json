@@ -1,5 +1,27 @@
 {
   "version": "7",
   "dialect": "mysql",
-  "entries": []
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1786713393698,
+      "tag": "0000_bizarre_imperial_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1786713757799,
+      "tag": "0001_abandoned_pretty_boy",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1786714500503,
+      "tag": "0002_huge_aqueduct",
+      "breakpoints": true
+    }
+  ]
 }

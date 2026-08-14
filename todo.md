@@ -1,0 +1,25 @@
+# Project TODO
+
+- [x] Establish Package Earn Pro’s responsive deep-green, gold, and slate visual system with English/Urdu typography and RTL language direction.
+- [x] Define and migrate persistent database tables for profiles, packages, package ownership, transactions, deposits, withdrawals, ad sessions, referrals, payment accounts, ads, tickets, broadcasts, and global settings.
+- [x] Enforce server-side designated-admin access for username `danyal955163` and email `muhammaddanyal4545@gmail.com`, including blocked-user checks.
+- [x] Implement server-side package purchase, expiry evaluation, wallet balance updates, fixed/configurable PKR–USD conversion, and referral withdrawal-limit crediting.
+- [x] Implement server-side ad sessions with a configurable minimum duration, daily allocation logic, and reward validation that cannot be bypassed in the browser.
+- [x] Implement the customer dashboard, packages, wallet, deposit, withdrawal, ad earning, transaction history, referral, and support pages with functional mutations and feedback states.
+- [x] Implement an accessible desktop top navigation, responsive mobile bottom navigation, account controls, and complete English/Urdu translations.
+- [x] Implement deposit proof uploads to secure storage, deposit status tracking, and administrative approval/rejection actions.
+- [x] Implement withdrawal limits, validation, request tracking, and administrative approval/rejection actions using the specified exact withdrawal-lock message.
+- [x] Implement the secure administrator panel for approvals, ads, payment account settings, broadcasts, user monitoring/blocking, global settings, and ticket responses.
+- [x] Add automated unit tests for critical server-side financial, privilege, referral, and ad-timer rules.
+- [x] Verify build, type-checking, primary click paths, error paths, desktop/mobile screenshots, and fix discovered issues.
+- [x] Link deposit and withdrawal transaction rows to their specific request IDs and update only the matching transaction during administrative review.
+- [x] Require a server-verifiable active ad-session heartbeat so leaving an ad early invalidates its reward claim.
+- [x] Complete English/Urdu coverage for all remaining administration, dynamic, and customer-facing interface strings.
+- [x] Add automated tests for designated-admin route protection, blocked-user rejection, and request-specific financial review flows.
+- [x] Exercise authenticated member and administrator primary flows plus key error paths in the browser where the authorized identities are available.
+- [x] Replace all remaining hardcoded English customer/admin UI strings and dynamic status labels with bilingual translations.
+- [x] Add router-level tests for admin-only access, blocked-user rejection, and request-specific deposit/withdrawal review mutations.
+- [x] Replace remaining hardcoded transaction, administrator-heading, select-option, and dynamic status strings with bilingual translation keys.
+- [x] Add router-level tests for reviewDeposit and reviewWithdrawal that verify only the matching referenced transaction is updated.
+- [x] Replace remaining administrator select-option labels and status strings with translation keys, then recheck visible components.
+- [x] Strengthen financial review router tests with multiple pending request transactions and a targeted-update assertion.

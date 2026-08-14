@@ -1,11 +1,40 @@
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import {
+  ads,
+  appSettings,
+  InsertUser,
+  packages,
+  paymentAccounts,
+  profiles,
+  type Profile,
+  type User,
+  users,
+} from "../drizzle/schema";
+import { ENV } from "./_core/env";
+import { DESIGNATED_ADMIN_EMAIL, DESIGNATED_ADMIN_USERNAME, isDesignatedAdministrator } from "./rules";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
+export const ADMIN_EMAIL = DESIGNATED_ADMIN_EMAIL;
+export const ADMIN_USERNAME = DESIGNATED_ADMIN_USERNAME;
+
+const defaultPackages = [
+  { tier: "bronze", name: "Bronze", icon: "🥉", pricePkr: 100, dailyAds: 1 },
+  { tier: "silver", name: "Silver", icon: "🥈", pricePkr: 200, dailyAds: 2 },
+  { tier: "gold", name: "Gold", icon: "🥇", pricePkr: 300, dailyAds: 3 },
+  { tier: "platinum", name: "Platinum", icon: "💎", pricePkr: 400, dailyAds: 4 },
+  { tier: "diamond", name: "Diamond", icon: "💠", pricePkr: 500, dailyAds: 5 },
+  { tier: "vip", name: "VIP", icon: "👑", pricePkr: 1000, dailyAds: 10 },
+] as const;
+
+const defaultAccounts = [
+  { currency: "PKR" as const, provider: "JazzCash / JazzChain", accountName: "Muhammad Danyal", accountDetails: "03269337570" },
+  { currency: "PKR" as const, provider: "Nayapay", accountName: "Muhammad Danyal", accountDetails: "03311332670" },
+  { currency: "PKR" as const, provider: "Opay", accountName: "Muhammad Danyal", accountDetails: "03311332670" },
+  { currency: "USD" as const, provider: "PayPal", accountName: "Administrator", accountDetails: "Configure in Admin Panel" },
+];
+
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
@@ -19,74 +48,108 @@ export async function getDb() {
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) {
-    throw new Error("User openId is required for upsert");
-  }
-
+  if (!user.openId) throw new Error("User openId is required for upsert");
   const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
-    return;
-  }
+  if (!db) return;
 
-  try {
-    const values: InsertUser = {
-      openId: user.openId,
-    };
-    const updateSet: Record<string, unknown> = {};
-
-    const textFields = ["name", "email", "loginMethod"] as const;
-    type TextField = (typeof textFields)[number];
-
-    const assignNullable = (field: TextField) => {
-      const value = user[field];
-      if (value === undefined) return;
-      const normalized = value ?? null;
-      values[field] = normalized;
-      updateSet[field] = normalized;
-    };
-
-    textFields.forEach(assignNullable);
-
-    if (user.lastSignedIn !== undefined) {
-      values.lastSignedIn = user.lastSignedIn;
-      updateSet.lastSignedIn = user.lastSignedIn;
+  const values: InsertUser = { openId: user.openId, lastSignedIn: user.lastSignedIn ?? new Date() };
+  const updateSet: Record<string, unknown> = { lastSignedIn: values.lastSignedIn };
+  (['name', 'email', 'loginMethod'] as const).forEach((field) => {
+    if (user[field] !== undefined) {
+      values[field] = user[field] ?? null;
+      updateSet[field] = user[field] ?? null;
     }
-    if (user.role !== undefined) {
-      values.role = user.role;
-      updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
-    }
-
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
-    }
-
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
-    }
-
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
-    });
-  } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
-    throw error;
-  }
+  });
+  values.role = user.openId === ENV.ownerOpenId ? "admin" : (user.role ?? "user");
+  updateSet.role = values.role;
+  await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
 }
 
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return undefined;
-  }
-
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-
-  return result.length > 0 ? result[0] : undefined;
+  if (!db) return undefined;
+  return (await db.select().from(users).where(eq(users.openId, openId)).limit(1))[0];
 }
 
-// TODO: add feature queries here as your schema grows.
+export async function ensurePlatformData() {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+
+  const settings = await db.select().from(appSettings).where(eq(appSettings.id, 1)).limit(1);
+  if (!settings[0]) await db.insert(appSettings).values({ id: 1 });
+
+  for (const item of defaultPackages) {
+    const existing = await db.select({ id: packages.id }).from(packages).where(eq(packages.tier, item.tier)).limit(1);
+    if (!existing[0]) await db.insert(packages).values({ ...item, durationDays: 30, isActive: true });
+  }
+
+  const existingAccounts = await db.select({ id: paymentAccounts.id }).from(paymentAccounts).limit(1);
+  if (!existingAccounts[0]) await db.insert(paymentAccounts).values(defaultAccounts);
+
+  for (const item of defaultPackages) {
+    const existing = await db.select({ id: ads.id }).from(ads).where(and(eq(ads.packageTier, item.tier), eq(ads.isActive, true))).limit(1);
+    if (!existing[0]) {
+      await db.insert(ads).values({
+        packageTier: item.tier,
+        title: `${item.name} daily opportunity`,
+        contentType: "text",
+        content: "Read this sponsored opportunity until the reward timer completes.",
+        isActive: true,
+      });
+    }
+  }
+}
+
+export async function ensureProfile(user: User): Promise<Profile> {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await ensurePlatformData();
+  const current = await db.select().from(profiles).where(eq(profiles.userId, user.id)).limit(1);
+  if (current[0]) return current[0];
+
+  const isDesignated = user.email?.toLowerCase() === ADMIN_EMAIL;
+  const baseUsername = isDesignated ? ADMIN_USERNAME : `member${user.id}`;
+  const referralCode = `PEP${user.id.toString(36).toUpperCase()}`;
+  await db.insert(profiles).values({
+    userId: user.id,
+    username: baseUsername,
+    referralCode,
+    balancePkr: 0,
+    withdrawalLimitPkr: 0,
+  });
+  const created = await db.select().from(profiles).where(eq(profiles.userId, user.id)).limit(1);
+  if (!created[0]) throw new Error("Profile creation failed");
+  return created[0];
+}
+
+export function isDesignatedAdmin(user: User, profile: Profile) {
+  return isDesignatedAdministrator(user.email, profile.username);
+}
+
+export function getDayKey(date = new Date()) {
+  return date.toISOString().slice(0, 10);
+}
+
+export async function getSettings() {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await ensurePlatformData();
+  const row = await db.select().from(appSettings).where(eq(appSettings.id, 1)).limit(1);
+  if (!row[0]) throw new Error("Settings unavailable");
+  return row[0];
+}
+
+export async function getActivePackageForUser(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const now = new Date();
+  const rows = await db
+    .select({ ownership: userPackages, plan: packages })
+    .from(userPackages)
+    .innerJoin(packages, eq(userPackages.packageId, packages.id))
+    .where(and(eq(userPackages.userId, userId)))
+    .orderBy(desc(userPackages.expiresAt));
+  return rows.find((row) => row.ownership.expiresAt > now && row.plan.isActive) ?? null;
+}
+
+import { userPackages } from "../drizzle/schema";
