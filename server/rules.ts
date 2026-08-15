@@ -1,4 +1,5 @@
-export const WITHDRAWAL_LOCK_MESSAGE = "Please invite someone to unlock withdrawal. Your 50% referral commission will be added to your withdraw limit.";
+export const WITHDRAWAL_LOCK_MESSAGE = "Please invite someone. When your invited user buys a package, 50% of his package price will be added to your withdraw limit.";
+export const WITHDRAWAL_NO_PACKAGE_MESSAGE = "Withdrawal requires an active package before referral withdrawal access can be displayed.";
 export const AD_TIMER_MESSAGE = "⚠️ Please watch the full ad for at least 30 seconds before claiming your reward!";
 export const DESIGNATED_ADMIN_EMAIL = "muhammaddanyal4545@gmail.com";
 export const DESIGNATED_ADMIN_USERNAME = "danyal955163";
@@ -21,8 +22,9 @@ export function validateWithdrawalRequest(input: {
   amountPkr: number;
   minimumWithdrawalPkr: number;
   maximumWithdrawalPkr: number;
+  activePackage?: boolean;
 }) {
-  if (input.withdrawalLimitPkr < 50) return WITHDRAWAL_LOCK_MESSAGE;
+  if (input.withdrawalLimitPkr < 50) return input.activePackage === false ? WITHDRAWAL_NO_PACKAGE_MESSAGE : WITHDRAWAL_LOCK_MESSAGE;
   if (input.amountPkr < input.minimumWithdrawalPkr || input.amountPkr > input.maximumWithdrawalPkr) {
     return `Withdrawal amount must be between PKR ${input.minimumWithdrawalPkr} and PKR ${input.maximumWithdrawalPkr}.`;
   }

@@ -369,12 +369,14 @@ export const appRouter = router({
       const settings = await getSettings();
       const amountPkr = toPkr(input.amount, input.currency, settings.exchangeRatePkrPerUsd);
       if (amountPkr < 50 || amountPkr > 3000) fail("Withdraw Limit: 50 PKR to 3000 PKR.");
+      const activePackage = Boolean(await getActivePackageForUser(user.id));
       const withdrawalError = validateWithdrawalRequest({
         balancePkr: profile.balancePkr,
         withdrawalLimitPkr: profile.withdrawalLimitPkr,
         amountPkr,
         minimumWithdrawalPkr: settings.minimumWithdrawalPkr,
         maximumWithdrawalPkr: settings.maximumWithdrawalPkr,
+        activePackage,
       });
       if (withdrawalError) fail(withdrawalError);
       const db = await getDb();

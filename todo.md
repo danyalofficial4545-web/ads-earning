@@ -63,3 +63,6 @@
 - [x] Preserve and verify the existing administrator workspace controls for Payment Accounts, Ads Management, and User Monitoring through the existing protected code paths without requesting another login or changing account data.
 
 - [x] Complete the remaining final verification and checkpoint without requesting or changing the existing admin login, credentials, or account data.
+- [x] Correct Withdraw-section invite-message visibility: hide it before package activation and show the exact 50% referral message only after an active package exists, with no other website changes.
+- [x] Align backend withdrawal-lock messaging with the post-activation invite rule and prevent the old invite message before package activation.
+- [x] Add targeted withdrawal-message tests for no active package, active package with locked limit, and unlocked limit states.
