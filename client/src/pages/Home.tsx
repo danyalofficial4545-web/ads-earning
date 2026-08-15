@@ -2,7 +2,10 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { startLogin } from "@/const";
 import { AdminPanel } from "@/components/AdminPanel";
+import { GoogleOnboarding, PublicAuth } from "@/components/PublicAuth";
+import { WorkspaceAccessGate } from "@/components/WorkspaceAccessGate";
 import { trpc } from "@/lib/trpc";
+import { resolveWorkspaceGate } from "@/lib/authOnboarding";
 import { translate, type Language, type TranslationKey } from "@/lib/i18n";
 import { toast } from "sonner";
 import {
@@ -46,14 +49,14 @@ export default function Home() {
   useEffect(() => { localStorage.setItem("pep-language", language); document.documentElement.lang = language === "ur" ? "ur" : "en"; document.documentElement.dir = language === "ur" ? "rtl" : "ltr"; }, [language]);
 
   if (loading || (isAuthenticated && session.isLoading)) return <LoadingScreen text={t("loading")} />;
-  if (!isAuthenticated) return <><Landing language={language} setLanguage={setLanguage} t={t} /><GoogleEntry language={language} t={t} /></>;
+  if (!isAuthenticated) return <PublicAuth language={language} setLanguage={setLanguage} t={t} />;
   if (session.error) return <LoadingScreen text={session.error.message} />;
   if (!session.data?.profile) return <LoadingScreen text={t("loading")} />;
-  if (!user?.hasPassword) return <PasswordSetup language={language} t={t} onDone={async () => { await utils.auth.me.invalidate(); await refresh(); }} />;
-
   const profile = session.data.profile;
+  const workspaceGate = resolveWorkspaceGate(user?.hasPassword, profile.username);
+  if (workspaceGate === "google-onboarding") return <WorkspaceAccessGate hasPassword={user?.hasPassword} username={profile.username} onboarding={<GoogleOnboarding language={language} t={t} profile={profile} onDone={async () => { await utils.auth.me.invalidate(); await utils.account.bootstrap.invalidate(); await refresh(); }} />} profileSetup={null} workspace={null} />;
   const isAdmin = session.data.isAdmin;
-  const needsProfile = profile.username.startsWith("member");
+  const needsProfile = workspaceGate === "profile-setup";
   const selectPage = (next: Page) => { setPage(next); setMobileNavOpen(false); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const invalidateCore = () => { utils.platform.overview.invalidate(); utils.wallet.get.invalidate(); utils.account.bootstrap.invalidate(); utils.wallet.transactions.invalidate(); };
 
@@ -69,7 +72,7 @@ export default function Home() {
       <div className="relative mx-auto flex max-w-[1600px] gap-6 px-4 py-5 md:px-6">
         <aside className="hidden w-[235px] shrink-0 lg:block"><nav className="sticky top-24 panel p-3">{nav.map((item) => <NavButton key={item.id} item={item} active={page === item.id} onClick={() => selectPage(item.id)} label={t(item.label)} />)}{isAdmin && <NavButton item={{ id: "admin", icon: ShieldCheck, label: "admin" }} active={page === "admin"} onClick={() => selectPage("admin")} label={t("admin")} />}<div className="my-3 border-t border-white/10" /><button onClick={() => logout()} className="nav-item w-full text-left text-red-200 hover:bg-red-400/10 hover:text-red-100"><LogOut className="size-4" />{t("logout")}</button></nav></aside>
         <main className="min-w-0 flex-1 pb-24 lg:pb-8">
-          {needsProfile ? <ProfileSetup profile={profile} t={t} onDone={invalidateCore} /> : <Workspace page={page} setPage={selectPage} t={t} language={language} user={user} profile={profile} overview={overview.data} overviewLoading={overview.isLoading} packages={publicData.data?.packages ?? []} settings={publicData.data?.settings} announcements={announcements.data ?? []} wallet={wallet.data} invalidateCore={invalidateCore} />}
+          <WorkspaceAccessGate hasPassword={user?.hasPassword} username={profile.username} onboarding={null} profileSetup={<ProfileSetup profile={profile} t={t} onDone={invalidateCore} />} workspace={<Workspace page={page} setPage={selectPage} t={t} language={language} user={user} profile={profile} overview={overview.data} overviewLoading={overview.isLoading} packages={publicData.data?.packages ?? []} settings={publicData.data?.settings} announcements={announcements.data ?? []} wallet={wallet.data} invalidateCore={invalidateCore} />} />
         </main>
       </div>
       <MobileNavigation nav={nav} active={page} t={t} onSelect={selectPage} isAdmin={isAdmin} />

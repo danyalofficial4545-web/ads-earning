@@ -72,3 +72,10 @@
 - [x] Add targeted tests for referral-limit-only crediting and pending/rejected/approved withdrawal accounting.
 - [x] Preserve referral credits earned while a withdrawal is pending by consuming only the reserved withdrawal amount on approval.
 - [x] Add router-level coverage for package.buy referral crediting and withdrawal create/review accounting across pending, rejected, and approved states.
+- [x] Simplify the public first screen so Sign In and Sign Up are prominent and all marketing/feature copy is removed.
+- [x] Relocate the Google sign-in option into the public authentication layout with a clear Google logo and preserve both English and Urdu presentation.
+- [x] Combine new Google-user username and password setup into a required pre-dashboard onboarding step while preserving referral-code prefill and all existing member/admin flows.
+- [x] Replace the placeholder Google badge with a recognizable Google-branded icon in the public authentication entry.
+- [x] Add targeted onboarding-gate coverage confirming new Google users are required to complete setup while existing password-based members and admins keep their normal access.
+- [x] Add a workspace-gate test proving new Google users reach combined onboarding before the dashboard while existing password members and admins keep their normal routes.
+- [x] Add render-level authentication-flow coverage for Google onboarding and existing password-account routing, then verify it without modifying user data.
