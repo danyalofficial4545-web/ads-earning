@@ -80,3 +80,14 @@
 - [x] Add a workspace-gate test proving new Google users reach combined onboarding before the dashboard while existing password members and admins keep their normal routes.
 - [x] Add render-level authentication-flow coverage for Google onboarding and existing password-account routing, then verify it without modifying user data.
 - [x] Upload the supplied Package Earn image to managed website storage and use it as the top brand image on public and signed-in screens without changing other content.
+- [x] Show every active admin-created custom ad on Ads/Tasks, with lock state and package-based daily unlock count of package price divided by 100.
+- [x] Use a Pakistan-time daily eligibility key and countdown to reset watched ads at 12:00 AM Pakistan time without an in-process scheduler.
+- [x] Make custom image, video, link, and app ads open safely in a new tab while the site enforces the existing 10-second viewing timer and rewards only completed views.
+- [x] Expand admin ad creation with the requested ad type, gallery upload, and link fields while preserving existing admin data.
+- [x] Remove withdraw-limit messaging from the main dashboard while retaining it only in the existing package-activated Withdraw flow.
+- [x] Add focused tests for daily package quotas, Pakistan-midnight reset boundaries, ad completion behavior, and dashboard display conditions.
+- [x] Align the existing six package tiers with the user-specified 100, 200, 500, 1000, 2000, and 5000 PKR ad-unlock mapping so price divided by 100 produces the requested quotas.
+- [x] Add router-level coverage proving only package-unlocked custom ads can start and locked custom ads are rejected.
+- [x] Ensure image ads without a separately supplied link open their uploaded image in a new tab when started.
+- [x] Restrict new administrator ad creation to Image, Video, Link, and App Ad while retaining legacy text-ad rendering compatibility.
+- [x] Add targeted coverage for dashboard withdrawal-limit removal and custom-ad claim success versus expired-session behavior.

@@ -1,0 +1,1 @@
+ALTER TABLE `ads` MODIFY COLUMN `contentType` enum('text','image','video','link','app') NOT NULL DEFAULT 'text';

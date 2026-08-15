@@ -1,0 +1,1 @@
+ALTER TABLE `appSettings` MODIFY COLUMN `adTimerSeconds` int NOT NULL DEFAULT 10;

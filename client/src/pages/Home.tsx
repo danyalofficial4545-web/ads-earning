@@ -4,157 +4,2261 @@ import { startLogin } from "@/const";
 import { AdminPanel } from "@/components/AdminPanel";
 import { GoogleOnboarding, PublicAuth } from "@/components/PublicAuth";
 import { WorkspaceAccessGate } from "@/components/WorkspaceAccessGate";
+import { AdsTasks } from "@/components/AdsTasks";
 import { trpc } from "@/lib/trpc";
 import { BRAND_IMAGE_URL } from "@/lib/brandAsset";
 import { resolveWorkspaceGate } from "@/lib/authOnboarding";
+import {
+  dashboardMetricKeys,
+  type DashboardMetricKey,
+} from "@/lib/dashboardMetrics";
 import { translate, type Language, type TranslationKey } from "@/lib/i18n";
 import { toast } from "sonner";
 import {
-  ArrowDownToLine, ArrowUpRight, BadgeCheck, Bell, Boxes, CircleHelp, ClipboardList,
-  Copy, CreditCard, Eye, EyeOff, Gem, Gift, History, Home as HomeIcon, Landmark, LayoutDashboard,
-  Loader2, LogOut, Menu, PackageCheck, PiggyBank, Play, Plus, Send, Settings2,
-  ShieldCheck, Sparkles, Users, WalletCards, X,
+  ArrowDownToLine,
+  ArrowUpRight,
+  BadgeCheck,
+  Bell,
+  Boxes,
+  CircleHelp,
+  ClipboardList,
+  Copy,
+  CreditCard,
+  Eye,
+  EyeOff,
+  Gem,
+  Gift,
+  History,
+  Home as HomeIcon,
+  Landmark,
+  LayoutDashboard,
+  Loader2,
+  LogOut,
+  Menu,
+  PackageCheck,
+  PiggyBank,
+  Play,
+  Plus,
+  Send,
+  Settings2,
+  ShieldCheck,
+  Sparkles,
+  Users,
+  WalletCards,
+  X,
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 
-type Page = "dashboard" | "packages" | "wallet" | "deposit" | "withdrawal" | "earn" | "history" | "referral" | "support" | "profile" | "admin";
+type Page =
+  | "dashboard"
+  | "packages"
+  | "wallet"
+  | "deposit"
+  | "withdrawal"
+  | "earn"
+  | "history"
+  | "referral"
+  | "support"
+  | "profile"
+  | "admin";
 
-const nav: Array<{ id: Page; icon: typeof LayoutDashboard; label: TranslationKey }> = [
-  { id: "dashboard", icon: LayoutDashboard, label: "dashboard" }, { id: "packages", icon: Boxes, label: "packages" },
-  { id: "wallet", icon: WalletCards, label: "wallet" }, { id: "deposit", icon: CreditCard, label: "deposit" },
-  { id: "withdrawal", icon: ArrowUpRight, label: "withdrawal" }, { id: "earn", icon: Play, label: "earn" },
-  { id: "history", icon: History, label: "history" }, { id: "referral", icon: Users, label: "referral" }, { id: "support", icon: CircleHelp, label: "support" },
+const nav: Array<{
+  id: Page;
+  icon: typeof LayoutDashboard;
+  label: TranslationKey;
+}> = [
+  { id: "dashboard", icon: LayoutDashboard, label: "dashboard" },
+  { id: "packages", icon: Boxes, label: "packages" },
+  { id: "wallet", icon: WalletCards, label: "wallet" },
+  { id: "deposit", icon: CreditCard, label: "deposit" },
+  { id: "withdrawal", icon: ArrowUpRight, label: "withdrawal" },
+  { id: "earn", icon: Play, label: "earn" },
+  { id: "history", icon: History, label: "history" },
+  { id: "referral", icon: Users, label: "referral" },
+  { id: "support", icon: CircleHelp, label: "support" },
 ];
 
-const typeLabels: Record<string, TranslationKey> = { deposit: "deposit", package: "packages", ad_reward: "adRewardMessage", withdrawal: "withdrawal", referral_limit: "withdrawalLimit", adjustment: "settings" };
-const statusLabels: Record<string, TranslationKey> = { pending: "pending", approved: "approved", rejected: "rejected", completed: "completed", open: "open", in_review: "inReview", resolved: "resolved" };
+const typeLabels: Record<string, TranslationKey> = {
+  deposit: "deposit",
+  package: "packages",
+  ad_reward: "adRewardMessage",
+  withdrawal: "withdrawal",
+  referral_limit: "withdrawalLimit",
+  adjustment: "settings",
+};
+const statusLabels: Record<string, TranslationKey> = {
+  pending: "pending",
+  approved: "approved",
+  rejected: "rejected",
+  completed: "completed",
+  open: "open",
+  in_review: "inReview",
+  resolved: "resolved",
+};
 
-function money(amount: number, currency = "PKR") { return currency === "USD" ? `$${(amount / 280).toFixed(2)}` : `PKR ${amount.toLocaleString()}`; }
-function dateTime(value: Date | string) { return new Date(value).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }); }
-function statusClass(status: string) { return status === "approved" || status === "completed" ? "bg-emerald-400/15 text-emerald-300" : status === "rejected" ? "bg-red-400/15 text-red-300" : "bg-amber-300/15 text-amber-200"; }
-function toDataUrl(file: File) { return new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsDataURL(file); }); }
+function money(amount: number, currency = "PKR") {
+  return currency === "USD"
+    ? `$${(amount / 280).toFixed(2)}`
+    : `PKR ${amount.toLocaleString()}`;
+}
+function dateTime(value: Date | string) {
+  return new Date(value).toLocaleString([], {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+function statusClass(status: string) {
+  return status === "approved" || status === "completed"
+    ? "bg-emerald-400/15 text-emerald-300"
+    : status === "rejected"
+      ? "bg-red-400/15 text-red-300"
+      : "bg-amber-300/15 text-amber-200";
+}
+function toDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function Home() {
   const { isAuthenticated, loading, logout, user, refresh } = useAuth();
-  const [language, setLanguage] = useState<Language>(() => (localStorage.getItem("pep-language") as Language) || "en");
+  const [language, setLanguage] = useState<Language>(
+    () => (localStorage.getItem("pep-language") as Language) || "en"
+  );
   const [page, setPage] = useState<Page>("dashboard");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const t = (key: TranslationKey) => translate(language, key);
   const utils = trpc.useUtils();
-  const session = trpc.account.bootstrap.useQuery(undefined, { enabled: isAuthenticated });
-  const publicData = trpc.platform.publicData.useQuery(undefined, { enabled: isAuthenticated });
-  const overview = trpc.platform.overview.useQuery(undefined, { enabled: isAuthenticated });
-  const announcements = trpc.platform.announcements.useQuery(undefined, { enabled: isAuthenticated });
-  const wallet = trpc.wallet.get.useQuery(undefined, { enabled: isAuthenticated });
+  const session = trpc.account.bootstrap.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
+  const publicData = trpc.platform.publicData.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
+  const overview = trpc.platform.overview.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
+  const announcements = trpc.platform.announcements.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
+  const wallet = trpc.wallet.get.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
 
-  useEffect(() => { localStorage.setItem("pep-language", language); document.documentElement.lang = language === "ur" ? "ur" : "en"; document.documentElement.dir = language === "ur" ? "rtl" : "ltr"; }, [language]);
+  useEffect(() => {
+    localStorage.setItem("pep-language", language);
+    document.documentElement.lang = language === "ur" ? "ur" : "en";
+    document.documentElement.dir = language === "ur" ? "rtl" : "ltr";
+  }, [language]);
 
-  if (loading || (isAuthenticated && session.isLoading)) return <LoadingScreen text={t("loading")} />;
-  if (!isAuthenticated) return <PublicAuth language={language} setLanguage={setLanguage} t={t} />;
+  if (loading || (isAuthenticated && session.isLoading))
+    return <LoadingScreen text={t("loading")} />;
+  if (!isAuthenticated)
+    return <PublicAuth language={language} setLanguage={setLanguage} t={t} />;
   if (session.error) return <LoadingScreen text={session.error.message} />;
   if (!session.data?.profile) return <LoadingScreen text={t("loading")} />;
   const profile = session.data.profile;
-  const workspaceGate = resolveWorkspaceGate(user?.hasPassword, profile.username);
-  if (workspaceGate === "google-onboarding") return <WorkspaceAccessGate hasPassword={user?.hasPassword} username={profile.username} onboarding={<GoogleOnboarding language={language} t={t} profile={profile} onDone={async () => { await utils.auth.me.invalidate(); await utils.account.bootstrap.invalidate(); await refresh(); }} />} profileSetup={null} workspace={null} />;
+  const workspaceGate = resolveWorkspaceGate(
+    user?.hasPassword,
+    profile.username
+  );
+  if (workspaceGate === "google-onboarding")
+    return (
+      <WorkspaceAccessGate
+        hasPassword={user?.hasPassword}
+        username={profile.username}
+        onboarding={
+          <GoogleOnboarding
+            language={language}
+            t={t}
+            profile={profile}
+            onDone={async () => {
+              await utils.auth.me.invalidate();
+              await utils.account.bootstrap.invalidate();
+              await refresh();
+            }}
+          />
+        }
+        profileSetup={null}
+        workspace={null}
+      />
+    );
   const isAdmin = session.data.isAdmin;
   const needsProfile = workspaceGate === "profile-setup";
-  const selectPage = (next: Page) => { setPage(next); setMobileNavOpen(false); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const invalidateCore = () => { utils.platform.overview.invalidate(); utils.wallet.get.invalidate(); utils.account.bootstrap.invalidate(); utils.wallet.transactions.invalidate(); };
+  const selectPage = (next: Page) => {
+    setPage(next);
+    setMobileNavOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const invalidateCore = () => {
+    utils.platform.overview.invalidate();
+    utils.wallet.get.invalidate();
+    utils.account.bootstrap.invalidate();
+    utils.wallet.transactions.invalidate();
+  };
 
   return (
-    <div className="min-h-screen bg-[#102621] text-white" dir={language === "ur" ? "rtl" : "ltr"}>
-      <div className="pointer-events-none fixed inset-0 overflow-hidden"><div className="absolute -top-40 right-[-6rem] size-[30rem] rounded-full bg-amber-300/10 blur-3xl" /><div className="absolute bottom-0 left-[-12rem] size-[30rem] rounded-full bg-emerald-400/10 blur-3xl" /></div>
+    <div
+      className="min-h-screen bg-[#102621] text-white"
+      dir={language === "ur" ? "rtl" : "ltr"}
+    >
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-40 right-[-6rem] size-[30rem] rounded-full bg-amber-300/10 blur-3xl" />
+        <div className="absolute bottom-0 left-[-12rem] size-[30rem] rounded-full bg-emerald-400/10 blur-3xl" />
+      </div>
       <header className="sticky top-0 z-30 border-b border-white/10 bg-[#102621]/85 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between gap-3 px-4 md:px-6">
-          <button onClick={() => selectPage("dashboard")} className="flex min-w-0 items-center gap-2 text-left"><BrandMark /><div className="hidden sm:block"><p className="text-sm font-bold tracking-tight">{t("brand")}</p><p className="text-[10px] text-amber-300">{t("tagline")}</p></div></button>
-          <div className="flex items-center gap-2"><LanguageToggle language={language} onChange={setLanguage} /><button aria-label={t("profile")} onClick={() => selectPage("profile")} className="grid size-9 place-items-center rounded-xl border border-white/10 bg-white/5 text-slate-200"><Settings2 className="size-4" /></button><button aria-label="Open navigation" onClick={() => setMobileNavOpen(true)} className="grid size-9 place-items-center rounded-xl border border-white/10 bg-white/5 text-slate-200 lg:hidden"><Menu className="size-4" /></button><button onClick={() => selectPage("wallet")} className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-emerald-200 md:flex"><WalletCards className="size-4" />{money(profile.balancePkr)}</button></div>
+          <button
+            onClick={() => selectPage("dashboard")}
+            className="flex min-w-0 items-center gap-2 text-left"
+          >
+            <BrandMark />
+            <div className="hidden sm:block">
+              <p className="text-sm font-bold tracking-tight">{t("brand")}</p>
+              <p className="text-[10px] text-amber-300">{t("tagline")}</p>
+            </div>
+          </button>
+          <div className="flex items-center gap-2">
+            <LanguageToggle language={language} onChange={setLanguage} />
+            <button
+              aria-label={t("profile")}
+              onClick={() => selectPage("profile")}
+              className="grid size-9 place-items-center rounded-xl border border-white/10 bg-white/5 text-slate-200"
+            >
+              <Settings2 className="size-4" />
+            </button>
+            <button
+              aria-label="Open navigation"
+              onClick={() => setMobileNavOpen(true)}
+              className="grid size-9 place-items-center rounded-xl border border-white/10 bg-white/5 text-slate-200 lg:hidden"
+            >
+              <Menu className="size-4" />
+            </button>
+            <button
+              onClick={() => selectPage("wallet")}
+              className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-emerald-200 md:flex"
+            >
+              <WalletCards className="size-4" />
+              {money(profile.balancePkr)}
+            </button>
+          </div>
         </div>
       </header>
       <div className="relative mx-auto flex max-w-[1600px] gap-6 px-4 py-5 md:px-6">
-        <aside className="hidden w-[235px] shrink-0 lg:block"><nav className="sticky top-24 panel p-3">{nav.map((item) => <NavButton key={item.id} item={item} active={page === item.id} onClick={() => selectPage(item.id)} label={t(item.label)} />)}{isAdmin && <NavButton item={{ id: "admin", icon: ShieldCheck, label: "admin" }} active={page === "admin"} onClick={() => selectPage("admin")} label={t("admin")} />}<div className="my-3 border-t border-white/10" /><button onClick={() => logout()} className="nav-item w-full text-left text-red-200 hover:bg-red-400/10 hover:text-red-100"><LogOut className="size-4" />{t("logout")}</button></nav></aside>
+        <aside className="hidden w-[235px] shrink-0 lg:block">
+          <nav className="sticky top-24 panel p-3">
+            {nav.map(item => (
+              <NavButton
+                key={item.id}
+                item={item}
+                active={page === item.id}
+                onClick={() => selectPage(item.id)}
+                label={t(item.label)}
+              />
+            ))}
+            {isAdmin && (
+              <NavButton
+                item={{ id: "admin", icon: ShieldCheck, label: "admin" }}
+                active={page === "admin"}
+                onClick={() => selectPage("admin")}
+                label={t("admin")}
+              />
+            )}
+            <div className="my-3 border-t border-white/10" />
+            <button
+              onClick={() => logout()}
+              className="nav-item w-full text-left text-red-200 hover:bg-red-400/10 hover:text-red-100"
+            >
+              <LogOut className="size-4" />
+              {t("logout")}
+            </button>
+          </nav>
+        </aside>
         <main className="min-w-0 flex-1 pb-24 lg:pb-8">
-          <WorkspaceAccessGate hasPassword={user?.hasPassword} username={profile.username} onboarding={null} profileSetup={<ProfileSetup profile={profile} t={t} onDone={invalidateCore} />} workspace={<Workspace page={page} setPage={selectPage} t={t} language={language} user={user} profile={profile} overview={overview.data} overviewLoading={overview.isLoading} packages={publicData.data?.packages ?? []} settings={publicData.data?.settings} announcements={announcements.data ?? []} wallet={wallet.data} invalidateCore={invalidateCore} />} />
+          <WorkspaceAccessGate
+            hasPassword={user?.hasPassword}
+            username={profile.username}
+            onboarding={null}
+            profileSetup={
+              <ProfileSetup profile={profile} t={t} onDone={invalidateCore} />
+            }
+            workspace={
+              <Workspace
+                page={page}
+                setPage={selectPage}
+                t={t}
+                language={language}
+                user={user}
+                profile={profile}
+                overview={overview.data}
+                overviewLoading={overview.isLoading}
+                packages={publicData.data?.packages ?? []}
+                settings={publicData.data?.settings}
+                announcements={announcements.data ?? []}
+                wallet={wallet.data}
+                invalidateCore={invalidateCore}
+              />
+            }
+          />
         </main>
       </div>
-      <MobileNavigation nav={nav} active={page} t={t} onSelect={selectPage} isAdmin={isAdmin} />
-      {mobileNavOpen && <MobileDrawer nav={nav} active={page} t={t} isAdmin={isAdmin} onSelect={selectPage} onClose={() => setMobileNavOpen(false)} onLogout={logout} />}
+      <MobileNavigation
+        nav={nav}
+        active={page}
+        t={t}
+        onSelect={selectPage}
+        isAdmin={isAdmin}
+      />
+      {mobileNavOpen && (
+        <MobileDrawer
+          nav={nav}
+          active={page}
+          t={t}
+          isAdmin={isAdmin}
+          onSelect={selectPage}
+          onClose={() => setMobileNavOpen(false)}
+          onLogout={logout}
+        />
+      )}
     </div>
   );
 }
 
-function BrandMark() { return <img src={BRAND_IMAGE_URL} alt="Package Earn Pro" className="size-11 shrink-0 rounded-2xl border border-amber-300/30 object-cover shadow-lg shadow-amber-400/20" />; }
-function LoadingScreen({ text }: { text: string }) { return <div className="grid min-h-screen place-items-center bg-[#102621]"><div className="flex flex-col items-center gap-4 text-slate-200"><BrandMark /><Loader2 className="size-5 animate-spin text-amber-300" /><p className="text-sm">{text}</p></div></div>; }
-function NavButton({ item, active, onClick, label }: { item: { id?: string; icon: typeof LayoutDashboard; label?: TranslationKey }; active: boolean; onClick: () => void; label: string }) { const Icon = item.icon; return <button onClick={onClick} className={`nav-item mb-1 w-full text-left ${active ? "nav-item-active" : ""}`}><Icon className="size-4" />{label}</button>; }
+function BrandMark() {
+  return (
+    <img
+      src={BRAND_IMAGE_URL}
+      alt="Package Earn Pro"
+      className="size-11 shrink-0 rounded-2xl border border-amber-300/30 object-cover shadow-lg shadow-amber-400/20"
+    />
+  );
+}
+function LoadingScreen({ text }: { text: string }) {
+  return (
+    <div className="grid min-h-screen place-items-center bg-[#102621]">
+      <div className="flex flex-col items-center gap-4 text-slate-200">
+        <BrandMark />
+        <Loader2 className="size-5 animate-spin text-amber-300" />
+        <p className="text-sm">{text}</p>
+      </div>
+    </div>
+  );
+}
+function NavButton({
+  item,
+  active,
+  onClick,
+  label,
+}: {
+  item: { id?: string; icon: typeof LayoutDashboard; label?: TranslationKey };
+  active: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  const Icon = item.icon;
+  return (
+    <button
+      onClick={onClick}
+      className={`nav-item mb-1 w-full text-left ${active ? "nav-item-active" : ""}`}
+    >
+      <Icon className="size-4" />
+      {label}
+    </button>
+  );
+}
 
-function Landing({ language, setLanguage, t }: { language: Language; setLanguage: (language: Language) => void; t: (key: TranslationKey) => string }) {
+function Landing({
+  language,
+  setLanguage,
+  t,
+}: {
+  language: Language;
+  setLanguage: (language: Language) => void;
+  t: (key: TranslationKey) => string;
+}) {
   const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
   const [signIn, setSignIn] = useState({ email: "", password: "" });
-  const [signUp, setSignUp] = useState(() => ({ username: "", email: "", password: "", confirmPassword: "", referralCode: new URLSearchParams(window.location.search).get("ref") ?? "" }));
+  const [signUp, setSignUp] = useState(() => ({
+    username: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    referralCode: new URLSearchParams(window.location.search).get("ref") ?? "",
+  }));
   const utils = trpc.useUtils();
-  const complete = async (message: string) => { toast.success(message); await utils.auth.me.invalidate(); await utils.account.bootstrap.invalidate(); };
-  const register = trpc.auth.register.useMutation({ onSuccess: () => complete(t("accountCreated")), onError: (error) => { toast.error(error.data?.code === "CONFLICT" ? `${error.message} ${t("duplicateRecovery")}` : error.message); if (error.data?.code === "CONFLICT") toast(t("googleAccountHelp"), { action: { label: t("googleContinue"), onClick: () => startLogin() } }); } });
-  const login = trpc.auth.signIn.useMutation({ onSuccess: () => complete(t("signedIn")), onError: (error) => toast.error(error.message) });
-  const submitSignUp = (event: React.FormEvent) => { event.preventDefault(); if (signUp.password !== signUp.confirmPassword) return toast.error(t("passwordMismatch")); register.mutate({ username: signUp.username, email: signUp.email, password: signUp.password, referralCode: signUp.referralCode || undefined }); };
-  const submitSignIn = (event: React.FormEvent) => { event.preventDefault(); login.mutate(signIn); };
+  const complete = async (message: string) => {
+    toast.success(message);
+    await utils.auth.me.invalidate();
+    await utils.account.bootstrap.invalidate();
+  };
+  const register = trpc.auth.register.useMutation({
+    onSuccess: () => complete(t("accountCreated")),
+    onError: error => {
+      toast.error(
+        error.data?.code === "CONFLICT"
+          ? `${error.message} ${t("duplicateRecovery")}`
+          : error.message
+      );
+      if (error.data?.code === "CONFLICT")
+        toast(t("googleAccountHelp"), {
+          action: { label: t("googleContinue"), onClick: () => startLogin() },
+        });
+    },
+  });
+  const login = trpc.auth.signIn.useMutation({
+    onSuccess: () => complete(t("signedIn")),
+    onError: error => toast.error(error.message),
+  });
+  const submitSignUp = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (signUp.password !== signUp.confirmPassword)
+      return toast.error(t("passwordMismatch"));
+    register.mutate({
+      username: signUp.username,
+      email: signUp.email,
+      password: signUp.password,
+      referralCode: signUp.referralCode || undefined,
+    });
+  };
+  const submitSignIn = (event: React.FormEvent) => {
+    event.preventDefault();
+    login.mutate(signIn);
+  };
   const busy = register.isPending || login.isPending;
-  return <div className="min-h-screen overflow-hidden bg-[#102621] text-white" dir={language === "ur" ? "rtl" : "ltr"}><div className="pointer-events-none fixed inset-0 overflow-hidden"><div className="absolute -top-36 left-[10%] size-[32rem] rounded-full bg-amber-300/10 blur-3xl" /><div className="absolute bottom-[-12rem] right-[4%] size-[35rem] rounded-full bg-emerald-400/10 blur-3xl" /></div><header className="relative mx-auto flex max-w-6xl items-center justify-between px-5 py-5"><div className="flex items-center gap-2"><BrandMark /><span className="text-sm font-bold">{t("brand")}</span></div><div className="flex items-center gap-3"><LanguageToggle language={language} onChange={setLanguage} /><div className="hidden rounded-xl border border-white/10 bg-white/5 p-1 sm:flex"><button onClick={() => setMode("signIn")} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${mode === "signIn" ? "bg-amber-300 text-slate-950" : "text-slate-300"}`}>{t("signIn")}</button><button onClick={() => setMode("signUp")} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${mode === "signUp" ? "bg-amber-300 text-slate-950" : "text-slate-300"}`}>{t("signUp")}</button></div></div></header><main className="relative mx-auto grid max-w-6xl gap-12 px-5 pb-16 pt-14 lg:grid-cols-[1.05fr_.95fr] lg:items-center lg:pt-20"><section><p className="eyebrow">{t("tagline")}</p><h1 className="mt-4 max-w-2xl text-5xl font-bold leading-[1.03] tracking-tight md:text-7xl">{t("secureTitle")}</h1><p className="mt-6 max-w-xl text-lg leading-8 text-slate-300">{t("secureSubtitle")}</p><div className="mt-8 flex flex-wrap gap-3"><button onClick={() => setMode("signUp")} className="inline-flex items-center gap-2 rounded-xl bg-amber-300 px-5 py-3 text-sm font-bold text-slate-950 transition active:scale-[.97]"><Sparkles className="size-4" />{t("secureSignIn")}</button><p className="max-w-xs self-center text-xs leading-5 text-slate-400">{t("authNote")}</p></div><div className="mt-10 grid gap-3 sm:grid-cols-3">{[[PackageCheck, "featureOne"], [BadgeCheck, "featureTwo"], [Users, "featureThree"]].map(([Icon, key]) => { const FeatureIcon = Icon as typeof PackageCheck; return <div className="glass rounded-2xl p-4" key={String(key)}><FeatureIcon className="size-5 text-amber-300" /><p className="mt-3 text-sm font-semibold text-slate-100">{t(key as TranslationKey)}</p></div>; })}</div></section><section className="panel relative overflow-hidden p-6 md:p-8"><div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-amber-300/10 blur-2xl" /><div className="relative"><div className="flex rounded-xl border border-white/10 bg-slate-950/20 p-1"><button onClick={() => setMode("signIn")} className={`flex-1 rounded-lg py-2 text-sm font-bold ${mode === "signIn" ? "bg-amber-300 text-slate-950" : "text-slate-300"}`}>{t("signIn")}</button><button onClick={() => setMode("signUp")} className={`flex-1 rounded-lg py-2 text-sm font-bold ${mode === "signUp" ? "bg-amber-300 text-slate-950" : "text-slate-300"}`}>{t("signUp")}</button></div>{mode === "signIn" ? <form className="mt-6 space-y-4" onSubmit={submitSignIn}><p className="eyebrow">{t("signIn")}</p><h2 className="text-2xl font-bold">{t("welcome")}</h2><label><span className="field-label">{t("email")}</span><input required type="email" autoComplete="email" className="field" value={signIn.email} onChange={(event) => setSignIn({ ...signIn, email: event.target.value })} /></label><label><span className="field-label">{t("password")}</span><input required type="password" autoComplete="current-password" className="field" value={signIn.password} onChange={(event) => setSignIn({ ...signIn, password: event.target.value })} /></label><button disabled={busy} className="flex h-11 w-full items-center justify-center rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-60">{busy ? <Loader2 className="size-4 animate-spin" /> : t("signIn")}</button><p className="text-center text-xs text-slate-400">{t("needAccount")} <button type="button" onClick={() => setMode("signUp")} className="font-bold text-amber-300">{t("switchToSignUp")}</button></p></form> : <form className="mt-6 space-y-3" onSubmit={submitSignUp}><p className="eyebrow">{t("signUp")}</p><h2 className="text-2xl font-bold">{t("createAccount")}</h2><label><span className="field-label">{t("username")}</span><input required minLength={3} autoComplete="username" className="field" value={signUp.username} onChange={(event) => setSignUp({ ...signUp, username: event.target.value })} /></label><label><span className="field-label">{t("email")}</span><input required type="email" autoComplete="email" className="field" value={signUp.email} onChange={(event) => setSignUp({ ...signUp, email: event.target.value })} /></label><div className="grid gap-3 sm:grid-cols-2"><label><span className="field-label">{t("password")}</span><input required minLength={8} type="password" autoComplete="new-password" className="field" value={signUp.password} onChange={(event) => setSignUp({ ...signUp, password: event.target.value })} /></label><label><span className="field-label">{t("confirmPassword")}</span><input required minLength={8} type="password" autoComplete="new-password" className="field" value={signUp.confirmPassword} onChange={(event) => setSignUp({ ...signUp, confirmPassword: event.target.value })} /></label></div><label><span className="field-label">{t("referralInvite")}</span><input className="field" value={signUp.referralCode} onChange={(event) => setSignUp({ ...signUp, referralCode: event.target.value.toUpperCase() })} placeholder="PEP…" /></label><button disabled={busy} className="flex h-11 w-full items-center justify-center rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-60">{busy ? <Loader2 className="size-4 animate-spin" /> : t("createAccount")}</button><p className="text-center text-xs text-slate-400">{t("alreadyHaveAccount")} <button type="button" onClick={() => setMode("signIn")} className="font-bold text-amber-300">{t("switchToSignIn")}</button></p></form>}</div></section></main></div>;
+  return (
+    <div
+      className="min-h-screen overflow-hidden bg-[#102621] text-white"
+      dir={language === "ur" ? "rtl" : "ltr"}
+    >
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-36 left-[10%] size-[32rem] rounded-full bg-amber-300/10 blur-3xl" />
+        <div className="absolute bottom-[-12rem] right-[4%] size-[35rem] rounded-full bg-emerald-400/10 blur-3xl" />
+      </div>
+      <header className="relative mx-auto flex max-w-6xl items-center justify-between px-5 py-5">
+        <div className="flex items-center gap-2">
+          <BrandMark />
+          <span className="text-sm font-bold">{t("brand")}</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <LanguageToggle language={language} onChange={setLanguage} />
+          <div className="hidden rounded-xl border border-white/10 bg-white/5 p-1 sm:flex">
+            <button
+              onClick={() => setMode("signIn")}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold ${mode === "signIn" ? "bg-amber-300 text-slate-950" : "text-slate-300"}`}
+            >
+              {t("signIn")}
+            </button>
+            <button
+              onClick={() => setMode("signUp")}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold ${mode === "signUp" ? "bg-amber-300 text-slate-950" : "text-slate-300"}`}
+            >
+              {t("signUp")}
+            </button>
+          </div>
+        </div>
+      </header>
+      <main className="relative mx-auto grid max-w-6xl gap-12 px-5 pb-16 pt-14 lg:grid-cols-[1.05fr_.95fr] lg:items-center lg:pt-20">
+        <section>
+          <p className="eyebrow">{t("tagline")}</p>
+          <h1 className="mt-4 max-w-2xl text-5xl font-bold leading-[1.03] tracking-tight md:text-7xl">
+            {t("secureTitle")}
+          </h1>
+          <p className="mt-6 max-w-xl text-lg leading-8 text-slate-300">
+            {t("secureSubtitle")}
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <button
+              onClick={() => setMode("signUp")}
+              className="inline-flex items-center gap-2 rounded-xl bg-amber-300 px-5 py-3 text-sm font-bold text-slate-950 transition active:scale-[.97]"
+            >
+              <Sparkles className="size-4" />
+              {t("secureSignIn")}
+            </button>
+            <p className="max-w-xs self-center text-xs leading-5 text-slate-400">
+              {t("authNote")}
+            </p>
+          </div>
+          <div className="mt-10 grid gap-3 sm:grid-cols-3">
+            {[
+              [PackageCheck, "featureOne"],
+              [BadgeCheck, "featureTwo"],
+              [Users, "featureThree"],
+            ].map(([Icon, key]) => {
+              const FeatureIcon = Icon as typeof PackageCheck;
+              return (
+                <div className="glass rounded-2xl p-4" key={String(key)}>
+                  <FeatureIcon className="size-5 text-amber-300" />
+                  <p className="mt-3 text-sm font-semibold text-slate-100">
+                    {t(key as TranslationKey)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+        <section className="panel relative overflow-hidden p-6 md:p-8">
+          <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-amber-300/10 blur-2xl" />
+          <div className="relative">
+            <div className="flex rounded-xl border border-white/10 bg-slate-950/20 p-1">
+              <button
+                onClick={() => setMode("signIn")}
+                className={`flex-1 rounded-lg py-2 text-sm font-bold ${mode === "signIn" ? "bg-amber-300 text-slate-950" : "text-slate-300"}`}
+              >
+                {t("signIn")}
+              </button>
+              <button
+                onClick={() => setMode("signUp")}
+                className={`flex-1 rounded-lg py-2 text-sm font-bold ${mode === "signUp" ? "bg-amber-300 text-slate-950" : "text-slate-300"}`}
+              >
+                {t("signUp")}
+              </button>
+            </div>
+            {mode === "signIn" ? (
+              <form className="mt-6 space-y-4" onSubmit={submitSignIn}>
+                <p className="eyebrow">{t("signIn")}</p>
+                <h2 className="text-2xl font-bold">{t("welcome")}</h2>
+                <label>
+                  <span className="field-label">{t("email")}</span>
+                  <input
+                    required
+                    type="email"
+                    autoComplete="email"
+                    className="field"
+                    value={signIn.email}
+                    onChange={event =>
+                      setSignIn({ ...signIn, email: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  <span className="field-label">{t("password")}</span>
+                  <input
+                    required
+                    type="password"
+                    autoComplete="current-password"
+                    className="field"
+                    value={signIn.password}
+                    onChange={event =>
+                      setSignIn({ ...signIn, password: event.target.value })
+                    }
+                  />
+                </label>
+                <button
+                  disabled={busy}
+                  className="flex h-11 w-full items-center justify-center rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-60"
+                >
+                  {busy ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    t("signIn")
+                  )}
+                </button>
+                <p className="text-center text-xs text-slate-400">
+                  {t("needAccount")}{" "}
+                  <button
+                    type="button"
+                    onClick={() => setMode("signUp")}
+                    className="font-bold text-amber-300"
+                  >
+                    {t("switchToSignUp")}
+                  </button>
+                </p>
+              </form>
+            ) : (
+              <form className="mt-6 space-y-3" onSubmit={submitSignUp}>
+                <p className="eyebrow">{t("signUp")}</p>
+                <h2 className="text-2xl font-bold">{t("createAccount")}</h2>
+                <label>
+                  <span className="field-label">{t("username")}</span>
+                  <input
+                    required
+                    minLength={3}
+                    autoComplete="username"
+                    className="field"
+                    value={signUp.username}
+                    onChange={event =>
+                      setSignUp({ ...signUp, username: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  <span className="field-label">{t("email")}</span>
+                  <input
+                    required
+                    type="email"
+                    autoComplete="email"
+                    className="field"
+                    value={signUp.email}
+                    onChange={event =>
+                      setSignUp({ ...signUp, email: event.target.value })
+                    }
+                  />
+                </label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label>
+                    <span className="field-label">{t("password")}</span>
+                    <input
+                      required
+                      minLength={8}
+                      type="password"
+                      autoComplete="new-password"
+                      className="field"
+                      value={signUp.password}
+                      onChange={event =>
+                        setSignUp({ ...signUp, password: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span className="field-label">{t("confirmPassword")}</span>
+                    <input
+                      required
+                      minLength={8}
+                      type="password"
+                      autoComplete="new-password"
+                      className="field"
+                      value={signUp.confirmPassword}
+                      onChange={event =>
+                        setSignUp({
+                          ...signUp,
+                          confirmPassword: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+                <label>
+                  <span className="field-label">{t("referralInvite")}</span>
+                  <input
+                    className="field"
+                    value={signUp.referralCode}
+                    onChange={event =>
+                      setSignUp({
+                        ...signUp,
+                        referralCode: event.target.value.toUpperCase(),
+                      })
+                    }
+                    placeholder="PEP…"
+                  />
+                </label>
+                <button
+                  disabled={busy}
+                  className="flex h-11 w-full items-center justify-center rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-60"
+                >
+                  {busy ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    t("createAccount")
+                  )}
+                </button>
+                <p className="text-center text-xs text-slate-400">
+                  {t("alreadyHaveAccount")}{" "}
+                  <button
+                    type="button"
+                    onClick={() => setMode("signIn")}
+                    className="font-bold text-amber-300"
+                  >
+                    {t("switchToSignIn")}
+                  </button>
+                </p>
+              </form>
+            )}
+          </div>
+        </section>
+      </main>
+    </div>
+  );
 }
 
-function GoogleEntry({ language, t }: { language: Language; t: (key: TranslationKey) => string }) {
-  return <div dir={language === "ur" ? "rtl" : "ltr"} className="fixed inset-x-4 bottom-4 z-40 mx-auto max-w-sm rounded-2xl border border-white/15 bg-[#17342d]/95 p-3 shadow-2xl shadow-black/30 backdrop-blur-xl"><p className="px-1 text-center text-xs leading-5 text-slate-300">{t("googleAccountHelp")}</p><button onClick={() => startLogin()} className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white text-sm font-bold text-slate-800 transition active:scale-[.97]"><span className="grid size-5 place-items-center rounded-full bg-[#4285F4] text-[11px] font-black text-white">G</span>{t("googleContinue")}</button></div>;
+function GoogleEntry({
+  language,
+  t,
+}: {
+  language: Language;
+  t: (key: TranslationKey) => string;
+}) {
+  return (
+    <div
+      dir={language === "ur" ? "rtl" : "ltr"}
+      className="fixed inset-x-4 bottom-4 z-40 mx-auto max-w-sm rounded-2xl border border-white/15 bg-[#17342d]/95 p-3 shadow-2xl shadow-black/30 backdrop-blur-xl"
+    >
+      <p className="px-1 text-center text-xs leading-5 text-slate-300">
+        {t("googleAccountHelp")}
+      </p>
+      <button
+        onClick={() => startLogin()}
+        className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white text-sm font-bold text-slate-800 transition active:scale-[.97]"
+      >
+        <span className="grid size-5 place-items-center rounded-full bg-[#4285F4] text-[11px] font-black text-white">
+          G
+        </span>
+        {t("googleContinue")}
+      </button>
+    </div>
+  );
 }
 
-function PasswordSetup({ language, t, onDone }: { language: Language; t: (key: TranslationKey) => string; onDone: () => Promise<unknown> }) {
-  const [password, setPassword] = useState(""); const [confirmPassword, setConfirmPassword] = useState("");
-  const setup = trpc.auth.setPassword.useMutation({ onSuccess: async () => { toast.success(t("passwordSaved")); await onDone(); }, onError: (error) => toast.error(error.message) });
-  const submit = (event: React.FormEvent) => { event.preventDefault(); if (password !== confirmPassword) return toast.error(t("passwordMismatch")); setup.mutate({ password }); };
-  return <div className="grid min-h-screen place-items-center bg-[#102621] p-5 text-white" dir={language === "ur" ? "rtl" : "ltr"}><div className="panel w-full max-w-md p-6 md:p-8"><div className="flex items-center gap-3"><BrandMark /><div><p className="eyebrow">Package Earn Pro</p><h1 className="mt-1 text-xl font-bold">{t("setPasswordTitle")}</h1></div></div><p className="mt-5 text-sm leading-6 text-slate-300">{t("setPasswordText")}</p><form className="mt-6 space-y-4" onSubmit={submit}><label><span className="field-label">{t("password")}</span><input required minLength={8} type="password" autoComplete="new-password" className="field" value={password} onChange={(event) => setPassword(event.target.value)} /></label><label><span className="field-label">{t("confirmPassword")}</span><input required minLength={8} type="password" autoComplete="new-password" className="field" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></label><button disabled={setup.isPending} className="flex h-11 w-full items-center justify-center rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-60">{setup.isPending ? <Loader2 className="size-4 animate-spin" /> : t("setPassword")}</button></form></div></div>;
+function PasswordSetup({
+  language,
+  t,
+  onDone,
+}: {
+  language: Language;
+  t: (key: TranslationKey) => string;
+  onDone: () => Promise<unknown>;
+}) {
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const setup = trpc.auth.setPassword.useMutation({
+    onSuccess: async () => {
+      toast.success(t("passwordSaved"));
+      await onDone();
+    },
+    onError: error => toast.error(error.message),
+  });
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (password !== confirmPassword) return toast.error(t("passwordMismatch"));
+    setup.mutate({ password });
+  };
+  return (
+    <div
+      className="grid min-h-screen place-items-center bg-[#102621] p-5 text-white"
+      dir={language === "ur" ? "rtl" : "ltr"}
+    >
+      <div className="panel w-full max-w-md p-6 md:p-8">
+        <div className="flex items-center gap-3">
+          <BrandMark />
+          <div>
+            <p className="eyebrow">Package Earn Pro</p>
+            <h1 className="mt-1 text-xl font-bold">{t("setPasswordTitle")}</h1>
+          </div>
+        </div>
+        <p className="mt-5 text-sm leading-6 text-slate-300">
+          {t("setPasswordText")}
+        </p>
+        <form className="mt-6 space-y-4" onSubmit={submit}>
+          <label>
+            <span className="field-label">{t("password")}</span>
+            <input
+              required
+              minLength={8}
+              type="password"
+              autoComplete="new-password"
+              className="field"
+              value={password}
+              onChange={event => setPassword(event.target.value)}
+            />
+          </label>
+          <label>
+            <span className="field-label">{t("confirmPassword")}</span>
+            <input
+              required
+              minLength={8}
+              type="password"
+              autoComplete="new-password"
+              className="field"
+              value={confirmPassword}
+              onChange={event => setConfirmPassword(event.target.value)}
+            />
+          </label>
+          <button
+            disabled={setup.isPending}
+            className="flex h-11 w-full items-center justify-center rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-60"
+          >
+            {setup.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              t("setPassword")
+            )}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
 }
 
-function Metric({ icon: Icon, label, value }: { icon: typeof WalletCards; label: string; value: string }) { return <div className="rounded-2xl border border-white/10 bg-slate-950/15 p-4"><Icon className="size-4 text-amber-300" /><p className="mt-4 text-xs text-slate-400">{label}</p><p className="mt-1 text-lg font-bold">{value}</p></div>; }
-
-function WhatsAppBanner({ t, joined, onJoin }: any) { return <div className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-4 py-3 text-sm"><span className="font-semibold text-emerald-100">{joined ? t("whatsappBonus") : t("whatsappBanner")}</span>{!joined && <button onClick={onJoin} className="rounded-lg bg-amber-300 px-3 py-2 text-xs font-bold text-slate-950">{t("joinNow")}</button>}</div>; }
-function WhatsAppCard({ t, joined, onJoin }: any) { return <div className="panel mt-5 border-emerald-300/20"><div className="flex flex-wrap items-center justify-between gap-4"><div><p className="eyebrow">{t("whatsappTitle")}</p><p className="mt-1 text-sm text-slate-300">{t("whatsappSubtitle")}</p></div>{joined ? <span className="rounded-xl bg-emerald-400/15 px-3 py-2 text-xs font-bold text-emerald-200">{t("whatsappBonus")}</span> : <button onClick={onJoin} className="rounded-xl bg-amber-300 px-4 py-2 text-sm font-bold text-slate-950">{t("joinNow")}</button>}</div></div>; }
-function ProfilePage({ t, user, profile, activePackage, totalEarnedPkr }: any) { const [showPassword, setShowPassword] = useState(false); const referral = trpc.referral.get.useQuery(); return <><PageHeading eyebrow={t("profile")} title={t("profile")} description={t("profileEmail")} /><div className="grid gap-5 md:grid-cols-2"><div className="panel space-y-4"><div><p className="field-label">{t("profileEmail")}</p><p className="mt-1 font-semibold">{user?.email ?? "—"}</p></div><div><p className="field-label">{t("profileUsername")}</p><p className="mt-1 font-semibold">{profile.username}</p></div><div><p className="field-label">{t("profilePassword")}</p><div className="mt-1 flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/20 px-3 py-2 text-sm"><span>{showPassword ? t("passwordSaved") : "••••••••"}</span><button type="button" aria-label={showPassword ? t("hidePassword") : t("showPassword")} onClick={() => setShowPassword(!showPassword)} className="text-amber-300">{showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}</button></div></div></div><div className="panel space-y-4"><div><p className="field-label">{t("activePackage")}</p><p className="mt-1 font-semibold">{activePackage ? `${activePackage.icon} ${activePackage.name}` : t("noActivePackageProfile")}</p></div><div><p className="field-label">{t("totalReferrals")}</p><p className="mt-1 text-2xl font-bold">{referral.data?.totalReferrals ?? 0}</p></div><div><p className="field-label">{t("totalEarnings")}</p><p className="mt-1 text-2xl font-bold text-amber-300">{money(totalEarnedPkr)}</p></div></div></div></>; }
-
-function ProfileSetup({ profile, t, onDone }: { profile: { username: string; preferredCurrency: "PKR" | "USD" }; t: (key: TranslationKey) => string; onDone: () => void }) {
-  const [username, setUsername] = useState(profile.username.startsWith("member") ? "" : profile.username); const [referralCode, setReferralCode] = useState(""); const [currency, setCurrency] = useState<"PKR" | "USD">(profile.preferredCurrency);
-  const save = trpc.account.saveProfile.useMutation({ onSuccess: () => { toast.success(t("saved")); onDone(); }, onError: (error) => toast.error(error.message) });
-  return <div className="mx-auto max-w-xl pt-8"><div className="panel"><div className="grid size-12 place-items-center rounded-2xl bg-amber-300 text-slate-950"><Settings2 className="size-5" /></div><p className="eyebrow mt-6">Package Earn Pro</p><h1 className="mt-2 text-3xl font-bold">{t("setupTitle")}</h1><p className="mt-3 leading-6 text-slate-300">{t("setupText")}</p><form className="mt-7 space-y-4" onSubmit={(event) => { event.preventDefault(); save.mutate({ username, referralCode: referralCode || undefined, preferredCurrency: currency }); }}><label><span className="field-label">{t("username")}</span><input required value={username} onChange={(e) => setUsername(e.target.value)} className="field" placeholder="your_username" /></label><label><span className="field-label">{t("referralCode")}</span><input value={referralCode} onChange={(e) => setReferralCode(e.target.value.toUpperCase())} className="field" placeholder="PEP…" /></label><label><span className="field-label">{t("preferredCurrency")}</span><select value={currency} onChange={(e) => setCurrency(e.target.value as "PKR" | "USD")} className="field"><option value="PKR">PKR</option><option value="USD">USD (PayPal)</option></select></label><button disabled={save.isPending} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-300 text-sm font-bold text-slate-950 transition active:scale-[.97] disabled:opacity-60">{save.isPending && <Loader2 className="size-4 animate-spin" />}{t("saveProfile")}</button></form></div></div>;
+function Metric({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof WalletCards;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-950/15 p-4">
+      <Icon className="size-4 text-amber-300" />
+      <p className="mt-4 text-xs text-slate-400">{label}</p>
+      <p className="mt-1 text-lg font-bold">{value}</p>
+    </div>
+  );
 }
 
-function Workspace({ page, setPage, t, language, user, profile, overview, overviewLoading, packages, settings, announcements, wallet, invalidateCore }: any) {
-  if (overviewLoading || !overview) return <LoadingScreen text={t("loading")} />;
-  const joinWhatsApp = trpc.platform.joinWhatsApp.useMutation({ onSuccess: (data) => { if (data.bonusPkr) toast.success(t("whatsappBonus")); invalidateCore(); }, onError: (error) => toast.error(error.message) });
-  const handleJoinWhatsApp = () => { window.open("https://whatsapp.com/channel/0029VbDB4LpDZ4LhbhGZsJ10", "_blank", "noopener,noreferrer"); joinWhatsApp.mutate(); };
-  const content: Record<Page, ReactNode> = { dashboard: <Dashboard t={t} overview={overview} announcements={announcements} setPage={setPage} onJoinWhatsApp={handleJoinWhatsApp} />, packages: <Packages t={t} plans={packages} balance={profile.balancePkr} active={overview.activePackage} onDone={invalidateCore} />, wallet: <Wallet t={t} wallet={wallet} setPage={setPage} />, deposit: <Deposit t={t} settings={settings} onDone={invalidateCore} />, withdrawal: <Withdrawal t={t} profile={profile} activePackage={overview.activePackage} settings={settings} onDone={invalidateCore} />, earn: <Earn t={t} overview={overview} onDone={invalidateCore} />, history: <TransactionHistory t={t} />, referral: <Referral t={t} />, support: <Support t={t} />, profile: <ProfilePage t={t} user={user} profile={profile} activePackage={overview.activePackage} totalEarnedPkr={overview.totalEarnedPkr} />, admin: <AdminPanel t={t} /> };
-  return <><WhatsAppBanner t={t} joined={Boolean(profile.whatsappJoined)} onJoin={handleJoinWhatsApp} /><div className="mt-4">{content[page as Page]}</div><p className="mt-8 text-center text-[11px] text-slate-500">{t("brand")} · {language === "ur" ? "محفوظ ورک اسپیس" : "Secure member workspace"}</p></>;
+function WhatsAppBanner({ t, joined, onJoin }: any) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-4 py-3 text-sm">
+      <span className="font-semibold text-emerald-100">
+        {joined ? t("whatsappBonus") : t("whatsappBanner")}
+      </span>
+      {!joined && (
+        <button
+          onClick={onJoin}
+          className="rounded-lg bg-amber-300 px-3 py-2 text-xs font-bold text-slate-950"
+        >
+          {t("joinNow")}
+        </button>
+      )}
+    </div>
+  );
+}
+function WhatsAppCard({ t, joined, onJoin }: any) {
+  return (
+    <div className="panel mt-5 border-emerald-300/20">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p className="eyebrow">{t("whatsappTitle")}</p>
+          <p className="mt-1 text-sm text-slate-300">{t("whatsappSubtitle")}</p>
+        </div>
+        {joined ? (
+          <span className="rounded-xl bg-emerald-400/15 px-3 py-2 text-xs font-bold text-emerald-200">
+            {t("whatsappBonus")}
+          </span>
+        ) : (
+          <button
+            onClick={onJoin}
+            className="rounded-xl bg-amber-300 px-4 py-2 text-sm font-bold text-slate-950"
+          >
+            {t("joinNow")}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+function ProfilePage({ t, user, profile, activePackage, totalEarnedPkr }: any) {
+  const [showPassword, setShowPassword] = useState(false);
+  const referral = trpc.referral.get.useQuery();
+  return (
+    <>
+      <PageHeading
+        eyebrow={t("profile")}
+        title={t("profile")}
+        description={t("profileEmail")}
+      />
+      <div className="grid gap-5 md:grid-cols-2">
+        <div className="panel space-y-4">
+          <div>
+            <p className="field-label">{t("profileEmail")}</p>
+            <p className="mt-1 font-semibold">{user?.email ?? "—"}</p>
+          </div>
+          <div>
+            <p className="field-label">{t("profileUsername")}</p>
+            <p className="mt-1 font-semibold">{profile.username}</p>
+          </div>
+          <div>
+            <p className="field-label">{t("profilePassword")}</p>
+            <div className="mt-1 flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/20 px-3 py-2 text-sm">
+              <span>{showPassword ? t("passwordSaved") : "••••••••"}</span>
+              <button
+                type="button"
+                aria-label={
+                  showPassword ? t("hidePassword") : t("showPassword")
+                }
+                onClick={() => setShowPassword(!showPassword)}
+                className="text-amber-300"
+              >
+                {showPassword ? (
+                  <EyeOff className="size-4" />
+                ) : (
+                  <Eye className="size-4" />
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="panel space-y-4">
+          <div>
+            <p className="field-label">{t("activePackage")}</p>
+            <p className="mt-1 font-semibold">
+              {activePackage
+                ? `${activePackage.icon} ${activePackage.name}`
+                : t("noActivePackageProfile")}
+            </p>
+          </div>
+          <div>
+            <p className="field-label">{t("totalReferrals")}</p>
+            <p className="mt-1 text-2xl font-bold">
+              {referral.data?.totalReferrals ?? 0}
+            </p>
+          </div>
+          <div>
+            <p className="field-label">{t("totalEarnings")}</p>
+            <p className="mt-1 text-2xl font-bold text-amber-300">
+              {money(totalEarnedPkr)}
+            </p>
+          </div>
+        </div>
+      </div>
+    </>
+  );
 }
 
-function PageHeading({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: React.ReactNode }) { return <div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p className="eyebrow">{eyebrow}</p><h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">{title}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">{description}</p></div>{action}</div>; }
+function ProfileSetup({
+  profile,
+  t,
+  onDone,
+}: {
+  profile: { username: string; preferredCurrency: "PKR" | "USD" };
+  t: (key: TranslationKey) => string;
+  onDone: () => void;
+}) {
+  const [username, setUsername] = useState(
+    profile.username.startsWith("member") ? "" : profile.username
+  );
+  const [referralCode, setReferralCode] = useState("");
+  const [currency, setCurrency] = useState<"PKR" | "USD">(
+    profile.preferredCurrency
+  );
+  const save = trpc.account.saveProfile.useMutation({
+    onSuccess: () => {
+      toast.success(t("saved"));
+      onDone();
+    },
+    onError: error => toast.error(error.message),
+  });
+  return (
+    <div className="mx-auto max-w-xl pt-8">
+      <div className="panel">
+        <div className="grid size-12 place-items-center rounded-2xl bg-amber-300 text-slate-950">
+          <Settings2 className="size-5" />
+        </div>
+        <p className="eyebrow mt-6">Package Earn Pro</p>
+        <h1 className="mt-2 text-3xl font-bold">{t("setupTitle")}</h1>
+        <p className="mt-3 leading-6 text-slate-300">{t("setupText")}</p>
+        <form
+          className="mt-7 space-y-4"
+          onSubmit={event => {
+            event.preventDefault();
+            save.mutate({
+              username,
+              referralCode: referralCode || undefined,
+              preferredCurrency: currency,
+            });
+          }}
+        >
+          <label>
+            <span className="field-label">{t("username")}</span>
+            <input
+              required
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              className="field"
+              placeholder="your_username"
+            />
+          </label>
+          <label>
+            <span className="field-label">{t("referralCode")}</span>
+            <input
+              value={referralCode}
+              onChange={e => setReferralCode(e.target.value.toUpperCase())}
+              className="field"
+              placeholder="PEP…"
+            />
+          </label>
+          <label>
+            <span className="field-label">{t("preferredCurrency")}</span>
+            <select
+              value={currency}
+              onChange={e => setCurrency(e.target.value as "PKR" | "USD")}
+              className="field"
+            >
+              <option value="PKR">PKR</option>
+              <option value="USD">USD (PayPal)</option>
+            </select>
+          </label>
+          <button
+            disabled={save.isPending}
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-300 text-sm font-bold text-slate-950 transition active:scale-[.97] disabled:opacity-60"
+          >
+            {save.isPending && <Loader2 className="size-4 animate-spin" />}
+            {t("saveProfile")}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
 
-function Dashboard({ t, overview, announcements, setPage, onJoinWhatsApp }: any) { const active = overview.activePackage; return <><PageHeading eyebrow={t("welcome")} title={t("overview")} description={active ? `${active.icon} ${active.name} · ${active.daysRemaining} ${t("daysLeft")}` : t("noActive")} action={<button onClick={() => setPage("wallet")} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-slate-100 transition hover:bg-white/10">{t("wallet")}</button>} /><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><StatCard icon={WalletCards} label={t("balance")} value={money(overview.profile.balancePkr)} accent="emerald" /><StatCard icon={ArrowUpRight} label={t("withdrawalLimit")} value={money(overview.profile.withdrawalLimitPkr)} accent="amber" /><StatCard icon={Play} label={t("adsToday")} value={`${overview.todayAds.watched} / ${overview.todayAds.total}`} accent="blue" /><StatCard icon={Sparkles} label={t("totalEarned")} value={money(overview.totalEarnedPkr)} accent="violet" /></div><div className="mt-5 grid gap-5 xl:grid-cols-[1.2fr_.8fr]"><div className="panel"><div className="flex items-center justify-between"><div><p className="eyebrow">{t("activePackage")}</p><h2 className="mt-1 text-xl font-bold">{active ? `${active.icon} ${active.name}` : t("noPackage")}</h2></div><PackageCheck className="size-8 text-amber-300" /></div>{active ? <><div className="mt-6 flex items-end justify-between"><div><p className="text-xs text-slate-400">{t("adsToday")}</p><p className="mt-1 text-2xl font-bold">{overview.todayAds.watched}<span className="text-slate-500"> / {overview.todayAds.total}</span></p></div><div className="text-right"><p className="text-xs text-slate-400">{t("daysLeft")}</p><p className="mt-1 text-2xl font-bold text-amber-300">{active.daysRemaining}</p></div></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-amber-300" style={{ width: `${Math.max(0, Math.min(100, (active.daysRemaining / 30) * 100))}%` }} /></div><button onClick={() => setPage("earn")} className="mt-6 inline-flex h-11 items-center gap-2 rounded-xl bg-amber-300 px-4 text-sm font-bold text-slate-950 transition active:scale-[.97]"><Play className="size-4" />{t("watchAd")}</button></> : <button onClick={() => setPage("packages")} className="mt-6 inline-flex h-11 items-center gap-2 rounded-xl bg-amber-300 px-4 text-sm font-bold text-slate-950 transition active:scale-[.97]"><Boxes className="size-4" />{t("viewPackages")}</button>}</div><div className="panel"><p className="eyebrow">{t("quickActions")}</p><div className="mt-4 grid gap-2"><QuickAction icon={CreditCard} label={t("makeDeposit")} onClick={() => setPage("deposit")} /><QuickAction icon={ArrowUpRight} label={t("requestWithdrawal")} onClick={() => setPage("withdrawal")} /><QuickAction icon={Users} label={t("inviteFriends")} onClick={() => setPage("referral")} /></div></div></div><WhatsAppCard t={t} joined={Boolean(overview.profile.whatsappJoined)} onJoin={onJoinWhatsApp} />{announcements.length > 0 && <div className="panel mt-5"><div className="flex items-center gap-2"><Bell className="size-4 text-amber-300" /><p className="font-bold">{t("announcements")}</p></div><div className="mt-4 space-y-3">{announcements.map((item: any) => <div key={item.id} className="rounded-xl border border-white/10 bg-slate-950/15 p-4"><p className="text-sm font-bold">{item.title}</p><p className="mt-1 text-sm leading-6 text-slate-300">{item.body}</p>{item.mediaUrl && <a target="_blank" rel="noreferrer" href={item.mediaUrl} className="mt-2 inline-block text-xs font-bold text-amber-300 underline">Open attachment</a>}</div>)}</div></div>}</> }
-function StatCard({ icon: Icon, label, value, accent }: any) { const colors: Record<string, string> = { emerald: "text-emerald-300 bg-emerald-300/10", amber: "text-amber-300 bg-amber-300/10", blue: "text-sky-300 bg-sky-300/10", violet: "text-violet-300 bg-violet-300/10" }; return <div className="panel"><div className={`grid size-9 place-items-center rounded-xl ${colors[accent]}`}><Icon className="size-4" /></div><p className="mt-6 text-xs text-slate-400">{label}</p><p className="mt-1 text-xl font-bold">{value}</p></div>; }
-function QuickAction({ icon: Icon, label, onClick }: any) { return <button onClick={onClick} className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/15 px-3 py-3 text-left text-sm font-semibold text-slate-200 transition hover:border-amber-300/30 hover:bg-white/5"><span className="flex items-center gap-2"><Icon className="size-4 text-amber-300" />{label}</span><ArrowUpRight className="size-4 text-slate-500" /></button>; }
+function Workspace({
+  page,
+  setPage,
+  t,
+  language,
+  user,
+  profile,
+  overview,
+  overviewLoading,
+  packages,
+  settings,
+  announcements,
+  wallet,
+  invalidateCore,
+}: any) {
+  if (overviewLoading || !overview)
+    return <LoadingScreen text={t("loading")} />;
+  const joinWhatsApp = trpc.platform.joinWhatsApp.useMutation({
+    onSuccess: data => {
+      if (data.bonusPkr) toast.success(t("whatsappBonus"));
+      invalidateCore();
+    },
+    onError: error => toast.error(error.message),
+  });
+  const handleJoinWhatsApp = () => {
+    window.open(
+      "https://whatsapp.com/channel/0029VbDB4LpDZ4LhbhGZsJ10",
+      "_blank",
+      "noopener,noreferrer"
+    );
+    joinWhatsApp.mutate();
+  };
+  const content: Record<Page, ReactNode> = {
+    dashboard: (
+      <Dashboard
+        t={t}
+        overview={overview}
+        announcements={announcements}
+        setPage={setPage}
+        onJoinWhatsApp={handleJoinWhatsApp}
+      />
+    ),
+    packages: (
+      <Packages
+        t={t}
+        plans={packages}
+        balance={profile.balancePkr}
+        active={overview.activePackage}
+        onDone={invalidateCore}
+      />
+    ),
+    wallet: <Wallet t={t} wallet={wallet} setPage={setPage} />,
+    deposit: <Deposit t={t} settings={settings} onDone={invalidateCore} />,
+    withdrawal: (
+      <Withdrawal
+        t={t}
+        profile={profile}
+        activePackage={overview.activePackage}
+        settings={settings}
+        onDone={invalidateCore}
+      />
+    ),
+    earn: <AdsTasks t={t} onDone={invalidateCore} />,
+    history: <TransactionHistory t={t} />,
+    referral: <Referral t={t} />,
+    support: <Support t={t} />,
+    profile: (
+      <ProfilePage
+        t={t}
+        user={user}
+        profile={profile}
+        activePackage={overview.activePackage}
+        totalEarnedPkr={overview.totalEarnedPkr}
+      />
+    ),
+    admin: <AdminPanel t={t} />,
+  };
+  return (
+    <>
+      <WhatsAppBanner
+        t={t}
+        joined={Boolean(profile.whatsappJoined)}
+        onJoin={handleJoinWhatsApp}
+      />
+      <div className="mt-4">{content[page as Page]}</div>
+      <p className="mt-8 text-center text-[11px] text-slate-500">
+        {t("brand")} ·{" "}
+        {language === "ur" ? "محفوظ ورک اسپیس" : "Secure member workspace"}
+      </p>
+    </>
+  );
+}
 
-function Packages({ t, plans, balance, active, onDone }: any) { const buy = trpc.package.buy.useMutation({ onSuccess: () => { toast.success(t("saved")); onDone(); }, onError: (error) => toast.error(error.message) }); return <><PageHeading eyebrow={t("purchase")} title={t("packageTitle")} description={t("packageSubtitle")} /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{plans.map((plan: any) => { const isActive = active?.id === plan.id; return <div key={plan.id} className={`panel relative overflow-hidden ${isActive ? "border-amber-300/45" : ""}`}><div className="absolute right-4 top-4 text-3xl opacity-70">{plan.icon}</div><p className="eyebrow">{plan.tier}</p><h2 className="mt-1 text-2xl font-bold">{plan.name}</h2><p className="mt-5 text-3xl font-bold text-amber-300">{money(plan.pricePkr)}</p><div className="mt-5 space-y-2 text-sm text-slate-300"><p className="flex items-center gap-2"><Play className="size-4 text-emerald-300" />{plan.dailyAds} {t("dailyAds")}</p><p className="flex items-center gap-2"><History className="size-4 text-emerald-300" />{t("validity")}</p></div><button disabled={buy.isPending || isActive} onClick={() => buy.mutate({ packageId: plan.id })} className={`mt-6 h-11 w-full rounded-xl text-sm font-bold transition active:scale-[.97] disabled:opacity-60 ${isActive ? "bg-emerald-400/15 text-emerald-200" : "bg-amber-300 text-slate-950"}`}>{isActive ? t("currentPackage") : t("buyPackage")}</button>{!isActive && balance < plan.pricePkr && <p className="mt-2 text-center text-[11px] text-amber-200/70">{t("insufficient")}</p>}</div>; })}</div></>; }
+function PageHeading({
+  eyebrow,
+  title,
+  description,
+  action,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <p className="eyebrow">{eyebrow}</p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">
+          {title}
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+          {description}
+        </p>
+      </div>
+      {action}
+    </div>
+  );
+}
 
-function Wallet({ t, wallet, setPage }: any) { if (!wallet) return <LoadingScreen text={t("loading")} />; return <><PageHeading eyebrow={t("wallet")} title={t("balance")} description={`${t("pkr")} + ${t("usd")}`} action={<div className="flex gap-2"><button onClick={() => setPage("deposit")} className="rounded-xl bg-amber-300 px-4 py-2 text-sm font-bold text-slate-950">{t("deposit")}</button><button onClick={() => setPage("withdrawal")} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold">{t("withdrawal")}</button></div>} /><div className="grid gap-4 md:grid-cols-3"><StatCard icon={WalletCards} label={t("balance")} value={money(wallet.profile.balancePkr)} accent="emerald" /><StatCard icon={Landmark} label={t("usd")} value={`$${wallet.balanceUsd.toFixed(2)}`} accent="blue" /><StatCard icon={ArrowUpRight} label={t("withdrawalLimit")} value={money(wallet.profile.withdrawalLimitPkr)} accent="amber" /></div><div className="mt-5 panel"><div className="flex items-center justify-between"><div><p className="eyebrow">{t("history")}</p><h2 className="mt-1 text-xl font-bold">{t("transactions")}</h2></div><button onClick={() => setPage("history")} className="text-sm font-bold text-amber-300">{t("history")}</button></div>{wallet.recent.length ? <div className="mt-4 divide-y divide-white/10">{wallet.recent.map((row: any) => <TransactionRow key={row.id} row={row} />)}</div> : <Empty text={t("noTransactions")} />}</div></>; }
-function TransactionRow({ row }: { row: any }) { const language = typeof window === "undefined" ? "en" : ((localStorage.getItem("pep-language") as Language) || "en"); return <div className="flex items-center justify-between gap-3 py-3"><div className="flex min-w-0 items-center gap-3"><div className="grid size-9 place-items-center rounded-xl bg-white/5"><ClipboardList className="size-4 text-amber-300" /></div><div className="min-w-0"><p className="truncate text-sm font-semibold">{translate(language, typeLabels[row.type] ?? "type")}</p><p className="mt-0.5 text-xs text-slate-500">{dateTime(row.createdAt)}</p></div></div><div className="text-right"><p className={`${row.direction === "credit" ? "text-emerald-300" : row.direction === "debit" ? "text-red-300" : "text-slate-200"} text-sm font-bold`}>{row.direction === "credit" ? "+" : row.direction === "debit" ? "−" : ""}{money(row.amountPkr)}</p><span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${statusClass(row.status)}`}>{translate(language, statusLabels[row.status] ?? "status")}</span></div></div>; }
-function Empty({ text }: { text: string }) { return <div className="mt-5 rounded-2xl border border-dashed border-white/15 px-5 py-12 text-center text-sm text-slate-400">{text}</div>; }
+function Dashboard({
+  t,
+  overview,
+  announcements,
+  setPage,
+  onJoinWhatsApp,
+}: any) {
+  const active = overview.activePackage;
+  const dashboardCards: Record<DashboardMetricKey, ReactNode> = {
+    balance: (
+      <StatCard
+        icon={WalletCards}
+        label={t("balance")}
+        value={money(overview.profile.balancePkr)}
+        accent="emerald"
+      />
+    ),
+    adsToday: (
+      <StatCard
+        icon={Play}
+        label={t("adsToday")}
+        value={`${overview.todayAds.watched} / ${overview.todayAds.total}`}
+        accent="blue"
+      />
+    ),
+    totalEarned: (
+      <StatCard
+        icon={Sparkles}
+        label={t("totalEarned")}
+        value={money(overview.totalEarnedPkr)}
+        accent="violet"
+      />
+    ),
+  };
+  return (
+    <>
+      <PageHeading
+        eyebrow={t("welcome")}
+        title={t("overview")}
+        description={
+          active
+            ? `${active.icon} ${active.name} · ${active.daysRemaining} ${t("daysLeft")}`
+            : t("noActive")
+        }
+        action={
+          <button
+            onClick={() => setPage("wallet")}
+            className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-slate-100 transition hover:bg-white/10"
+          >
+            {t("wallet")}
+          </button>
+        }
+      />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {dashboardMetricKeys.map(key => (
+          <div key={key}>{dashboardCards[key]}</div>
+        ))}
+      </div>
+      <div className="mt-5 grid gap-5 xl:grid-cols-[1.2fr_.8fr]">
+        <div className="panel">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="eyebrow">{t("activePackage")}</p>
+              <h2 className="mt-1 text-xl font-bold">
+                {active ? `${active.icon} ${active.name}` : t("noPackage")}
+              </h2>
+            </div>
+            <PackageCheck className="size-8 text-amber-300" />
+          </div>
+          {active ? (
+            <>
+              <div className="mt-6 flex items-end justify-between">
+                <div>
+                  <p className="text-xs text-slate-400">{t("adsToday")}</p>
+                  <p className="mt-1 text-2xl font-bold">
+                    {overview.todayAds.watched}
+                    <span className="text-slate-500">
+                      {" "}
+                      / {overview.todayAds.total}
+                    </span>
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-slate-400">{t("daysLeft")}</p>
+                  <p className="mt-1 text-2xl font-bold text-amber-300">
+                    {active.daysRemaining}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-amber-300"
+                  style={{
+                    width: `${Math.max(0, Math.min(100, (active.daysRemaining / 30) * 100))}%`,
+                  }}
+                />
+              </div>
+              <button
+                onClick={() => setPage("earn")}
+                className="mt-6 inline-flex h-11 items-center gap-2 rounded-xl bg-amber-300 px-4 text-sm font-bold text-slate-950 transition active:scale-[.97]"
+              >
+                <Play className="size-4" />
+                {t("watchAd")}
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setPage("packages")}
+              className="mt-6 inline-flex h-11 items-center gap-2 rounded-xl bg-amber-300 px-4 text-sm font-bold text-slate-950 transition active:scale-[.97]"
+            >
+              <Boxes className="size-4" />
+              {t("viewPackages")}
+            </button>
+          )}
+        </div>
+        <div className="panel">
+          <p className="eyebrow">{t("quickActions")}</p>
+          <div className="mt-4 grid gap-2">
+            <QuickAction
+              icon={CreditCard}
+              label={t("makeDeposit")}
+              onClick={() => setPage("deposit")}
+            />
+            <QuickAction
+              icon={ArrowUpRight}
+              label={t("requestWithdrawal")}
+              onClick={() => setPage("withdrawal")}
+            />
+            <QuickAction
+              icon={Users}
+              label={t("inviteFriends")}
+              onClick={() => setPage("referral")}
+            />
+          </div>
+        </div>
+      </div>
+      <WhatsAppCard
+        t={t}
+        joined={Boolean(overview.profile.whatsappJoined)}
+        onJoin={onJoinWhatsApp}
+      />
+      {announcements.length > 0 && (
+        <div className="panel mt-5">
+          <div className="flex items-center gap-2">
+            <Bell className="size-4 text-amber-300" />
+            <p className="font-bold">{t("announcements")}</p>
+          </div>
+          <div className="mt-4 space-y-3">
+            {announcements.map((item: any) => (
+              <div
+                key={item.id}
+                className="rounded-xl border border-white/10 bg-slate-950/15 p-4"
+              >
+                <p className="text-sm font-bold">{item.title}</p>
+                <p className="mt-1 text-sm leading-6 text-slate-300">
+                  {item.body}
+                </p>
+                {item.mediaUrl && (
+                  <a
+                    target="_blank"
+                    rel="noreferrer"
+                    href={item.mediaUrl}
+                    className="mt-2 inline-block text-xs font-bold text-amber-300 underline"
+                  >
+                    Open attachment
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+function StatCard({ icon: Icon, label, value, accent }: any) {
+  const colors: Record<string, string> = {
+    emerald: "text-emerald-300 bg-emerald-300/10",
+    amber: "text-amber-300 bg-amber-300/10",
+    blue: "text-sky-300 bg-sky-300/10",
+    violet: "text-violet-300 bg-violet-300/10",
+  };
+  return (
+    <div className="panel">
+      <div
+        className={`grid size-9 place-items-center rounded-xl ${colors[accent]}`}
+      >
+        <Icon className="size-4" />
+      </div>
+      <p className="mt-6 text-xs text-slate-400">{label}</p>
+      <p className="mt-1 text-xl font-bold">{value}</p>
+    </div>
+  );
+}
+function QuickAction({ icon: Icon, label, onClick }: any) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/15 px-3 py-3 text-left text-sm font-semibold text-slate-200 transition hover:border-amber-300/30 hover:bg-white/5"
+    >
+      <span className="flex items-center gap-2">
+        <Icon className="size-4 text-amber-300" />
+        {label}
+      </span>
+      <ArrowUpRight className="size-4 text-slate-500" />
+    </button>
+  );
+}
 
-function Deposit({ t, settings, onDone }: any) { const [currency, setCurrency] = useState<"PKR" | "USD">("PKR"); const [amount, setAmount] = useState(""); const [method, setMethod] = useState(""); const [proof, setProof] = useState(""); const accounts = trpc.deposit.accounts.useQuery({ currency }); const create = trpc.deposit.create.useMutation({ onSuccess: () => { toast.success(t("submitted")); setAmount(""); setProof(""); onDone(); }, onError: (error) => toast.error(error.message) }); const list = trpc.deposit.list.useQuery(); return <><PageHeading eyebrow={t("deposit")} title={t("makeDeposit")} description={t("officialAccounts")} /><div className="grid gap-5 xl:grid-cols-[.85fr_1.15fr]"><div className="panel"><p className="eyebrow">{t("officialAccounts")}</p><div className="mt-4 flex gap-2"><CurrencyTabs value={currency} onChange={setCurrency} t={t} /></div><div className="mt-4 space-y-3">{accounts.data?.map((account: any) => <div key={account.id} className="rounded-2xl border border-white/10 bg-slate-950/15 p-4"><p className="font-bold">{account.provider}</p><p className="mt-1 text-sm text-slate-300">{account.accountName}</p><p className="mt-2 font-mono text-sm text-amber-300">{account.accountDetails}</p></div>)}</div></div><div className="panel"><form onSubmit={(event) => { event.preventDefault(); if (!proof) return toast.error(t("uploadRequired")); const numeric = Number(amount); if (!numeric || numeric <= 0) return toast.error(t("amountRequired")); create.mutate({ currency, amount: numeric, method, proofData: proof }); }}><div className="grid gap-4 md:grid-cols-2"><label><span className="field-label">{t("amount")} ({currency})</span><input className="field" type="number" min={currency === "PKR" ? "100" : "0.36"} max={currency === "PKR" ? "1000" : "3.57"} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} /></label><p className="mb-4 rounded-xl border border-amber-300/15 bg-amber-300/10 p-3 text-xs text-amber-100">{t("depositLimit")}</p><label><span className="field-label">{t("paymentMethod")}</span><select required value={method} onChange={(e) => setMethod(e.target.value)} className="field"><option value="">{t("selectCurrency")}</option>{accounts.data?.map((account: any) => <option key={account.id} value={account.provider}>{account.provider}</option>)}</select></label></div><label className="mt-4 block"><span className="field-label">{t("proof")}</span><input className="field h-auto py-2" type="file" accept="image/*" onChange={async (e) => { const file = e.target.files?.[0]; if (file) setProof(await toDataUrl(file)); }} /></label><button disabled={create.isPending} className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-60"><ArrowDownToLine className="size-4" />{t("submitDeposit")}</button></form></div></div><div className="panel mt-5"><p className="eyebrow">{t("history")}</p>{list.data?.length ? <div className="mt-3 divide-y divide-white/10">{list.data.map((item: any) => <div key={item.id} className="flex justify-between py-3 text-sm"><div><p className="font-bold">{money(item.amountPkr)}</p><p className="text-xs text-slate-500">{item.method} · {dateTime(item.createdAt)}</p></div><span className={`h-fit rounded-full px-2 py-1 text-xs font-bold ${statusClass(item.status)}`}>{item.status}</span></div>)}</div> : <Empty text={t("noTransactions")} />}</div></>; }
-function CurrencyTabs({ value, onChange, t }: any) { return <div className="flex rounded-xl border border-white/10 bg-slate-950/20 p-1"><button onClick={() => onChange("PKR")} type="button" className={`rounded-lg px-3 py-1.5 text-xs font-bold ${value === "PKR" ? "bg-amber-300 text-slate-950" : "text-slate-300"}`}>{t("pkr")}</button><button onClick={() => onChange("USD")} type="button" className={`rounded-lg px-3 py-1.5 text-xs font-bold ${value === "USD" ? "bg-amber-300 text-slate-950" : "text-slate-300"}`}>{t("usd")}</button></div>; }
+function Packages({ t, plans, balance, active, onDone }: any) {
+  const buy = trpc.package.buy.useMutation({
+    onSuccess: () => {
+      toast.success(t("saved"));
+      onDone();
+    },
+    onError: error => toast.error(error.message),
+  });
+  return (
+    <>
+      <PageHeading
+        eyebrow={t("purchase")}
+        title={t("packageTitle")}
+        description={t("packageSubtitle")}
+      />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {plans.map((plan: any) => {
+          const isActive = active?.id === plan.id;
+          return (
+            <div
+              key={plan.id}
+              className={`panel relative overflow-hidden ${isActive ? "border-amber-300/45" : ""}`}
+            >
+              <div className="absolute right-4 top-4 text-3xl opacity-70">
+                {plan.icon}
+              </div>
+              <p className="eyebrow">{plan.tier}</p>
+              <h2 className="mt-1 text-2xl font-bold">{plan.name}</h2>
+              <p className="mt-5 text-3xl font-bold text-amber-300">
+                {money(plan.pricePkr)}
+              </p>
+              <div className="mt-5 space-y-2 text-sm text-slate-300">
+                <p className="flex items-center gap-2">
+                  <Play className="size-4 text-emerald-300" />
+                  {plan.dailyAds} {t("dailyAds")}
+                </p>
+                <p className="flex items-center gap-2">
+                  <History className="size-4 text-emerald-300" />
+                  {t("validity")}
+                </p>
+              </div>
+              <button
+                disabled={buy.isPending || isActive}
+                onClick={() => buy.mutate({ packageId: plan.id })}
+                className={`mt-6 h-11 w-full rounded-xl text-sm font-bold transition active:scale-[.97] disabled:opacity-60 ${isActive ? "bg-emerald-400/15 text-emerald-200" : "bg-amber-300 text-slate-950"}`}
+              >
+                {isActive ? t("currentPackage") : t("buyPackage")}
+              </button>
+              {!isActive && balance < plan.pricePkr && (
+                <p className="mt-2 text-center text-[11px] text-amber-200/70">
+                  {t("insufficient")}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
 
-function Withdrawal({ t, profile, activePackage, settings, onDone }: any) { const [currency, setCurrency] = useState<"PKR" | "USD">("PKR"); const [amount, setAmount] = useState(""); const [accountName, setAccountName] = useState(""); const [accountDetails, setAccountDetails] = useState(""); const create = trpc.withdrawal.create.useMutation({ onSuccess: () => { toast.success(t("submitted")); setAmount(""); onDone(); }, onError: (error) => toast.error(error.message) }); const list = trpc.withdrawal.list.useQuery(); const displayLimit = currency === "PKR" ? money(profile.withdrawalLimitPkr) : `$${(profile.withdrawalLimitPkr / settings.exchangeRatePkrPerUsd).toFixed(2)}`; return <><PageHeading eyebrow={t("withdrawal")} title={t("requestWithdrawal")} description={t("withdrawalNote")} /><div className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><div className="panel"><ArrowUpRight className="size-6 text-amber-300" />{profile.withdrawalLimitPkr >= 50 && <><p className="mt-5 text-sm text-slate-400">{t("availableLimit")}</p><p className="mt-1 text-3xl font-bold">{displayLimit}</p></>}<p className="mt-6 rounded-xl border border-amber-300/15 bg-amber-300/10 p-3 text-xs leading-5 text-amber-100/80">{t("withdrawLimit")}<br />{t("withdrawLimitUsd")}</p>{activePackage && <p className="mt-3 rounded-xl border border-red-300/20 bg-red-300/10 p-3 text-xs leading-5 text-red-100">{t("inviteUnlock")}</p>}{profile.withdrawalLimitPkr >= 50 && <p className="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-3 text-xs leading-5 text-emerald-100">{t("withdrawalUnlocked")}</p>}</div><div className="panel"><form onSubmit={(event) => { event.preventDefault(); const numeric = Number(amount); if (!numeric) return toast.error(t("amountRequired")); create.mutate({ currency, amount: numeric, accountName, accountDetails }); }}><div className="mb-4"><CurrencyTabs value={currency} onChange={setCurrency} t={t} /></div><div className="grid gap-4 md:grid-cols-2"><label><span className="field-label">{t("amount")} ({currency})</span><input className="field" type="number" min={currency === "PKR" ? "50" : "0.18"} max={currency === "PKR" ? "3000" : "10.71"} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} /></label><label><span className="field-label">{t("accountName")}</span><input required className="field" value={accountName} onChange={(e) => setAccountName(e.target.value)} /></label></div><label className="mt-4 block"><span className="field-label">{t("accountDetails")}</span><input required className="field" value={accountDetails} onChange={(e) => setAccountDetails(e.target.value)} /></label><button disabled={create.isPending} className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-60"><ArrowUpRight className="size-4" />{t("submitWithdrawal")}</button></form></div></div><div className="panel mt-5"><p className="eyebrow">{t("history")}</p>{list.data?.length ? <div className="mt-3 divide-y divide-white/10">{list.data.map((item: any) => <div key={item.id} className="flex justify-between py-3 text-sm"><div><p className="font-bold">{money(item.amountPkr)}</p><p className="text-xs text-slate-500">{dateTime(item.createdAt)}</p></div><span className={`h-fit rounded-full px-2 py-1 text-xs font-bold ${statusClass(item.status)}`}>{item.status}</span></div>)}</div> : <Empty text={t("noTransactions")} />}</div></>; }
+function Wallet({ t, wallet, setPage }: any) {
+  if (!wallet) return <LoadingScreen text={t("loading")} />;
+  return (
+    <>
+      <PageHeading
+        eyebrow={t("wallet")}
+        title={t("balance")}
+        description={`${t("pkr")} + ${t("usd")}`}
+        action={
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage("deposit")}
+              className="rounded-xl bg-amber-300 px-4 py-2 text-sm font-bold text-slate-950"
+            >
+              {t("deposit")}
+            </button>
+            <button
+              onClick={() => setPage("withdrawal")}
+              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold"
+            >
+              {t("withdrawal")}
+            </button>
+          </div>
+        }
+      />
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard
+          icon={WalletCards}
+          label={t("balance")}
+          value={money(wallet.profile.balancePkr)}
+          accent="emerald"
+        />
+        <StatCard
+          icon={Landmark}
+          label={t("usd")}
+          value={`$${wallet.balanceUsd.toFixed(2)}`}
+          accent="blue"
+        />
+        <StatCard
+          icon={ArrowUpRight}
+          label={t("withdrawalLimit")}
+          value={money(wallet.profile.withdrawalLimitPkr)}
+          accent="amber"
+        />
+      </div>
+      <div className="mt-5 panel">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="eyebrow">{t("history")}</p>
+            <h2 className="mt-1 text-xl font-bold">{t("transactions")}</h2>
+          </div>
+          <button
+            onClick={() => setPage("history")}
+            className="text-sm font-bold text-amber-300"
+          >
+            {t("history")}
+          </button>
+        </div>
+        {wallet.recent.length ? (
+          <div className="mt-4 divide-y divide-white/10">
+            {wallet.recent.map((row: any) => (
+              <TransactionRow key={row.id} row={row} />
+            ))}
+          </div>
+        ) : (
+          <Empty text={t("noTransactions")} />
+        )}
+      </div>
+    </>
+  );
+}
+function TransactionRow({ row }: { row: any }) {
+  const language =
+    typeof window === "undefined"
+      ? "en"
+      : (localStorage.getItem("pep-language") as Language) || "en";
+  return (
+    <div className="flex items-center justify-between gap-3 py-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="grid size-9 place-items-center rounded-xl bg-white/5">
+          <ClipboardList className="size-4 text-amber-300" />
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">
+            {translate(language, typeLabels[row.type] ?? "type")}
+          </p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {dateTime(row.createdAt)}
+          </p>
+        </div>
+      </div>
+      <div className="text-right">
+        <p
+          className={`${row.direction === "credit" ? "text-emerald-300" : row.direction === "debit" ? "text-red-300" : "text-slate-200"} text-sm font-bold`}
+        >
+          {row.direction === "credit"
+            ? "+"
+            : row.direction === "debit"
+              ? "−"
+              : ""}
+          {money(row.amountPkr)}
+        </p>
+        <span
+          className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${statusClass(row.status)}`}
+        >
+          {translate(language, statusLabels[row.status] ?? "status")}
+        </span>
+      </div>
+    </div>
+  );
+}
+function Empty({ text }: { text: string }) {
+  return (
+    <div className="mt-5 rounded-2xl border border-dashed border-white/15 px-5 py-12 text-center text-sm text-slate-400">
+      {text}
+    </div>
+  );
+}
 
-function Earn({ t, overview, onDone }: any) { const [session, setSession] = useState<any>(null); const [seconds, setSeconds] = useState(0); const start = trpc.earning.startAd.useMutation({ onSuccess: (data) => { setSession(data); setSeconds(data.timerSeconds); }, onError: (error) => toast.error(error.message) }); const heartbeat = trpc.earning.heartbeat.useMutation({ onError: () => setSession(null) }); const claim = trpc.earning.claimAd.useMutation({ onSuccess: () => { toast.success(t("saved")); setSession(null); onDone(); }, onError: (error) => toast.error(error.message) }); useEffect(() => { if (!session) return; const tick = () => setSeconds(Math.max(0, Math.ceil((new Date(session.availableAt).getTime() - Date.now()) / 1000))); const beat = () => { if (document.visibilityState === "visible") heartbeat.mutate({ sessionId: session.sessionId }); }; tick(); beat(); const timerInterval = window.setInterval(tick, 300); const heartbeatInterval = window.setInterval(beat, 4_000); return () => { window.clearInterval(timerInterval); window.clearInterval(heartbeatInterval); }; }, [session]); return <><PageHeading eyebrow={t("earn")} title={t("earnTitle")} description={t("earnSubtitle")} /><div className="grid gap-5 lg:grid-cols-[.8fr_1.2fr]"><div className="panel"><p className="eyebrow">{t("activePackage")}</p>{overview.activePackage ? <><p className="mt-2 text-2xl font-bold">{overview.activePackage.icon} {overview.activePackage.name}</p><div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/15 p-4"><p className="text-xs text-slate-400">{t("adsToday")}</p><p className="mt-1 text-3xl font-bold">{overview.todayAds.watched} <span className="text-slate-500">/ {overview.todayAds.total}</span></p></div></> : <p className="mt-4 rounded-xl border border-amber-300/15 bg-amber-300/10 p-4 text-sm leading-6 text-amber-100">{t("noActive")}</p>}</div><div className="panel text-center"><div className="mx-auto grid size-16 place-items-center rounded-full bg-amber-300/10 text-amber-300"><Play className="size-7" /></div>{session ? <><p className="eyebrow mt-5">{t("timer")}</p><h2 className="mt-1 text-5xl font-bold text-amber-300">00:{String(seconds).padStart(2, "0")}</h2><div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/15 p-4 text-left"><p className="font-bold">{session.ad.title}</p><p className="mt-2 text-sm leading-6 text-slate-300">{session.ad.content}</p>{session.ad.targetUrl && <a target="_blank" rel="noreferrer" href={session.ad.targetUrl} className="mt-3 inline-block text-sm font-bold text-amber-300 underline">{t("openSponsoredLink")}</a>}</div><button disabled={seconds > 0 || claim.isPending} onClick={() => claim.mutate({ sessionId: session.sessionId })} className="mt-5 h-11 w-full rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40">{t("claimReward")}</button></> : <><h2 className="mt-5 text-2xl font-bold">{t("watchAd")}</h2><p className="mt-2 text-sm text-slate-400">{t("adRewardMessage")}</p><button disabled={!overview.activePackage || start.isPending} onClick={() => start.mutate()} className="mt-6 h-11 w-full rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-40">{start.isPending ? <Loader2 className="mx-auto size-4 animate-spin" /> : t("watchAd")}</button></>}</div></div></>; }
+function Deposit({ t, settings, onDone }: any) {
+  const [currency, setCurrency] = useState<"PKR" | "USD">("PKR");
+  const [amount, setAmount] = useState("");
+  const [method, setMethod] = useState("");
+  const [proof, setProof] = useState("");
+  const accounts = trpc.deposit.accounts.useQuery({ currency });
+  const create = trpc.deposit.create.useMutation({
+    onSuccess: () => {
+      toast.success(t("submitted"));
+      setAmount("");
+      setProof("");
+      onDone();
+    },
+    onError: error => toast.error(error.message),
+  });
+  const list = trpc.deposit.list.useQuery();
+  return (
+    <>
+      <PageHeading
+        eyebrow={t("deposit")}
+        title={t("makeDeposit")}
+        description={t("officialAccounts")}
+      />
+      <div className="grid gap-5 xl:grid-cols-[.85fr_1.15fr]">
+        <div className="panel">
+          <p className="eyebrow">{t("officialAccounts")}</p>
+          <div className="mt-4 flex gap-2">
+            <CurrencyTabs value={currency} onChange={setCurrency} t={t} />
+          </div>
+          <div className="mt-4 space-y-3">
+            {accounts.data?.map((account: any) => (
+              <div
+                key={account.id}
+                className="rounded-2xl border border-white/10 bg-slate-950/15 p-4"
+              >
+                <p className="font-bold">{account.provider}</p>
+                <p className="mt-1 text-sm text-slate-300">
+                  {account.accountName}
+                </p>
+                <p className="mt-2 font-mono text-sm text-amber-300">
+                  {account.accountDetails}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="panel">
+          <form
+            onSubmit={event => {
+              event.preventDefault();
+              if (!proof) return toast.error(t("uploadRequired"));
+              const numeric = Number(amount);
+              if (!numeric || numeric <= 0)
+                return toast.error(t("amountRequired"));
+              create.mutate({
+                currency,
+                amount: numeric,
+                method,
+                proofData: proof,
+              });
+            }}
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <label>
+                <span className="field-label">
+                  {t("amount")} ({currency})
+                </span>
+                <input
+                  className="field"
+                  type="number"
+                  min={currency === "PKR" ? "100" : "0.36"}
+                  max={currency === "PKR" ? "1000" : "3.57"}
+                  step="0.01"
+                  value={amount}
+                  onChange={e => setAmount(e.target.value)}
+                />
+              </label>
+              <p className="mb-4 rounded-xl border border-amber-300/15 bg-amber-300/10 p-3 text-xs text-amber-100">
+                {t("depositLimit")}
+              </p>
+              <label>
+                <span className="field-label">{t("paymentMethod")}</span>
+                <select
+                  required
+                  value={method}
+                  onChange={e => setMethod(e.target.value)}
+                  className="field"
+                >
+                  <option value="">{t("selectCurrency")}</option>
+                  {accounts.data?.map((account: any) => (
+                    <option key={account.id} value={account.provider}>
+                      {account.provider}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label className="mt-4 block">
+              <span className="field-label">{t("proof")}</span>
+              <input
+                className="field h-auto py-2"
+                type="file"
+                accept="image/*"
+                onChange={async e => {
+                  const file = e.target.files?.[0];
+                  if (file) setProof(await toDataUrl(file));
+                }}
+              />
+            </label>
+            <button
+              disabled={create.isPending}
+              className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-60"
+            >
+              <ArrowDownToLine className="size-4" />
+              {t("submitDeposit")}
+            </button>
+          </form>
+        </div>
+      </div>
+      <div className="panel mt-5">
+        <p className="eyebrow">{t("history")}</p>
+        {list.data?.length ? (
+          <div className="mt-3 divide-y divide-white/10">
+            {list.data.map((item: any) => (
+              <div key={item.id} className="flex justify-between py-3 text-sm">
+                <div>
+                  <p className="font-bold">{money(item.amountPkr)}</p>
+                  <p className="text-xs text-slate-500">
+                    {item.method} · {dateTime(item.createdAt)}
+                  </p>
+                </div>
+                <span
+                  className={`h-fit rounded-full px-2 py-1 text-xs font-bold ${statusClass(item.status)}`}
+                >
+                  {item.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Empty text={t("noTransactions")} />
+        )}
+      </div>
+    </>
+  );
+}
+function CurrencyTabs({ value, onChange, t }: any) {
+  return (
+    <div className="flex rounded-xl border border-white/10 bg-slate-950/20 p-1">
+      <button
+        onClick={() => onChange("PKR")}
+        type="button"
+        className={`rounded-lg px-3 py-1.5 text-xs font-bold ${value === "PKR" ? "bg-amber-300 text-slate-950" : "text-slate-300"}`}
+      >
+        {t("pkr")}
+      </button>
+      <button
+        onClick={() => onChange("USD")}
+        type="button"
+        className={`rounded-lg px-3 py-1.5 text-xs font-bold ${value === "USD" ? "bg-amber-300 text-slate-950" : "text-slate-300"}`}
+      >
+        {t("usd")}
+      </button>
+    </div>
+  );
+}
 
-function TransactionHistory({ t }: any) { const [type, setType] = useState<any>("all"); const [status, setStatus] = useState<any>("all"); const input = useMemo(() => ({ type, status }), [type, status]); const history = trpc.wallet.transactions.useQuery(input); return <><PageHeading eyebrow={t("history")} title={t("transactions")} description={t("allTypes")} /><div className="panel"><div className="grid gap-3 sm:grid-cols-2"><select className="field" value={type} onChange={(e) => setType(e.target.value)}><option value="all">{t("allTypes")}</option>{Object.entries(typeLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select><select className="field" value={status} onChange={(e) => setStatus(e.target.value)}><option value="all">{t("allStatuses")}</option>{["pending", "approved", "rejected", "completed"].map((value) => <option value={value} key={value}>{value}</option>)}</select></div>{history.data?.length ? <div className="mt-4 divide-y divide-white/10">{history.data.map((row: any) => <TransactionRow key={row.id} row={row} />)}</div> : <Empty text={t("noTransactions")} />}</div></>; }
+function Withdrawal({ t, profile, activePackage, settings, onDone }: any) {
+  const [currency, setCurrency] = useState<"PKR" | "USD">("PKR");
+  const [amount, setAmount] = useState("");
+  const [accountName, setAccountName] = useState("");
+  const [accountDetails, setAccountDetails] = useState("");
+  const create = trpc.withdrawal.create.useMutation({
+    onSuccess: () => {
+      toast.success(t("submitted"));
+      setAmount("");
+      onDone();
+    },
+    onError: error => toast.error(error.message),
+  });
+  const list = trpc.withdrawal.list.useQuery();
+  const displayLimit =
+    currency === "PKR"
+      ? money(profile.withdrawalLimitPkr)
+      : `$${(profile.withdrawalLimitPkr / settings.exchangeRatePkrPerUsd).toFixed(2)}`;
+  return (
+    <>
+      <PageHeading
+        eyebrow={t("withdrawal")}
+        title={t("requestWithdrawal")}
+        description={t("withdrawalNote")}
+      />
+      <div className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]">
+        <div className="panel">
+          <ArrowUpRight className="size-6 text-amber-300" />
+          {profile.withdrawalLimitPkr >= 50 && (
+            <>
+              <p className="mt-5 text-sm text-slate-400">
+                {t("availableLimit")}
+              </p>
+              <p className="mt-1 text-3xl font-bold">{displayLimit}</p>
+            </>
+          )}
+          <p className="mt-6 rounded-xl border border-amber-300/15 bg-amber-300/10 p-3 text-xs leading-5 text-amber-100/80">
+            {t("withdrawLimit")}
+            <br />
+            {t("withdrawLimitUsd")}
+          </p>
+          {activePackage && (
+            <p className="mt-3 rounded-xl border border-red-300/20 bg-red-300/10 p-3 text-xs leading-5 text-red-100">
+              {t("inviteUnlock")}
+            </p>
+          )}
+          {profile.withdrawalLimitPkr >= 50 && (
+            <p className="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-3 text-xs leading-5 text-emerald-100">
+              {t("withdrawalUnlocked")}
+            </p>
+          )}
+        </div>
+        <div className="panel">
+          <form
+            onSubmit={event => {
+              event.preventDefault();
+              const numeric = Number(amount);
+              if (!numeric) return toast.error(t("amountRequired"));
+              create.mutate({
+                currency,
+                amount: numeric,
+                accountName,
+                accountDetails,
+              });
+            }}
+          >
+            <div className="mb-4">
+              <CurrencyTabs value={currency} onChange={setCurrency} t={t} />
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label>
+                <span className="field-label">
+                  {t("amount")} ({currency})
+                </span>
+                <input
+                  className="field"
+                  type="number"
+                  min={currency === "PKR" ? "50" : "0.18"}
+                  max={currency === "PKR" ? "3000" : "10.71"}
+                  step="0.01"
+                  value={amount}
+                  onChange={e => setAmount(e.target.value)}
+                />
+              </label>
+              <label>
+                <span className="field-label">{t("accountName")}</span>
+                <input
+                  required
+                  className="field"
+                  value={accountName}
+                  onChange={e => setAccountName(e.target.value)}
+                />
+              </label>
+            </div>
+            <label className="mt-4 block">
+              <span className="field-label">{t("accountDetails")}</span>
+              <input
+                required
+                className="field"
+                value={accountDetails}
+                onChange={e => setAccountDetails(e.target.value)}
+              />
+            </label>
+            <button
+              disabled={create.isPending}
+              className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-60"
+            >
+              <ArrowUpRight className="size-4" />
+              {t("submitWithdrawal")}
+            </button>
+          </form>
+        </div>
+      </div>
+      <div className="panel mt-5">
+        <p className="eyebrow">{t("history")}</p>
+        {list.data?.length ? (
+          <div className="mt-3 divide-y divide-white/10">
+            {list.data.map((item: any) => (
+              <div key={item.id} className="flex justify-between py-3 text-sm">
+                <div>
+                  <p className="font-bold">{money(item.amountPkr)}</p>
+                  <p className="text-xs text-slate-500">
+                    {dateTime(item.createdAt)}
+                  </p>
+                </div>
+                <span
+                  className={`h-fit rounded-full px-2 py-1 text-xs font-bold ${statusClass(item.status)}`}
+                >
+                  {item.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Empty text={t("noTransactions")} />
+        )}
+      </div>
+    </>
+  );
+}
 
-function Referral({ t }: any) { const referral = trpc.referral.get.useQuery(); const [copied, setCopied] = useState(false); if (!referral.data) return <LoadingScreen text={t("loading")} />; const link = `${window.location.origin}/?ref=${encodeURIComponent(referral.data.username)}`; const copy = async () => { await navigator.clipboard.writeText(link); setCopied(true); toast.success(t("copied")); window.setTimeout(() => setCopied(false), 1500); }; const share = async () => { if (navigator.share) await navigator.share({ title: t("brand"), text: t("referralTitle"), url: link }); else copy(); }; return <><PageHeading eyebrow={t("referral")} title={t("referralTitle")} description={t("referralSubtitle")} /><div className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]"><div className="panel"><p className="eyebrow">{t("yourLink")}</p><div className="mt-4 flex flex-col gap-3 sm:flex-row"><input readOnly className="field flex-1 font-mono text-xs" value={link} /><button onClick={copy} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-bold"><Copy className="size-4" />{copied ? "✓" : t("copy")}</button><button onClick={share} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-amber-300 px-4 text-sm font-bold text-slate-950"><Send className="size-4" />{t("share")}</button></div></div><div className="panel"><p className="eyebrow">{t("unlocked")}</p><p className="mt-2 text-3xl font-bold text-amber-300">{money(referral.data.withdrawalLimitPkr)}</p></div></div><div className="mt-5 grid gap-4 md:grid-cols-2"><StatCard icon={Users} label={t("totalReferrals")} value={String(referral.data.totalReferrals)} accent="blue" /><StatCard icon={PackageCheck} label={t("friendsPurchased")} value={String(referral.data.purchasedReferrals)} accent="emerald" /></div></>; }
+function Earn({ t, overview, onDone }: any) {
+  const [session, setSession] = useState<any>(null);
+  const [seconds, setSeconds] = useState(0);
+  const start = trpc.earning.startAd.useMutation({
+    onSuccess: data => {
+      setSession(data);
+      setSeconds(data.timerSeconds);
+    },
+    onError: error => toast.error(error.message),
+  });
+  const heartbeat = trpc.earning.heartbeat.useMutation({
+    onError: () => setSession(null),
+  });
+  const claim = trpc.earning.claimAd.useMutation({
+    onSuccess: () => {
+      toast.success(t("saved"));
+      setSession(null);
+      onDone();
+    },
+    onError: error => toast.error(error.message),
+  });
+  useEffect(() => {
+    if (!session) return;
+    const tick = () =>
+      setSeconds(
+        Math.max(
+          0,
+          Math.ceil(
+            (new Date(session.availableAt).getTime() - Date.now()) / 1000
+          )
+        )
+      );
+    const beat = () => {
+      if (document.visibilityState === "visible")
+        heartbeat.mutate({ sessionId: session.sessionId });
+    };
+    tick();
+    beat();
+    const timerInterval = window.setInterval(tick, 300);
+    const heartbeatInterval = window.setInterval(beat, 4_000);
+    return () => {
+      window.clearInterval(timerInterval);
+      window.clearInterval(heartbeatInterval);
+    };
+  }, [session]);
+  return (
+    <>
+      <PageHeading
+        eyebrow={t("earn")}
+        title={t("earnTitle")}
+        description={t("earnSubtitle")}
+      />
+      <div className="grid gap-5 lg:grid-cols-[.8fr_1.2fr]">
+        <div className="panel">
+          <p className="eyebrow">{t("activePackage")}</p>
+          {overview.activePackage ? (
+            <>
+              <p className="mt-2 text-2xl font-bold">
+                {overview.activePackage.icon} {overview.activePackage.name}
+              </p>
+              <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/15 p-4">
+                <p className="text-xs text-slate-400">{t("adsToday")}</p>
+                <p className="mt-1 text-3xl font-bold">
+                  {overview.todayAds.watched}{" "}
+                  <span className="text-slate-500">
+                    / {overview.todayAds.total}
+                  </span>
+                </p>
+              </div>
+            </>
+          ) : (
+            <p className="mt-4 rounded-xl border border-amber-300/15 bg-amber-300/10 p-4 text-sm leading-6 text-amber-100">
+              {t("noActive")}
+            </p>
+          )}
+        </div>
+        <div className="panel text-center">
+          <div className="mx-auto grid size-16 place-items-center rounded-full bg-amber-300/10 text-amber-300">
+            <Play className="size-7" />
+          </div>
+          {session ? (
+            <>
+              <p className="eyebrow mt-5">{t("timer")}</p>
+              <h2 className="mt-1 text-5xl font-bold text-amber-300">
+                00:{String(seconds).padStart(2, "0")}
+              </h2>
+              <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/15 p-4 text-left">
+                <p className="font-bold">{session.ad.title}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-300">
+                  {session.ad.content}
+                </p>
+                {session.ad.targetUrl && (
+                  <a
+                    target="_blank"
+                    rel="noreferrer"
+                    href={session.ad.targetUrl}
+                    className="mt-3 inline-block text-sm font-bold text-amber-300 underline"
+                  >
+                    {t("openSponsoredLink")}
+                  </a>
+                )}
+              </div>
+              <button
+                disabled={seconds > 0 || claim.isPending}
+                onClick={() => claim.mutate({ sessionId: session.sessionId })}
+                className="mt-5 h-11 w-full rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {t("claimReward")}
+              </button>
+            </>
+          ) : (
+            <>
+              <h2 className="mt-5 text-2xl font-bold">{t("watchAd")}</h2>
+              <p className="mt-2 text-sm text-slate-400">
+                {t("adRewardMessage")}
+              </p>
+              <button
+                disabled={!overview.activePackage || start.isPending}
+                onClick={() => start.mutate()}
+                className="mt-6 h-11 w-full rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-40"
+              >
+                {start.isPending ? (
+                  <Loader2 className="mx-auto size-4 animate-spin" />
+                ) : (
+                  t("watchAd")
+                )}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
 
-function Support({ t }: any) { const [subject, setSubject] = useState(""); const [description, setDescription] = useState(""); const [screenshot, setScreenshot] = useState(""); const create = trpc.support.create.useMutation({ onSuccess: () => { toast.success(t("submitted")); setSubject(""); setDescription(""); setScreenshot(""); tickets.refetch(); }, onError: (error) => toast.error(error.message) }); const tickets = trpc.support.list.useQuery(); return <><PageHeading eyebrow={t("support")} title={t("supportTitle")} description={t("supportSubtitle")} /><div className="grid gap-5 xl:grid-cols-[.9fr_1.1fr]"><div className="panel"><form onSubmit={(e) => { e.preventDefault(); create.mutate({ subject, description, screenshotData: screenshot || undefined }); }}><label><span className="field-label">{t("subject")}</span><input required className="field" value={subject} onChange={(e) => setSubject(e.target.value)} /></label><label className="mt-4 block"><span className="field-label">{t("description")}</span><textarea required className="field min-h-32 py-3" value={description} onChange={(e) => setDescription(e.target.value)} /></label><label className="mt-4 block"><span className="field-label">{t("proof")}</span><input className="field h-auto py-2" type="file" accept="image/*" onChange={async (e) => { const file = e.target.files?.[0]; if (file) setScreenshot(await toDataUrl(file)); }} /></label><button disabled={create.isPending} className="mt-5 h-11 w-full rounded-xl bg-amber-300 text-sm font-bold text-slate-950">{t("submitTicket")}</button></form></div><div className="panel"><p className="eyebrow">{t("ticketStatus")}</p>{tickets.data?.length ? <div className="mt-3 space-y-3">{tickets.data.map((ticket: any) => <div className="rounded-2xl border border-white/10 bg-slate-950/15 p-4" key={ticket.id}><div className="flex justify-between gap-3"><p className="font-bold">{ticket.subject}</p><span className={`h-fit rounded-full px-2 py-1 text-[10px] font-bold ${statusClass(ticket.status)}`}>{ticket.status}</span></div><p className="mt-2 text-sm leading-6 text-slate-300">{ticket.description}</p>{ticket.adminResponse && <div className="mt-3 rounded-xl bg-emerald-400/10 p-3 text-sm text-emerald-100"><p className="text-xs font-bold text-emerald-300">{t("response")}</p>{ticket.adminResponse}</div>}</div>)}</div> : <Empty text={t("noTickets")} />}</div></div></>; }
+function TransactionHistory({ t }: any) {
+  const [type, setType] = useState<any>("all");
+  const [status, setStatus] = useState<any>("all");
+  const input = useMemo(() => ({ type, status }), [type, status]);
+  const history = trpc.wallet.transactions.useQuery(input);
+  return (
+    <>
+      <PageHeading
+        eyebrow={t("history")}
+        title={t("transactions")}
+        description={t("allTypes")}
+      />
+      <div className="panel">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <select
+            className="field"
+            value={type}
+            onChange={e => setType(e.target.value)}
+          >
+            <option value="all">{t("allTypes")}</option>
+            {Object.entries(typeLabels).map(([value, label]) => (
+              <option value={value} key={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <select
+            className="field"
+            value={status}
+            onChange={e => setStatus(e.target.value)}
+          >
+            <option value="all">{t("allStatuses")}</option>
+            {["pending", "approved", "rejected", "completed"].map(value => (
+              <option value={value} key={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </div>
+        {history.data?.length ? (
+          <div className="mt-4 divide-y divide-white/10">
+            {history.data.map((row: any) => (
+              <TransactionRow key={row.id} row={row} />
+            ))}
+          </div>
+        ) : (
+          <Empty text={t("noTransactions")} />
+        )}
+      </div>
+    </>
+  );
+}
 
-function MobileNavigation({ nav, active, t, onSelect, isAdmin }: any) { const items = [...nav.slice(0, 5), ...(isAdmin ? [{ id: "admin", icon: ShieldCheck, label: "admin" }] : [])]; return <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-white/10 bg-[#102621]/95 px-1 pb-[max(env(safe-area-inset-bottom),.3rem)] pt-1 backdrop-blur-xl lg:hidden">{items.map((item: any) => { const Icon = item.icon; return <button key={item.id} onClick={() => onSelect(item.id)} className={`flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-2 text-[9px] font-bold ${active === item.id ? "text-amber-300" : "text-slate-500"}`}><Icon className="size-4" /><span className="truncate">{t(item.label)}</span></button>; })}</nav>; }
-function MobileDrawer({ nav, active, t, isAdmin, onSelect, onClose, onLogout }: any) { return <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm lg:hidden"><div className="ml-auto flex h-full w-[min(20rem,88vw)] flex-col bg-[#15332b] p-4 shadow-2xl"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><BrandMark /><p className="font-bold">{t("brand")}</p></div><button onClick={onClose} className="grid size-9 place-items-center rounded-xl bg-white/5"><X className="size-4" /></button></div><nav className="mt-6">{nav.map((item: any) => <NavButton key={item.id} item={item} active={active === item.id} onClick={() => onSelect(item.id)} label={t(item.label)} />)}{isAdmin && <NavButton item={{ id: "admin", icon: ShieldCheck }} active={active === "admin"} onClick={() => onSelect("admin")} label={t("admin")} />}</nav><button onClick={onLogout} className="mt-auto nav-item text-red-200"><LogOut className="size-4" />{t("logout")}</button></div></div>; }
+function Referral({ t }: any) {
+  const referral = trpc.referral.get.useQuery();
+  const [copied, setCopied] = useState(false);
+  if (!referral.data) return <LoadingScreen text={t("loading")} />;
+  const link = `${window.location.origin}/?ref=${encodeURIComponent(referral.data.username)}`;
+  const copy = async () => {
+    await navigator.clipboard.writeText(link);
+    setCopied(true);
+    toast.success(t("copied"));
+    window.setTimeout(() => setCopied(false), 1500);
+  };
+  const share = async () => {
+    if (navigator.share)
+      await navigator.share({
+        title: t("brand"),
+        text: t("referralTitle"),
+        url: link,
+      });
+    else copy();
+  };
+  return (
+    <>
+      <PageHeading
+        eyebrow={t("referral")}
+        title={t("referralTitle")}
+        description={t("referralSubtitle")}
+      />
+      <div className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
+        <div className="panel">
+          <p className="eyebrow">{t("yourLink")}</p>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <input
+              readOnly
+              className="field flex-1 font-mono text-xs"
+              value={link}
+            />
+            <button
+              onClick={copy}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-bold"
+            >
+              <Copy className="size-4" />
+              {copied ? "✓" : t("copy")}
+            </button>
+            <button
+              onClick={share}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-amber-300 px-4 text-sm font-bold text-slate-950"
+            >
+              <Send className="size-4" />
+              {t("share")}
+            </button>
+          </div>
+        </div>
+        <div className="panel">
+          <p className="eyebrow">{t("unlocked")}</p>
+          <p className="mt-2 text-3xl font-bold text-amber-300">
+            {money(referral.data.withdrawalLimitPkr)}
+          </p>
+        </div>
+      </div>
+      <div className="mt-5 grid gap-4 md:grid-cols-2">
+        <StatCard
+          icon={Users}
+          label={t("totalReferrals")}
+          value={String(referral.data.totalReferrals)}
+          accent="blue"
+        />
+        <StatCard
+          icon={PackageCheck}
+          label={t("friendsPurchased")}
+          value={String(referral.data.purchasedReferrals)}
+          accent="emerald"
+        />
+      </div>
+    </>
+  );
+}
+
+function Support({ t }: any) {
+  const [subject, setSubject] = useState("");
+  const [description, setDescription] = useState("");
+  const [screenshot, setScreenshot] = useState("");
+  const create = trpc.support.create.useMutation({
+    onSuccess: () => {
+      toast.success(t("submitted"));
+      setSubject("");
+      setDescription("");
+      setScreenshot("");
+      tickets.refetch();
+    },
+    onError: error => toast.error(error.message),
+  });
+  const tickets = trpc.support.list.useQuery();
+  return (
+    <>
+      <PageHeading
+        eyebrow={t("support")}
+        title={t("supportTitle")}
+        description={t("supportSubtitle")}
+      />
+      <div className="grid gap-5 xl:grid-cols-[.9fr_1.1fr]">
+        <div className="panel">
+          <form
+            onSubmit={e => {
+              e.preventDefault();
+              create.mutate({
+                subject,
+                description,
+                screenshotData: screenshot || undefined,
+              });
+            }}
+          >
+            <label>
+              <span className="field-label">{t("subject")}</span>
+              <input
+                required
+                className="field"
+                value={subject}
+                onChange={e => setSubject(e.target.value)}
+              />
+            </label>
+            <label className="mt-4 block">
+              <span className="field-label">{t("description")}</span>
+              <textarea
+                required
+                className="field min-h-32 py-3"
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+              />
+            </label>
+            <label className="mt-4 block">
+              <span className="field-label">{t("proof")}</span>
+              <input
+                className="field h-auto py-2"
+                type="file"
+                accept="image/*"
+                onChange={async e => {
+                  const file = e.target.files?.[0];
+                  if (file) setScreenshot(await toDataUrl(file));
+                }}
+              />
+            </label>
+            <button
+              disabled={create.isPending}
+              className="mt-5 h-11 w-full rounded-xl bg-amber-300 text-sm font-bold text-slate-950"
+            >
+              {t("submitTicket")}
+            </button>
+          </form>
+        </div>
+        <div className="panel">
+          <p className="eyebrow">{t("ticketStatus")}</p>
+          {tickets.data?.length ? (
+            <div className="mt-3 space-y-3">
+              {tickets.data.map((ticket: any) => (
+                <div
+                  className="rounded-2xl border border-white/10 bg-slate-950/15 p-4"
+                  key={ticket.id}
+                >
+                  <div className="flex justify-between gap-3">
+                    <p className="font-bold">{ticket.subject}</p>
+                    <span
+                      className={`h-fit rounded-full px-2 py-1 text-[10px] font-bold ${statusClass(ticket.status)}`}
+                    >
+                      {ticket.status}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">
+                    {ticket.description}
+                  </p>
+                  {ticket.adminResponse && (
+                    <div className="mt-3 rounded-xl bg-emerald-400/10 p-3 text-sm text-emerald-100">
+                      <p className="text-xs font-bold text-emerald-300">
+                        {t("response")}
+                      </p>
+                      {ticket.adminResponse}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Empty text={t("noTickets")} />
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function MobileNavigation({ nav, active, t, onSelect, isAdmin }: any) {
+  const items = [
+    ...nav.slice(0, 5),
+    ...(isAdmin ? [{ id: "admin", icon: ShieldCheck, label: "admin" }] : []),
+  ];
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-white/10 bg-[#102621]/95 px-1 pb-[max(env(safe-area-inset-bottom),.3rem)] pt-1 backdrop-blur-xl lg:hidden">
+      {items.map((item: any) => {
+        const Icon = item.icon;
+        return (
+          <button
+            key={item.id}
+            onClick={() => onSelect(item.id)}
+            className={`flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-2 text-[9px] font-bold ${active === item.id ? "text-amber-300" : "text-slate-500"}`}
+          >
+            <Icon className="size-4" />
+            <span className="truncate">{t(item.label)}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+function MobileDrawer({
+  nav,
+  active,
+  t,
+  isAdmin,
+  onSelect,
+  onClose,
+  onLogout,
+}: any) {
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm lg:hidden">
+      <div className="ml-auto flex h-full w-[min(20rem,88vw)] flex-col bg-[#15332b] p-4 shadow-2xl">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BrandMark />
+            <p className="font-bold">{t("brand")}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="grid size-9 place-items-center rounded-xl bg-white/5"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+        <nav className="mt-6">
+          {nav.map((item: any) => (
+            <NavButton
+              key={item.id}
+              item={item}
+              active={active === item.id}
+              onClick={() => onSelect(item.id)}
+              label={t(item.label)}
+            />
+          ))}
+          {isAdmin && (
+            <NavButton
+              item={{ id: "admin", icon: ShieldCheck }}
+              active={active === "admin"}
+              onClick={() => onSelect("admin")}
+              label={t("admin")}
+            />
+          )}
+        </nav>
+        <button onClick={onLogout} className="mt-auto nav-item text-red-200">
+          <LogOut className="size-4" />
+          {t("logout")}
+        </button>
+      </div>
+    </div>
+  );
+}

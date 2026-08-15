@@ -4,6 +4,7 @@ import {
   applyWithdrawalRequest,
   canUseMemberWorkspace,
   canClaimAd,
+  getAdClaimStatus,
   fromPkr,
   isDesignatedAdministrator,
   matchesRequestTransaction,
@@ -27,31 +28,107 @@ describe("Package Earn Pro server rules", () => {
   });
 
   it("reserves the wallet amount and resets the one-time withdrawal limit at request time", () => {
-    expect(applyWithdrawalRequest(1200, 500)).toEqual({ balancePkr: 700, withdrawalLimitPkr: 0 });
+    expect(applyWithdrawalRequest(1200, 500)).toEqual({
+      balancePkr: 700,
+      withdrawalLimitPkr: 0,
+    });
     expect(refundRejectedWithdrawal(700, 500)).toBe(1200);
   });
 
   it("enforces the exact referral-based withdrawal lock message", () => {
-    expect(validateWithdrawalRequest({ balancePkr: 1000, withdrawalLimitPkr: 0, amountPkr: 100, minimumWithdrawalPkr: 100, maximumWithdrawalPkr: 3000 })).toBe(WITHDRAWAL_LOCK_MESSAGE);
+    expect(
+      validateWithdrawalRequest({
+        balancePkr: 1000,
+        withdrawalLimitPkr: 0,
+        amountPkr: 100,
+        minimumWithdrawalPkr: 100,
+        maximumWithdrawalPkr: 3000,
+      })
+    ).toBe(WITHDRAWAL_LOCK_MESSAGE);
   });
 
   it("rejects withdrawal amounts outside of limits or the available balance", () => {
-    expect(validateWithdrawalRequest({ balancePkr: 1000, withdrawalLimitPkr: 500, amountPkr: 50, minimumWithdrawalPkr: 100, maximumWithdrawalPkr: 3000 })).toContain("between PKR 100 and PKR 3000");
-    expect(validateWithdrawalRequest({ balancePkr: 1000, withdrawalLimitPkr: 500, amountPkr: 600, minimumWithdrawalPkr: 100, maximumWithdrawalPkr: 3000 })).toContain("current withdrawal limit");
-    expect(validateWithdrawalRequest({ balancePkr: 150, withdrawalLimitPkr: 500, amountPkr: 200, minimumWithdrawalPkr: 100, maximumWithdrawalPkr: 3000 })).toContain("wallet balance is insufficient");
+    expect(
+      validateWithdrawalRequest({
+        balancePkr: 1000,
+        withdrawalLimitPkr: 500,
+        amountPkr: 50,
+        minimumWithdrawalPkr: 100,
+        maximumWithdrawalPkr: 3000,
+      })
+    ).toContain("between PKR 100 and PKR 3000");
+    expect(
+      validateWithdrawalRequest({
+        balancePkr: 1000,
+        withdrawalLimitPkr: 500,
+        amountPkr: 600,
+        minimumWithdrawalPkr: 100,
+        maximumWithdrawalPkr: 3000,
+      })
+    ).toContain("current withdrawal limit");
+    expect(
+      validateWithdrawalRequest({
+        balancePkr: 150,
+        withdrawalLimitPkr: 500,
+        amountPkr: 200,
+        minimumWithdrawalPkr: 100,
+        maximumWithdrawalPkr: 3000,
+      })
+    ).toContain("wallet balance is insufficient");
   });
 
   it("allows a reward only after the whole server-side timer duration has elapsed", () => {
     const startedAt = new Date("2026-08-14T12:00:00.000Z");
-    expect(canClaimAd(startedAt, new Date("2026-08-14T12:00:29.999Z"), 30)).toBe(false);
-    expect(canClaimAd(startedAt, new Date("2026-08-14T12:00:30.000Z"), 30)).toBe(true);
-    expect(AD_TIMER_MESSAGE).toContain("30 seconds");
+    expect(
+      canClaimAd(startedAt, new Date("2026-08-14T12:00:09.999Z"), 10)
+    ).toBe(false);
+    expect(
+      canClaimAd(startedAt, new Date("2026-08-14T12:00:10.000Z"), 10)
+    ).toBe(true);
+    expect(AD_TIMER_MESSAGE).toContain("expired");
+  });
+
+  it("permits a completed custom ad and expires stale or invalidated sessions without reward", () => {
+    const startedAt = new Date("2026-08-14T12:00:00.000Z");
+    expect(
+      getAdClaimStatus({
+        startedAt,
+        lastHeartbeatAt: new Date("2026-08-14T12:00:10.000Z"),
+        invalidatedAt: null,
+        now: new Date("2026-08-14T12:00:10.000Z"),
+        timerSeconds: 10,
+      })
+    ).toBe("claimable");
+    expect(
+      getAdClaimStatus({
+        startedAt,
+        lastHeartbeatAt: new Date("2026-08-14T12:00:00.000Z"),
+        invalidatedAt: null,
+        now: new Date("2026-08-14T12:00:10.001Z"),
+        timerSeconds: 10,
+      })
+    ).toBe("expired");
+    expect(
+      getAdClaimStatus({
+        startedAt,
+        lastHeartbeatAt: new Date("2026-08-14T12:00:10.000Z"),
+        invalidatedAt: new Date("2026-08-14T12:00:05.000Z"),
+        now: new Date("2026-08-14T12:00:10.000Z"),
+        timerSeconds: 10,
+      })
+    ).toBe("expired");
   });
 
   it("grants administrator capability only to the exact designated identity and denies blocked members", () => {
-    expect(isDesignatedAdministrator("muhammaddanyal4545@gmail.com", "danyal955163")).toBe(true);
-    expect(isDesignatedAdministrator("other@example.com", "danyal955163")).toBe(false);
-    expect(isDesignatedAdministrator("muhammaddanyal4545@gmail.com", "other_user")).toBe(false);
+    expect(
+      isDesignatedAdministrator("muhammaddanyal4545@gmail.com", "danyal955163")
+    ).toBe(true);
+    expect(isDesignatedAdministrator("other@example.com", "danyal955163")).toBe(
+      false
+    );
+    expect(
+      isDesignatedAdministrator("muhammaddanyal4545@gmail.com", "other_user")
+    ).toBe(false);
     expect(canUseMemberWorkspace(false)).toBe(true);
     expect(canUseMemberWorkspace(true)).toBe(false);
   });
@@ -59,6 +136,8 @@ describe("Package Earn Pro server rules", () => {
   it("matches financial status updates only to the transaction that owns a specific request", () => {
     expect(matchesRequestTransaction("deposit", 12, "deposit", 12)).toBe(true);
     expect(matchesRequestTransaction("deposit", 13, "deposit", 12)).toBe(false);
-    expect(matchesRequestTransaction("withdrawal", 12, "deposit", 12)).toBe(false);
+    expect(matchesRequestTransaction("withdrawal", 12, "deposit", 12)).toBe(
+      false
+    );
   });
 });

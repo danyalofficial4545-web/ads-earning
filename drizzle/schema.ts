@@ -82,7 +82,7 @@ export const ads = mysqlTable("ads", {
   id: int("id").autoincrement().primaryKey(),
   packageTier: varchar("packageTier", { length: 24 }).notNull(),
   title: varchar("title", { length: 128 }).notNull(),
-  contentType: mysqlEnum("contentType", ["text", "image", "video", "link"]).notNull().default("text"),
+  contentType: mysqlEnum("contentType", ["text", "image", "video", "link", "app"]).notNull().default("text"),
   content: text("content").notNull(),
   targetUrl: varchar("targetUrl", { length: 1024 }),
   isActive: boolean("isActive").notNull().default(true),
@@ -173,7 +173,7 @@ export const appSettings = mysqlTable("appSettings", {
   exchangeRatePkrPerUsd: int("exchangeRatePkrPerUsd").notNull().default(280),
   minimumWithdrawalPkr: int("minimumWithdrawalPkr").notNull().default(50),
   maximumWithdrawalPkr: int("maximumWithdrawalPkr").notNull().default(3000),
-  adTimerSeconds: int("adTimerSeconds").notNull().default(30),
+  adTimerSeconds: int("adTimerSeconds").notNull().default(10),
   referralCommissionPercent: int("referralCommissionPercent").notNull().default(50),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
