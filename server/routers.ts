@@ -33,7 +33,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { createLocalSession, hashPassword, LOCAL_SESSION_COOKIE, verifyPassword } from "./localAuth";
-import { AD_TIMER_MESSAGE, canClaimAd, canUseMemberWorkspace, fromPkr, referralLimitCredit, toPkr, validateDepositAmountPkr, validateWithdrawalRequest } from "./rules";
+import { AD_TIMER_MESSAGE, applyWithdrawalRequest, canClaimAd, canUseMemberWorkspace, fromPkr, referralLimitCredit, refundRejectedWithdrawal, toPkr, validateDepositAmountPkr, validateWithdrawalRequest } from "./rules";
 
 function fail(message: string, code: TRPCError["code"] = "BAD_REQUEST"): never {
   throw new TRPCError({ code, message });
@@ -383,7 +383,9 @@ export const appRouter = router({
       if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
       const result = await db.insert(withdrawals).values({ userId: user.id, currency: input.currency, amountPkr, accountName: input.accountName, accountDetails: input.accountDetails, status: "pending" });
       const withdrawalId = Number(result[0].insertId);
-      await db.insert(transactions).values({ userId: user.id, type: "withdrawal", direction: "neutral", amountPkr, status: "pending", note: "Withdrawal request awaiting approval", referenceType: "withdrawal", referenceId: withdrawalId });
+      const reserved = applyWithdrawalRequest(profile.balancePkr, amountPkr);
+      await db.update(profiles).set({ balancePkr: reserved.balancePkr, withdrawalLimitPkr: reserved.withdrawalLimitPkr }).where(eq(profiles.userId, user.id));
+      await db.insert(transactions).values({ userId: user.id, type: "withdrawal", direction: "debit", amountPkr, status: "pending", note: "Withdrawal request awaiting approval; wallet amount reserved", referenceType: "withdrawal", referenceId: withdrawalId });
       return { success: true };
     }),
     list: protectedProcedure.query(async ({ ctx }) => {
@@ -462,10 +464,11 @@ export const appRouter = router({
       const request = (await db.select().from(withdrawals).where(eq(withdrawals.id, input.id)).limit(1))[0];
       if (!request) fail("Withdrawal request was not found.", "NOT_FOUND");
       if (request.status !== "pending") fail("This withdrawal request has already been reviewed.");
-      if (input.approved) {
-        const profile = (await db.select().from(profiles).where(eq(profiles.userId, request.userId)).limit(1))[0];
-        if (!profile || profile.balancePkr < request.amountPkr || profile.withdrawalLimitPkr < request.amountPkr) fail("The user's balance or withdrawal limit is no longer sufficient.");
-        await db.update(profiles).set({ balancePkr: profile.balancePkr - request.amountPkr, withdrawalLimitPkr: profile.withdrawalLimitPkr - request.amountPkr }).where(eq(profiles.userId, request.userId));
+      const profile = (await db.select().from(profiles).where(eq(profiles.userId, request.userId)).limit(1))[0];
+      if (!profile) fail("The user's profile was not found.", "NOT_FOUND");
+      if (!input.approved) {
+        const refundedBalance = refundRejectedWithdrawal(profile.balancePkr, request.amountPkr);
+        await db.update(profiles).set({ balancePkr: refundedBalance, withdrawalLimitPkr: profile.withdrawalLimitPkr + request.amountPkr }).where(eq(profiles.userId, request.userId));
       }
       await db.update(withdrawals).set({ status: input.approved ? "approved" : "rejected", adminNote: input.note ?? null, reviewedAt: new Date() }).where(eq(withdrawals.id, request.id));
       await db.update(transactions).set({ status: input.approved ? "approved" : "rejected", direction: input.approved ? "debit" : "neutral" }).where(and(eq(transactions.referenceType, "withdrawal"), eq(transactions.referenceId, request.id), eq(transactions.status, "pending")));

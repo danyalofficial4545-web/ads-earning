@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   AD_TIMER_MESSAGE,
+  applyWithdrawalRequest,
   canUseMemberWorkspace,
   canClaimAd,
   fromPkr,
   isDesignatedAdministrator,
   matchesRequestTransaction,
   referralLimitCredit,
+  refundRejectedWithdrawal,
   toPkr,
   validateWithdrawalRequest,
   WITHDRAWAL_LOCK_MESSAGE,
@@ -22,6 +24,11 @@ describe("Package Earn Pro server rules", () => {
   it("credits referral value only to the withdrawal limit according to the configured percentage", () => {
     expect(referralLimitCredit(300, 50)).toBe(150);
     expect(referralLimitCredit(1000, 25)).toBe(250);
+  });
+
+  it("reserves the wallet amount and resets the one-time withdrawal limit at request time", () => {
+    expect(applyWithdrawalRequest(1200, 500)).toEqual({ balancePkr: 700, withdrawalLimitPkr: 0 });
+    expect(refundRejectedWithdrawal(700, 500)).toBe(1200);
   });
 
   it("enforces the exact referral-based withdrawal lock message", () => {

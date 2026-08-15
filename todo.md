@@ -66,3 +66,9 @@
 - [x] Correct Withdraw-section invite-message visibility: hide it before package activation and show the exact 50% referral message only after an active package exists, with no other website changes.
 - [x] Align backend withdrawal-lock messaging with the post-activation invite rule and prevent the old invite message before package activation.
 - [x] Add targeted withdrawal-message tests for no active package, active package with locked limit, and unlocked limit states.
+- [x] Ensure referral package commissions credit only the referrer withdrawal limit, never the main wallet balance.
+- [x] Reset the one-time withdrawal limit to zero after a successful withdrawal and allow later referrals to refill it.
+- [x] Deduct withdrawal amounts from wallet balance at request time, refund rejected requests, and avoid refunding approved requests.
+- [x] Add targeted tests for referral-limit-only crediting and pending/rejected/approved withdrawal accounting.
+- [x] Preserve referral credits earned while a withdrawal is pending by consuming only the reserved withdrawal amount on approval.
+- [x] Add router-level coverage for package.buy referral crediting and withdrawal create/review accounting across pending, rejected, and approved states.
