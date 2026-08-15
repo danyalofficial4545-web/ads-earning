@@ -88,7 +88,7 @@ function Landing({ language, setLanguage, t }: { language: Language; setLanguage
   const [signUp, setSignUp] = useState(() => ({ username: "", email: "", password: "", confirmPassword: "", referralCode: new URLSearchParams(window.location.search).get("ref") ?? "" }));
   const utils = trpc.useUtils();
   const complete = async (message: string) => { toast.success(message); await utils.auth.me.invalidate(); await utils.account.bootstrap.invalidate(); };
-  const register = trpc.auth.register.useMutation({ onSuccess: () => complete(t("accountCreated")), onError: (error) => { toast.error(error.message); if (error.data?.code === "CONFLICT") toast(t("googleAccountHelp"), { action: { label: t("googleContinue"), onClick: () => startLogin() } }); } });
+  const register = trpc.auth.register.useMutation({ onSuccess: () => complete(t("accountCreated")), onError: (error) => { toast.error(error.data?.code === "CONFLICT" ? `${error.message} ${t("duplicateRecovery")}` : error.message); if (error.data?.code === "CONFLICT") toast(t("googleAccountHelp"), { action: { label: t("googleContinue"), onClick: () => startLogin() } }); } });
   const login = trpc.auth.signIn.useMutation({ onSuccess: () => complete(t("signedIn")), onError: (error) => toast.error(error.message) });
   const submitSignUp = (event: React.FormEvent) => { event.preventDefault(); if (signUp.password !== signUp.confirmPassword) return toast.error(t("passwordMismatch")); register.mutate({ username: signUp.username, email: signUp.email, password: signUp.password, referralCode: signUp.referralCode || undefined }); };
   const submitSignIn = (event: React.FormEvent) => { event.preventDefault(); login.mutate(signIn); };

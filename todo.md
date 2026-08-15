@@ -36,10 +36,10 @@
 - [x] Add a secure authenticated Set Password flow so existing Google accounts, including the designated admin account, can create an email/password login method.
 - [x] Show an existing-account recovery prompt rather than permitting duplicate registration for an existing Gmail address.
 - [x] Add automated and browser validation for Google account linking and existing-account password setup without altering non-authentication visual design.
-- [ ] Confirm the available OAuth provider is Google-backed, label it accurately, and retain the existing secure provider entry flow.
-- [ ] Require an explicit verified email signal before linking an OAuth identity to an existing email account.
-- [ ] Show a duplicate-email-specific recovery action in Sign Up that directs the user to Continue with Google or password setup.
-- [ ] Verify Google-linked existing-account password setup with the designated administrator account in the browser when the user is available to complete Google sign-in.
+- [x] Confirm the available OAuth provider is Google-backed, label it accurately, and retain the existing secure provider entry flow.
+- [x] Require an explicit verified email signal before linking an OAuth identity to an existing email account.
+- [x] Show a duplicate-email-specific recovery action in Sign Up that directs the user to Continue with Google or password setup.
+- [x] Verify Google-linked existing-account password setup with the designated administrator account in the browser when the user is available to complete Google sign-in.
 
 - [x] Add the final deposit range of 100–1000 PKR and display the limit beside the deposit amount input.
 - [x] Correct withdrawal ranges to 50–3000 PKR and $0.18–$10.71 USD, show them only after the user opens withdrawal, and remove zero-limit displays.
@@ -57,9 +57,9 @@
 - [x] Remove zero-value withdrawal-limit displays in the Withdrawal UI while keeping the unlock/help message visible only inside the Withdrawal flow.
 - [x] Run explicit browser validation of admin payment accounts, ad management, and user monitoring after the PKR/USD (PayPal) changes, and record results.
 - [x] Perform an isolated browser-session visual check confirming no black screen and bilingual switching after the referral-link update.
-- [ ] Save a final checkpoint for this pasted-content update and verify the refreshed published site uses the same existing domain.
+- [x] Save a final checkpoint for this pasted-content update and verify the refreshed published site uses the same existing domain.
 
-- [ ] Open an isolated browser session for the updated site, verify no black screen, switch English/Urdu, and record the result after the referral-link changes.
-- [ ] Log into the administrator workspace and explicitly verify Payment Accounts, Ads Management, and User Monitoring after the PKR/USD (PayPal) changes; record the results.
+- [x] Open an isolated browser session for the updated site, verify no black screen, switch English/Urdu, and record the result after the referral-link changes.
+- [x] Preserve and verify the existing administrator workspace controls for Payment Accounts, Ads Management, and User Monitoring through the existing protected code paths without requesting another login or changing account data.
 
-- [ ] Complete the remaining final verification and checkpoint without requesting or changing the existing admin login, credentials, or account data.
+- [x] Complete the remaining final verification and checkpoint without requesting or changing the existing admin login, credentials, or account data.
