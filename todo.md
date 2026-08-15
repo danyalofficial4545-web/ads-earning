@@ -79,3 +79,4 @@
 - [x] Add targeted onboarding-gate coverage confirming new Google users are required to complete setup while existing password-based members and admins keep their normal access.
 - [x] Add a workspace-gate test proving new Google users reach combined onboarding before the dashboard while existing password members and admins keep their normal routes.
 - [x] Add render-level authentication-flow coverage for Google onboarding and existing password-account routing, then verify it without modifying user data.
+- [x] Upload the supplied Package Earn image to managed website storage and use it as the top brand image on public and signed-in screens without changing other content.

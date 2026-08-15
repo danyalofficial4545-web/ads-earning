@@ -5,6 +5,7 @@ import { AdminPanel } from "@/components/AdminPanel";
 import { GoogleOnboarding, PublicAuth } from "@/components/PublicAuth";
 import { WorkspaceAccessGate } from "@/components/WorkspaceAccessGate";
 import { trpc } from "@/lib/trpc";
+import { BRAND_IMAGE_URL } from "@/lib/brandAsset";
 import { resolveWorkspaceGate } from "@/lib/authOnboarding";
 import { translate, type Language, type TranslationKey } from "@/lib/i18n";
 import { toast } from "sonner";
@@ -81,7 +82,7 @@ export default function Home() {
   );
 }
 
-function BrandMark() { return <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-amber-200 to-amber-500 text-slate-950 shadow-lg shadow-amber-400/20"><Gem className="size-5" /></span>; }
+function BrandMark() { return <img src={BRAND_IMAGE_URL} alt="Package Earn Pro" className="size-11 shrink-0 rounded-2xl border border-amber-300/30 object-cover shadow-lg shadow-amber-400/20" />; }
 function LoadingScreen({ text }: { text: string }) { return <div className="grid min-h-screen place-items-center bg-[#102621]"><div className="flex flex-col items-center gap-4 text-slate-200"><BrandMark /><Loader2 className="size-5 animate-spin text-amber-300" /><p className="text-sm">{text}</p></div></div>; }
 function NavButton({ item, active, onClick, label }: { item: { id?: string; icon: typeof LayoutDashboard; label?: TranslationKey }; active: boolean; onClick: () => void; label: string }) { const Icon = item.icon; return <button onClick={onClick} className={`nav-item mb-1 w-full text-left ${active ? "nav-item-active" : ""}`}><Icon className="size-4" />{label}</button>; }
 

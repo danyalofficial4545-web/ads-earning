@@ -1,6 +1,7 @@
 import { startLogin } from "@/const";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { trpc } from "@/lib/trpc";
+import { BRAND_IMAGE_URL } from "@/lib/brandAsset";
 import type { Language, TranslationKey } from "@/lib/i18n";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
@@ -9,7 +10,7 @@ import { toast } from "sonner";
 type Translate = (key: TranslationKey) => string;
 
 function Brand() {
-  return <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-amber-200 to-amber-500 text-lg font-black text-slate-950 shadow-lg shadow-amber-400/20">P</span>;
+  return <img src={BRAND_IMAGE_URL} alt="Package Earn Pro" className="size-12 shrink-0 rounded-2xl border border-amber-300/30 object-cover shadow-lg shadow-amber-400/20" />;
 }
 
 function GoogleMark({ compact = false }: { compact?: boolean }) {
