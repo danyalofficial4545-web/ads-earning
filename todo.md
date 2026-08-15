@@ -40,3 +40,26 @@
 - [ ] Require an explicit verified email signal before linking an OAuth identity to an existing email account.
 - [ ] Show a duplicate-email-specific recovery action in Sign Up that directs the user to Continue with Google or password setup.
 - [ ] Verify Google-linked existing-account password setup with the designated administrator account in the browser when the user is available to complete Google sign-in.
+
+- [x] Add the final deposit range of 100–1000 PKR and display the limit beside the deposit amount input.
+- [x] Correct withdrawal ranges to 50–3000 PKR and $0.18–$10.71 USD, show them only after the user opens withdrawal, and remove zero-limit displays.
+- [x] Apply 50% referral commission logic and unlock withdrawals when referral commission reaches 50 PKR, with the exact requested messages.
+- [x] Add the WhatsApp Channel dashboard bonus card, top banner, one-time 30 PKR bonus, and channel link.
+- [x] Restrict currency choices to PKR and USD/PayPal, remove USDT, and apply the requested deposit and withdrawal methods/conversions.
+- [x] Extend the profile section with visible email/username, hidden password with view control, active package, total referrals, and total earnings.
+- [x] Verify admin payment-account management, ad management, and user-monitoring data remain functional with the new currency/settings.
+- [x] Fix referral links with ?ref=USERNAME, prevent black screens, preserve bilingual switching, and complete final build/incognito visual checks.
+- [x] Save the final updated version and deliver the new live link.
+
+- [x] Apply all pasted-content updates in the existing Package Earn Pro project only, with no new project and no new domain/link.
+- [x] Preserve the existing production domain and verify the update is associated with the same site after the final checkpoint.
+
+- [x] Remove zero-value withdrawal-limit displays in the Withdrawal UI while keeping the unlock/help message visible only inside the Withdrawal flow.
+- [x] Run explicit browser validation of admin payment accounts, ad management, and user monitoring after the PKR/USD (PayPal) changes, and record results.
+- [x] Perform an isolated browser-session visual check confirming no black screen and bilingual switching after the referral-link update.
+- [ ] Save a final checkpoint for this pasted-content update and verify the refreshed published site uses the same existing domain.
+
+- [ ] Open an isolated browser session for the updated site, verify no black screen, switch English/Urdu, and record the result after the referral-link changes.
+- [ ] Log into the administrator workspace and explicitly verify Payment Accounts, Ads Management, and User Monitoring after the PKR/USD (PayPal) changes; record the results.
+
+- [ ] Complete the remaining final verification and checkpoint without requesting or changing the existing admin login, credentials, or account data.

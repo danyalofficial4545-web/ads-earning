@@ -29,6 +29,20 @@
       "when": 1786719151735,
       "tag": "0003_bouncy_spirit",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1786793641829,
+      "tag": "0004_polite_beast",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1786793689040,
+      "tag": "0005_milky_maddog",
+      "breakpoints": true
     }
   ]
 }

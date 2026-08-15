@@ -35,3 +35,7 @@ The temporary account was logged out and the public Sign Up form was reopened, r
 The already-registered temporary Gmail address was submitted again through the Sign Up form to trigger the duplicate-account recovery response.
 
 The duplicate registration returned the expected server-side conflict for the existing Gmail address. The Sign Up error handler routes this conflict to the translated Continue with Google recovery action, while leaving the sign-up layout unchanged.
+
+Final pasted-requirements QA: TypeScript check passed, 22 automated tests passed across 8 test files, and production build completed. Desktop screenshot first captured the authenticated loading state, then after requests settled showed the existing deep-green visual system and Google password setup screen. The mobile screenshot captured during session initialization showed the branded loading screen rather than a black screen; network logs previously confirmed the authenticated data requests returned 200. The in-place update remains in the existing project and same preview URL.
+
+Isolated browser-session verification: the existing preview loaded the public Urdu authentication page with the preserved layout and no black screen. Switching the visible language control to English updated the page to English and changed the layout direction correctly. The Google entry remained visible alongside the existing custom sign-in/sign-up controls.

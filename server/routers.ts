@@ -33,7 +33,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { createLocalSession, hashPassword, LOCAL_SESSION_COOKIE, verifyPassword } from "./localAuth";
-import { AD_TIMER_MESSAGE, canClaimAd, canUseMemberWorkspace, fromPkr, referralLimitCredit, toPkr, validateWithdrawalRequest } from "./rules";
+import { AD_TIMER_MESSAGE, canClaimAd, canUseMemberWorkspace, fromPkr, referralLimitCredit, toPkr, validateDepositAmountPkr, validateWithdrawalRequest } from "./rules";
 
 function fail(message: string, code: TRPCError["code"] = "BAD_REQUEST"): never {
   throw new TRPCError({ code, message });
@@ -116,9 +116,11 @@ export const appRouter = router({
       if (usernameMatch[0]) fail("That username is already in use.", "CONFLICT");
       let referredByUserId: number | null = null;
       if (input.referralCode) {
-        const referrer = await db.select().from(profiles).where(eq(profiles.referralCode, input.referralCode.toUpperCase())).limit(1);
-        if (!referrer[0]) fail("Referral code was not found.");
-        referredByUserId = referrer[0].userId;
+        const referralValue = input.referralCode.trim();
+        let referrer = (await db.select().from(profiles).where(eq(profiles.referralCode, referralValue.toUpperCase())).limit(1))[0];
+        if (!referrer) referrer = (await db.select().from(profiles).where(eq(profiles.username, referralValue.toLowerCase())).limit(1))[0];
+        if (!referrer) fail("Referral code or username was not found.");
+        referredByUserId = referrer.userId;
       }
       const created = await db.insert(users).values({
         openId: `local_${randomUUID()}`,
@@ -184,10 +186,12 @@ export const appRouter = router({
       if (duplicate[0] && duplicate[0].userId !== user.id) fail("That username is already in use.");
       let referredByUserId = profile.referredByUserId;
       if (input.referralCode && !referredByUserId) {
-        const referrer = await db.select().from(profiles).where(eq(profiles.referralCode, input.referralCode.toUpperCase())).limit(1);
-        if (!referrer[0]) fail("Referral code was not found.");
-        if (referrer[0].userId === user.id) fail("You cannot use your own referral code.");
-        referredByUserId = referrer[0].userId;
+        const referralValue = input.referralCode.trim();
+        let referrer = (await db.select().from(profiles).where(eq(profiles.referralCode, referralValue.toUpperCase())).limit(1))[0];
+        if (!referrer) referrer = (await db.select().from(profiles).where(eq(profiles.username, referralValue.toLowerCase())).limit(1))[0];
+        if (!referrer) fail("Referral code or username was not found.");
+        if (referrer.userId === user.id) fail("You cannot use your own referral code.");
+        referredByUserId = referrer.userId;
       }
       if (isDesignatedAdmin(user, profile) && requestedName !== "danyal955163") fail("The designated administrator username cannot be changed.");
       await db.update(profiles).set({ username: requestedName, preferredCurrency: input.preferredCurrency, referredByUserId }).where(eq(profiles.userId, user.id));
@@ -212,6 +216,15 @@ export const appRouter = router({
       const db = await getDb();
       if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
       return db.select().from(broadcasts).orderBy(desc(broadcasts.createdAt)).limit(10);
+    }),
+    joinWhatsApp: protectedProcedure.mutation(async ({ ctx }) => {
+      const { user, profile } = await getActor(ctx);
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      if (profile.whatsappJoined || profile.whatsappBonusClaimed) return { success: true, bonusPkr: 0, alreadyJoined: true } as const;
+      await db.update(profiles).set({ whatsappJoined: true, whatsappBonusClaimed: true, balancePkr: profile.balancePkr + 30 }).where(eq(profiles.userId, user.id));
+      await db.insert(transactions).values({ userId: user.id, type: "adjustment", direction: "credit", amountPkr: 30, status: "completed", note: "WhatsApp Channel join bonus", referenceType: "whatsapp_bonus", referenceId: user.id });
+      return { success: true, bonusPkr: 30, alreadyJoined: false } as const;
     }),
   }),
   package: router({
@@ -334,6 +347,8 @@ export const appRouter = router({
       if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
       const receipt = await saveUpload(user.id, input.proofData, "deposit-proofs");
       const amountPkr = toPkr(input.amount, input.currency, settings.exchangeRatePkrPerUsd);
+      const depositError = validateDepositAmountPkr(amountPkr);
+      if (depositError) fail(depositError);
       const result = await db.insert(deposits).values({ userId: user.id, currency: input.currency, amountPkr, method: input.method, proofUrl: receipt.url, proofKey: receipt.key, status: "pending" });
       const depositId = Number(result[0].insertId);
       await db.insert(transactions).values({ userId: user.id, type: "deposit", direction: "neutral", amountPkr, status: "pending", note: `${input.method} deposit awaiting approval`, referenceType: "deposit", referenceId: depositId });
@@ -353,6 +368,7 @@ export const appRouter = router({
       const { user, profile } = await getActor(ctx);
       const settings = await getSettings();
       const amountPkr = toPkr(input.amount, input.currency, settings.exchangeRatePkrPerUsd);
+      if (amountPkr < 50 || amountPkr > 3000) fail("Withdraw Limit: 50 PKR to 3000 PKR.");
       const withdrawalError = validateWithdrawalRequest({
         balancePkr: profile.balancePkr,
         withdrawalLimitPkr: profile.withdrawalLimitPkr,
@@ -383,7 +399,7 @@ export const appRouter = router({
       const referrals = await db.select({ userId: profiles.userId, username: profiles.username, createdAt: profiles.createdAt }).from(profiles).where(eq(profiles.referredByUserId, user.id));
       const purchaserRows = referrals.length ? await db.select({ userId: userPackages.userId }).from(userPackages).where(inArray(userPackages.userId, referrals.map((referral) => referral.userId))) : [];
       const purchasers = new Set(purchaserRows.map((row) => row.userId));
-      return { referralCode: profile.referralCode, totalReferrals: referrals.length, purchasedReferrals: purchasers.size, withdrawalLimitPkr: profile.withdrawalLimitPkr, referrals };
+      return { username: profile.username, referralCode: profile.referralCode, totalReferrals: referrals.length, purchasedReferrals: purchasers.size, withdrawalLimitPkr: profile.withdrawalLimitPkr, referrals };
     }),
   }),
   support: router({

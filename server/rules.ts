@@ -1,4 +1,4 @@
-export const WITHDRAWAL_LOCK_MESSAGE = "⚠️ Your withdrawal limit is 0. To unlock withdrawal limit, invite friends using your referral link. When your referred friend purchases a package, 50% of the package amount is added to your withdrawal limit.";
+export const WITHDRAWAL_LOCK_MESSAGE = "Please invite someone to unlock withdrawal. Your 50% referral commission will be added to your withdraw limit.";
 export const AD_TIMER_MESSAGE = "⚠️ Please watch the full ad for at least 30 seconds before claiming your reward!";
 export const DESIGNATED_ADMIN_EMAIL = "muhammaddanyal4545@gmail.com";
 export const DESIGNATED_ADMIN_USERNAME = "danyal955163";
@@ -22,7 +22,7 @@ export function validateWithdrawalRequest(input: {
   minimumWithdrawalPkr: number;
   maximumWithdrawalPkr: number;
 }) {
-  if (input.withdrawalLimitPkr === 0) return WITHDRAWAL_LOCK_MESSAGE;
+  if (input.withdrawalLimitPkr < 50) return WITHDRAWAL_LOCK_MESSAGE;
   if (input.amountPkr < input.minimumWithdrawalPkr || input.amountPkr > input.maximumWithdrawalPkr) {
     return `Withdrawal amount must be between PKR ${input.minimumWithdrawalPkr} and PKR ${input.maximumWithdrawalPkr}.`;
   }
@@ -45,4 +45,14 @@ export function canUseMemberWorkspace(isBlocked: boolean) {
 
 export function matchesRequestTransaction(referenceType: string | null, referenceId: number | null, expectedType: string, expectedId: number) {
   return referenceType === expectedType && referenceId === expectedId;
+}
+
+export const DEPOSIT_MIN_PKR = 100;
+export const DEPOSIT_MAX_PKR = 1000;
+export const WITHDRAWAL_MIN_PKR = 50;
+export const WITHDRAWAL_MAX_PKR = 3000;
+
+export function validateDepositAmountPkr(amountPkr: number) {
+  if (amountPkr < DEPOSIT_MIN_PKR || amountPkr > DEPOSIT_MAX_PKR) return `Deposit Limit: ${DEPOSIT_MIN_PKR} PKR to ${DEPOSIT_MAX_PKR} PKR.`;
+  return null;
 }

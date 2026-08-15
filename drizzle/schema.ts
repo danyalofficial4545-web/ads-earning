@@ -33,6 +33,8 @@ export const profiles = mysqlTable("profiles", {
   withdrawalLimitPkr: int("withdrawalLimitPkr").notNull().default(0),
   preferredCurrency: mysqlEnum("preferredCurrency", ["PKR", "USD"]).notNull().default("PKR"),
   isBlocked: boolean("isBlocked").notNull().default(false),
+  whatsappJoined: boolean("whatsappJoined").notNull().default(false),
+  whatsappBonusClaimed: boolean("whatsappBonusClaimed").notNull().default(false),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => [
@@ -169,7 +171,7 @@ export const broadcasts = mysqlTable("broadcasts", {
 export const appSettings = mysqlTable("appSettings", {
   id: int("id").primaryKey(),
   exchangeRatePkrPerUsd: int("exchangeRatePkrPerUsd").notNull().default(280),
-  minimumWithdrawalPkr: int("minimumWithdrawalPkr").notNull().default(100),
+  minimumWithdrawalPkr: int("minimumWithdrawalPkr").notNull().default(50),
   maximumWithdrawalPkr: int("maximumWithdrawalPkr").notNull().default(3000),
   adTimerSeconds: int("adTimerSeconds").notNull().default(30),
   referralCommissionPercent: int("referralCommissionPercent").notNull().default(50),
