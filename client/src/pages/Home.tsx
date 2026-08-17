@@ -9,6 +9,9 @@ import { trpc } from "@/lib/trpc";
 import { BRAND_IMAGE_URL } from "@/lib/brandAsset";
 import { resolveWorkspaceGate } from "@/lib/authOnboarding";
 import { resolvePublicBranding } from "@/lib/publicBranding";
+import { groupHistoryRows, historyDateLabel } from "@/lib/groupedHistory";
+import { isMemberBottomNavigationId } from "@/lib/memberNavigation";
+import { buildInviteSummary } from "@/lib/inviteSummary";
 import {
   dashboardMetricKeys,
   type DashboardMetricKey,
@@ -53,14 +56,13 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 type Page =
   | "dashboard"
   | "packages"
-  | "wallet"
+  | "profile"
   | "deposit"
   | "withdrawal"
   | "earn"
   | "history"
-  | "referral"
+  | "invite"
   | "support"
-  | "profile"
   | "admin";
 
 const nav: Array<{
@@ -70,12 +72,10 @@ const nav: Array<{
 }> = [
   { id: "dashboard", icon: LayoutDashboard, label: "dashboard" },
   { id: "packages", icon: Boxes, label: "packages" },
-  { id: "wallet", icon: WalletCards, label: "wallet" },
-  { id: "deposit", icon: CreditCard, label: "deposit" },
-  { id: "withdrawal", icon: ArrowUpRight, label: "withdrawal" },
+  { id: "profile", icon: WalletCards, label: "profile" },
+  { id: "invite", icon: Users, label: "invite" },
   { id: "earn", icon: Play, label: "earn" },
   { id: "history", icon: History, label: "history" },
-  { id: "referral", icon: Users, label: "referral" },
   { id: "support", icon: CircleHelp, label: "support" },
 ];
 
@@ -241,7 +241,7 @@ export default function Home() {
               <Menu className="size-4" />
             </button>
             <button
-              onClick={() => selectPage("wallet")}
+              onClick={() => selectPage("profile")}
               className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-emerald-200 md:flex"
             >
               <WalletCards className="size-4" />
@@ -1048,7 +1048,19 @@ function Workspace({
         onDone={invalidateCore}
       />
     ),
-    wallet: <Wallet t={t} wallet={wallet} setPage={setPage} />,
+    profile: (
+      <ProfileWallet
+        t={t}
+        wallet={wallet}
+        setPage={setPage}
+        user={user}
+        profile={profile}
+        activePackage={overview.activePackage}
+        totalEarnedPkr={overview.totalEarnedPkr}
+        joined={Boolean(profile.whatsappJoined)}
+        onJoin={handleJoinWhatsApp}
+      />
+    ),
     deposit: <Deposit t={t} settings={settings} packages={packages} onDone={invalidateCore} />,
     withdrawal: (
       <Withdrawal
@@ -1061,17 +1073,8 @@ function Workspace({
     ),
     earn: <AdsTasks t={t} onDone={invalidateCore} />,
     history: <TransactionHistory t={t} />,
-    referral: <Referral t={t} />,
+    invite: <Referral t={t} />,
     support: <Support t={t} />,
-    profile: (
-      <ProfilePage
-        t={t}
-        user={user}
-        profile={profile}
-        activePackage={overview.activePackage}
-        totalEarnedPkr={overview.totalEarnedPkr}
-      />
-    ),
     admin: <AdminPanel t={t} />,
   };
   return (
@@ -1163,7 +1166,7 @@ function Dashboard({
         }
         action={
           <button
-            onClick={() => setPage("wallet")}
+            onClick={() => setPage("profile")}
             className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-slate-100 transition hover:bg-white/10"
           >
             {t("wallet")}
@@ -1248,7 +1251,7 @@ function Dashboard({
             <QuickAction
               icon={Users}
               label={t("inviteFriends")}
-              onClick={() => setPage("referral")}
+              onClick={() => setPage("invite")}
             />
           </div>
         </div>
@@ -1387,14 +1390,26 @@ function Packages({ t, plans, balance, active, onDone }: any) {
   );
 }
 
-function Wallet({ t, wallet, setPage }: any) {
+function ProfileWallet({
+  t,
+  wallet,
+  setPage,
+  user,
+  profile,
+  activePackage,
+  totalEarnedPkr,
+  joined,
+  onJoin,
+}: any) {
   if (!wallet) return <LoadingScreen text={t("loading")} />;
+  const [showPassword, setShowPassword] = useState(false);
+  const referral = trpc.referral.get.useQuery();
   return (
     <>
       <PageHeading
-        eyebrow={t("wallet")}
-        title={t("balance")}
-        description={`${t("pkr")} + ${t("usd")}`}
+        eyebrow={t("profile")}
+        title={t("profile")}
+        description={t("walletBalance")}
         action={
           <div className="flex gap-2">
             <button
@@ -1412,7 +1427,8 @@ function Wallet({ t, wallet, setPage }: any) {
           </div>
         }
       />
-      <div className="grid gap-4 md:grid-cols-3">
+      <WhatsAppCard t={t} joined={joined} onJoin={onJoin} />
+      <div className="mt-5 grid gap-4 md:grid-cols-2">
         <StatCard
           icon={WalletCards}
           label={t("balance")}
@@ -1425,12 +1441,48 @@ function Wallet({ t, wallet, setPage }: any) {
           value={`$${wallet.balanceUsd.toFixed(2)}`}
           accent="blue"
         />
-        <StatCard
-          icon={ArrowUpRight}
-          label={t("withdrawalLimit")}
-          value={money(wallet.profile.withdrawalLimitPkr)}
-          accent="amber"
-        />
+      </div>
+      <div className="mt-5 grid gap-5 xl:grid-cols-[1.05fr_.95fr]">
+        <div className="panel space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="eyebrow">{t("personalInfo")}</p>
+              <h2 className="mt-1 text-xl font-bold">{t("profile")}</h2>
+            </div>
+            <Settings2 className="size-5 text-amber-300" />
+          </div>
+          <div>
+            <p className="field-label">{t("profileEmail")}</p>
+            <p className="mt-1 font-semibold">{user?.email ?? "—"}</p>
+          </div>
+          <div>
+            <p className="field-label">{t("profileUsername")}</p>
+            <p className="mt-1 font-semibold">{profile.username}</p>
+          </div>
+          <div>
+            <p className="field-label">{t("profilePassword")}</p>
+            <div className="mt-1 flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/20 px-3 py-2 text-sm">
+              <span>{showPassword ? t("passwordSaved") : "••••••••"}</span>
+              <button type="button" aria-label={showPassword ? t("hidePassword") : t("showPassword")} onClick={() => setShowPassword(!showPassword)} className="text-amber-300">
+                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="panel space-y-4">
+          <div>
+            <p className="field-label">{t("activePackage")}</p>
+            <p className="mt-1 font-semibold">{activePackage ? `${activePackage.icon} ${activePackage.name}` : t("noActivePackageProfile")}</p>
+          </div>
+          <div>
+            <p className="field-label">{t("totalReferrals")}</p>
+            <p className="mt-1 text-2xl font-bold">{referral.data?.totalReferrals ?? 0}</p>
+          </div>
+          <div>
+            <p className="field-label">{t("totalEarnings")}</p>
+            <p className="mt-1 text-2xl font-bold text-amber-300">{money(totalEarnedPkr)}</p>
+          </div>
+        </div>
       </div>
       <div className="mt-5 panel">
         <div className="flex items-center justify-between">
@@ -1506,6 +1558,34 @@ function Empty({ text }: { text: string }) {
   );
 }
 
+function GroupedFinancialHistory({ rows, t, kind }: { rows: any[]; t: (key: TranslationKey) => string; kind: "deposit" | "withdrawal" }) {
+  const groups = groupHistoryRows(rows ?? []);
+  return (
+    <div className="mt-5 space-y-5">
+      {groups.map(group => {
+        const label = historyDateLabel(group.key);
+        const groupTitle = label === "date" ? new Date(`${group.key}T12:00:00`).toLocaleDateString() : t(label);
+        return (
+          <section key={group.key} className="rounded-2xl border border-white/10 bg-slate-950/10 p-4">
+            <p className="text-xs font-bold uppercase tracking-[.16em] text-amber-300">{groupTitle}</p>
+            <div className="mt-2 divide-y divide-white/10">
+              {group.items.map((item: any) => (
+                <div key={item.id} className="flex items-center justify-between gap-3 py-3 text-sm">
+                  <div>
+                    <p className="font-bold">{money(item.amountPkr)} {t(kind)}</p>
+                    <p className="mt-1 text-xs text-slate-500">{kind === "deposit" ? `${item.method} · ` : ""}{dateTime(item.createdAt)}</p>
+                  </div>
+                  <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${statusClass(item.status)}`}>{t(statusLabels[item.status] ?? "status")}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
 function Deposit({ t, settings, packages, onDone }: any) {
   const [currency, setCurrency] = useState<"PKR" | "USD">("PKR");
   const [amount, setAmount] = useState("");
@@ -1515,6 +1595,7 @@ function Deposit({ t, settings, packages, onDone }: any) {
   const [transactionId, setTransactionId] = useState("");
   const [requestedPackageId, setRequestedPackageId] = useState("");
   const [proof, setProof] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
   const accounts = trpc.deposit.accounts.useQuery({ currency });
   const create = trpc.deposit.create.useMutation({
     onSuccess: () => {
@@ -1536,6 +1617,7 @@ function Deposit({ t, settings, packages, onDone }: any) {
         eyebrow={t("deposit")}
         title={t("makeDeposit")}
         description={t("officialAccounts")}
+        action={<button onClick={() => setShowHistory(!showHistory)} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-amber-300">{showHistory ? t("hideHistory") : t("viewDepositHistory")}</button>}
       />
       <div className="grid gap-5 xl:grid-cols-[.85fr_1.15fr]">
         <div className="panel">
@@ -1658,30 +1740,7 @@ function Deposit({ t, settings, packages, onDone }: any) {
           </form>
         </div>
       </div>
-      <div className="panel mt-5">
-        <p className="eyebrow">{t("history")}</p>
-        {list.data?.length ? (
-          <div className="mt-3 divide-y divide-white/10">
-            {list.data.map((item: any) => (
-              <div key={item.id} className="flex justify-between py-3 text-sm">
-                <div>
-                  <p className="font-bold">{money(item.amountPkr)}</p>
-                  <p className="text-xs text-slate-500">
-                    {item.method} · {dateTime(item.createdAt)}
-                  </p>
-                </div>
-                <span
-                  className={`h-fit rounded-full px-2 py-1 text-xs font-bold ${statusClass(item.status)}`}
-                >
-                  {item.status}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <Empty text={t("noTransactions")} />
-        )}
-      </div>
+      {showHistory && <div className="panel mt-5"><p className="eyebrow">{t("viewDepositHistory")}</p>{list.data?.length ? <GroupedFinancialHistory rows={list.data} t={t} kind="deposit" /> : <Empty text={t("noTransactions")} />}</div>}
     </>
   );
 }
@@ -1711,6 +1770,7 @@ function Withdrawal({ t, profile, activePackage, settings, onDone }: any) {
   const [amount, setAmount] = useState("");
   const [accountName, setAccountName] = useState("");
   const [accountDetails, setAccountDetails] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
   const create = trpc.withdrawal.create.useMutation({
     onSuccess: () => {
       toast.success(t("submitted"));
@@ -1730,6 +1790,7 @@ function Withdrawal({ t, profile, activePackage, settings, onDone }: any) {
         eyebrow={t("withdrawal")}
         title={t("requestWithdrawal")}
         description={t("withdrawalNote")}
+        action={<button onClick={() => setShowHistory(!showHistory)} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-amber-300">{showHistory ? t("hideHistory") : t("viewWithdrawalHistory")}</button>}
       />
       <div className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]">
         <div className="panel">
@@ -1819,30 +1880,7 @@ function Withdrawal({ t, profile, activePackage, settings, onDone }: any) {
           </form>
         </div>
       </div>
-      <div className="panel mt-5">
-        <p className="eyebrow">{t("history")}</p>
-        {list.data?.length ? (
-          <div className="mt-3 divide-y divide-white/10">
-            {list.data.map((item: any) => (
-              <div key={item.id} className="flex justify-between py-3 text-sm">
-                <div>
-                  <p className="font-bold">{money(item.amountPkr)}</p>
-                  <p className="text-xs text-slate-500">
-                    {dateTime(item.createdAt)}
-                  </p>
-                </div>
-                <span
-                  className={`h-fit rounded-full px-2 py-1 text-xs font-bold ${statusClass(item.status)}`}
-                >
-                  {item.status}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <Empty text={t("noTransactions")} />
-        )}
-      </div>
+      {showHistory && <div className="panel mt-5"><p className="eyebrow">{t("viewWithdrawalHistory")}</p>{list.data?.length ? <GroupedFinancialHistory rows={list.data} t={t} kind="withdrawal" /> : <Empty text={t("noTransactions")} />}</div>}
     </>
   );
 }
@@ -2029,7 +2067,8 @@ function Referral({ t }: any) {
   const referral = trpc.referral.get.useQuery();
   const [copied, setCopied] = useState(false);
   if (!referral.data) return <LoadingScreen text={t("loading")} />;
-  const link = `${window.location.origin}/?ref=${encodeURIComponent(referral.data.username)}`;
+  const invite = buildInviteSummary(referral.data, window.location.origin);
+  const link = invite.link;
   const copy = async () => {
     await navigator.clipboard.writeText(link);
     setCopied(true);
@@ -2048,8 +2087,8 @@ function Referral({ t }: any) {
   return (
     <>
       <PageHeading
-        eyebrow={t("referral")}
-        title={t("referralTitle")}
+        eyebrow={t("invite")}
+        title={t("invite")}
         description={t("referralSubtitle")}
       />
       <div className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
@@ -2078,17 +2117,19 @@ function Referral({ t }: any) {
           </div>
         </div>
         <div className="panel">
-          <p className="eyebrow">{t("unlocked")}</p>
+          <p className="eyebrow">{t("referralEarnings")}</p>
           <p className="mt-2 text-3xl font-bold text-amber-300">
-            {money(referral.data.withdrawalLimitPkr)}
+            {money(invite.referralEarningsPkr)}
           </p>
+          <p className="mt-4 text-xs font-bold text-slate-400">{t("referralCode")}</p>
+          <p className="mt-1 font-mono text-sm text-amber-300">{referral.data.referralCode}</p>
         </div>
       </div>
       <div className="mt-5 grid gap-4 md:grid-cols-2">
         <StatCard
           icon={Users}
           label={t("totalReferrals")}
-          value={String(referral.data.totalReferrals)}
+          value={String(invite.totalInvites)}
           accent="blue"
         />
         <StatCard
@@ -2216,7 +2257,7 @@ function Support({ t }: any) {
 
 function MobileNavigation({ nav, active, t, onSelect, isAdmin }: any) {
   const items = [
-    ...nav.slice(0, 5),
+    ...nav.filter((item: any) => isMemberBottomNavigationId(item.id)),
     ...(isAdmin ? [{ id: "admin", icon: ShieldCheck, label: "admin" }] : []),
   ];
   return (

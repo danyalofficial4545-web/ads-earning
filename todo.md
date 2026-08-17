@@ -114,3 +114,9 @@
 - [x] Add focused tests and browser verification for the requested deposit, history, and ad updates before the same-domain checkpoint.
 - [x] Remove early-link-close ad expiry and make the 10-second card timer continuously reward-claimable after the link or video tab is closed.
 - [x] Prevent automatic retry loops after a completed ad reward claim fails, while keeping a stable manual claim retry state.
+- [x] Remove standalone member Deposit and Withdrawal destinations from desktop and mobile navigation while keeping their forms available from the Profile wallet actions.
+- [x] Rename the member Wallet navigation destination to Profile and combine wallet balances, WhatsApp bonus status, personal identity details, active package, and referral metrics there.
+- [x] Add an Invite navigation destination with referral link, invite code, total invites, and referral earnings.
+- [x] Add form-level Deposit History and Withdrawal History toggles with member records grouped as Today, Yesterday, or calendar date.
+- [x] Show an explicit bilingual referral-earnings metric on Invite and add focused mapping coverage for invite link, code, total invites, and earnings.
+- [x] Add focused navigation, grouped-history, and Invite-mapping tests plus public mobile rendering verification before the same-domain checkpoint.
