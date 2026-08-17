@@ -120,3 +120,12 @@
 - [x] Add form-level Deposit History and Withdrawal History toggles with member records grouped as Today, Yesterday, or calendar date.
 - [x] Show an explicit bilingual referral-earnings metric on Invite and add focused mapping coverage for invite link, code, total invites, and earnings.
 - [x] Add focused navigation, grouped-history, and Invite-mapping tests plus public mobile rendering verification before the same-domain checkpoint.
+- [ ] Replace hardcoded USD (PayPal) labels with USD and make administrator payment-account fields fully custom for PKR and USD/custom currencies and account types.
+- [ ] Persist 50 Hi Fami administrator-created Link/App ads with varied bilingual titles, one supplied destination URL, and the existing 20 PKR reward.
+- [ ] Add focused tests and same-domain verification for custom payment rendering, USD-only labels, and the 50 Hi Fami ads before checkpointing.
+
+### Current request: custom payments and 50 Hi Fami ads
+
+- [ ] Replace hardcoded USD (PayPal) labels with USD and make administrator payment-account fields fully custom for PKR and USD/custom currencies and account types.
+- [ ] Persist 50 Hi Fami administrator-created Link/App ads with varied bilingual titles, one supplied destination URL, and the existing 20 PKR reward.
+- [ ] Add focused tests and same-domain verification for custom payment rendering, USD-only labels, and the 50 Hi Fami ads before checkpointing.
