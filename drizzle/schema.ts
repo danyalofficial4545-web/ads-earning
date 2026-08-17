@@ -76,7 +76,9 @@ export const userPackages = mysqlTable("userPackages", {
 export const paymentAccounts = mysqlTable("paymentAccounts", {
   id: int("id").autoincrement().primaryKey(),
   currency: mysqlEnum("currency", ["PKR", "USD"]).notNull(),
+  currencyType: varchar("currencyType", { length: 32 }).notNull().default("PKR"),
   provider: varchar("provider", { length: 64 }).notNull(),
+  accountType: varchar("accountType", { length: 64 }).notNull().default("Payment account"),
   accountName: varchar("accountName", { length: 128 }).notNull(),
   accountDetails: varchar("accountDetails", { length: 256 }).notNull(),
   isActive: boolean("isActive").notNull().default(true),

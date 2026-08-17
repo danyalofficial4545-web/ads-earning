@@ -64,6 +64,13 @@
       "when": 1786926052739,
       "tag": "0008_hot_absorbing_man",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1786973044112,
+      "tag": "0009_strong_valeria_richards",
+      "breakpoints": true
     }
   ]
 }

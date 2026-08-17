@@ -1,0 +1,2 @@
+ALTER TABLE `paymentAccounts` ADD `currencyType` varchar(32) DEFAULT 'PKR' NOT NULL;--> statement-breakpoint
+ALTER TABLE `paymentAccounts` ADD `accountType` varchar(64) DEFAULT 'Payment account' NOT NULL;
