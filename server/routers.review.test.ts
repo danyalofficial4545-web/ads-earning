@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { inspect } from "node:util";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import type { TrpcContext } from "./_core/context";
-import { profiles, transactions } from "../drizzle/schema";
+import { deposits, packages, profiles, transactions, userPackages, users, withdrawals } from "../drizzle/schema";
 
 const mocks = vi.hoisted(() => ({
   ensureProfile: vi.fn(),
@@ -71,5 +71,32 @@ describe("admin financial review procedures", () => {
     expect(updates.some((update) => update.table === profiles)).toBe(false);
     const transactionUpdate = updates.find((update) => update.table === transactions);
     expect(transactionUpdate?.values).toMatchObject({ status: "approved", direction: "debit" });
+  });
+
+  it("returns enriched protected deposit and withdrawal request details for administrator review", async () => {
+    const depositRows = [{ id: 11, userId: 22, amountPkr: 500, method: "Easypaisa", senderAccountName: "Ali", senderAccountNumber: "03001234567", transactionId: "TID-500", requestedPackageId: 4, createdAt: new Date() }];
+    const withdrawalRows = [{ id: 12, userId: 22, amountPkr: 300, currency: "PKR", accountName: "Ali", accountDetails: "03001234567", createdAt: new Date() }];
+    const memberRows = [{ userId: 22, email: "ali@example.com", username: "ali", balancePkr: 900, withdrawalLimitPkr: 300 }];
+    const packageRows = [{ id: 4, name: "Platinum" }];
+    const referralRows = [{ referredByUserId: 22 }, { referredByUserId: 22 }];
+    const activePackageRows = [{ userId: 22, packageName: "Platinum" }];
+    const db = {
+      select: vi.fn(() => {
+        let table: unknown;
+        const result = () => table === deposits ? depositRows : table === withdrawals ? withdrawalRows : table === users ? memberRows : table === packages ? packageRows : table === profiles ? referralRows : table === userPackages ? activePackageRows : [];
+        const query: any = {
+          from: (source: unknown) => { table = source; return query; },
+          orderBy: async () => result(),
+          innerJoin: () => table === users ? Promise.resolve(result()) : query,
+          where: async () => result(),
+          then: (resolve: (value: unknown) => unknown) => Promise.resolve(result()).then(resolve),
+        };
+        return query;
+      }),
+    };
+    mocks.getDb.mockResolvedValue(db);
+    const result = await appRouter.createCaller(adminContext()).admin.financialRequests();
+    expect(result.deposits[0]).toMatchObject({ senderAccountName: "Ali", senderAccountNumber: "03001234567", transactionId: "TID-500", requestedPackageName: "Platinum", member: { username: "ali", balancePkr: 900, activePackageName: "Platinum" } });
+    expect(result.withdrawals[0]).toMatchObject({ member: { username: "ali", withdrawalLimitPkr: 300, referralCount: 2, activePackageName: "Platinum" } });
   });
 });

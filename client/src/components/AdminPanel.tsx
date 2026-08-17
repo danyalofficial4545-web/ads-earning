@@ -244,7 +244,12 @@ function Approvals({ t, onChange }: any) {
                         {money(row.amountPkr)} · {row.method}
                       </p>
                       <p className="mt-1 text-xs text-slate-400">
-                        {t("member")} #{row.userId} · {dateTime(row.createdAt)}
+                        {row.member?.username ?? t("member")} · {row.member?.email ?? `#${row.userId}`} · {dateTime(row.createdAt)}
+                      </p>
+                      <p className="mt-2 text-xs leading-5 text-slate-300">
+                        {t("senderAccountName")}: {row.senderAccountName ?? "—"} · {t("senderAccountNumber")}: {row.senderAccountNumber ?? "—"}<br />
+                        {t("transactionId")}: {row.transactionId ?? "—"} · {t("requestedPackage")}: {row.requestedPackageName ?? t("walletDeposit")}<br />
+                        {t("activePackage")}: {row.member?.activePackageName ?? t("noPackage")}
                       </p>
                     </div>
                     <Pill status={row.status}>{row.status}</Pill>
@@ -305,8 +310,11 @@ function Approvals({ t, onChange }: any) {
                         {money(row.amountPkr)} · {row.currency}
                       </p>
                       <p className="mt-1 text-xs text-slate-400">
-                        {t("member")} #{row.userId} · {row.accountName} ·{" "}
-                        {row.accountDetails}
+                        {row.member?.username ?? t("member")} · {row.member?.email ?? `#${row.userId}`} · {row.accountName} · {row.accountDetails}
+                      </p>
+                      <p className="mt-2 text-xs leading-5 text-slate-300">
+                        {t("balance")}: {money(row.member?.balancePkr ?? 0)} · {t("referralCount")}: {row.member?.referralCount ?? 0}<br />
+                        {t("withdrawalLimit")}: {money(row.member?.withdrawalLimitPkr ?? 0)} · {t("activePackage")}: {row.member?.activePackageName ?? t("noPackage")}
                       </p>
                     </div>
                     <Pill status={row.status}>{row.status}</Pill>
@@ -797,6 +805,11 @@ function Broadcasts({ t }: any) {
 
 function UserManagement({ t }: any) {
   const list = trpc.admin.users.useQuery();
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const detail = trpc.admin.userDetail.useQuery(
+    { userId: selectedUserId ?? 0 },
+    { enabled: selectedUserId !== null }
+  );
   const block = trpc.admin.setBlocked.useMutation({
     onSuccess: () => list.refetch(),
     onError: e => toast.error(e.message),
@@ -839,30 +852,37 @@ function UserManagement({ t }: any) {
                   </Pill>
                 </td>
                 <td className="text-right">
-                  <Button
-                    danger={!row.profile.isBlocked}
-                    onClick={() =>
-                      block.mutate({
-                        userId: row.id,
-                        blocked: !row.profile.isBlocked,
-                      })
-                    }
-                  >
-                    {row.profile.isBlocked ? t("unblock") : t("block")}
-                  </Button>
+                  <div className="flex justify-end gap-2">
+                    <Button onClick={() => setSelectedUserId(row.id)}>{t("viewDetails")}</Button>
+                    <Button danger={!row.profile.isBlocked} onClick={() => block.mutate({ userId: row.id, blocked: !row.profile.isBlocked })}>
+                      {row.profile.isBlocked ? t("unblock") : t("block")}
+                    </Button>
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {selectedUserId && <div className="panel mt-5">
+        {detail.isLoading ? <Loader2 className="animate-spin text-amber-300" /> : detail.data ? <>
+          <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eyebrow">{t("viewDetails")}</p><h3 className="mt-1 text-xl font-bold">{detail.data.member.profile.username}</h3><p className="mt-1 text-sm text-slate-400">{detail.data.member.email ?? "—"}</p></div><Button onClick={() => setSelectedUserId(null)}>{t("close")}</Button></div>
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4"><div className="rounded-xl bg-slate-950/15 p-3 text-sm"><p className="text-xs text-slate-400">{t("balance")}</p><p className="mt-1 font-bold">{money(detail.data.member.profile.balancePkr)}</p></div><div className="rounded-xl bg-slate-950/15 p-3 text-sm"><p className="text-xs text-slate-400">{t("accountPasswordStatus")}</p><p className="mt-1 font-bold">{detail.data.member.passwordStatus === "set" ? t("setPassword") : "—"}</p></div><div className="rounded-xl bg-slate-950/15 p-3 text-sm"><p className="text-xs text-slate-400">{t("activePackage")}</p><p className="mt-1 font-bold">{detail.data.activePackage?.name ?? t("noPackage")}</p></div><div className="rounded-xl bg-slate-950/15 p-3 text-sm"><p className="text-xs text-slate-400">{t("referralCount")}</p><p className="mt-1 font-bold">{detail.data.totals.referralCount}</p></div></div>
+          <div className="mt-5 grid gap-4 lg:grid-cols-3"><HistorySummary title={t("totalDeposits")} amount={detail.data.totals.depositAmountPkr} count={detail.data.totals.depositCount} rows={detail.data.deposits} /><HistorySummary title={t("totalWithdrawals")} amount={detail.data.totals.withdrawalAmountPkr} count={detail.data.totals.withdrawalCount} rows={detail.data.withdrawals} /><HistorySummary title={t("referral")} amount={detail.data.referralEarnings.reduce((sum: number, row: any) => sum + row.amountPkr, 0)} count={detail.data.referralEarnings.length} rows={detail.data.referralEarnings} /></div>
+        </> : <Empty>{t("noTransactions")}</Empty>}
+      </div>}
     </>
   );
+}
+
+function HistorySummary({ title, amount, count, rows }: { title: string; amount: number; count: number; rows: any[] }) {
+  return <div className="rounded-2xl border border-white/10 bg-slate-950/15 p-4"><p className="text-xs text-slate-400">{title}</p><p className="mt-1 text-lg font-bold">{money(amount)} · {count}</p><div className="mt-3 max-h-36 space-y-2 overflow-y-auto text-xs text-slate-300">{rows.length ? rows.map((row: any) => <p key={row.id}>{money(row.amountPkr)} · {dateTime(row.createdAt)} · {row.status ?? row.type}</p>) : <p className="text-slate-500">—</p>}</div></div>;
 }
 
 function GlobalSettings({ t }: any) {
   const query = trpc.admin.settings.useQuery();
   const [form, setForm] = useState<any>(null);
+  const [logoData, setLogoData] = useState("");
   const values = form ?? query.data;
   const save = trpc.admin.saveSettings.useMutation({
     onSuccess: () => {
@@ -897,9 +917,29 @@ function GlobalSettings({ t }: any) {
         className="panel"
         onSubmit={e => {
           e.preventDefault();
-          save.mutate(values);
+          save.mutate({ ...values, logoData: logoData || undefined });
         }}
       >
+        <div className="mb-5 rounded-2xl border border-amber-300/15 bg-amber-300/10 p-4">
+          <p className="font-bold">{t("websiteSettings")}</p>
+          <div className="mt-3 grid gap-4 md:grid-cols-2">
+            <Field label={t("websiteName")}>
+              <input className="field" value={values.websiteName ?? "Package Earn Pro"} onChange={e => setForm({ ...values, websiteName: e.target.value })} />
+            </Field>
+            <Field label={t("themeSettings")}>
+              <select className="field" value={values.themeName ?? "green"} onChange={e => setForm({ ...values, themeName: e.target.value })}>
+                <option value="green">{t("greenTheme")}</option>
+                <option value="blue">{t("blueTheme")}</option>
+                <option value="dark">{t("darkTheme")}</option>
+                <option value="white">{t("whiteTheme")}</option>
+              </select>
+            </Field>
+            <Field label={t("websiteLogo")}>
+              <input className="field h-auto py-2" type="file" accept="image/*" onChange={async e => { const file = e.target.files?.[0]; if (file) setLogoData(await toDataUrl(file)); }} />
+            </Field>
+            {values.logoUrl && <a className="self-end text-sm font-bold text-amber-300" href={values.logoUrl} target="_blank" rel="noreferrer">{t("viewProof")}</a>}
+          </div>
+        </div>
         <div className="grid gap-4 md:grid-cols-2">
           {field(t("pkrPerUsd"), "exchangeRatePkrPerUsd")}
           {field(t("minimumWithdrawal"), "minimumWithdrawalPkr")}

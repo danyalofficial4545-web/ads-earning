@@ -8,6 +8,7 @@ import { AdsTasks } from "@/components/AdsTasks";
 import { trpc } from "@/lib/trpc";
 import { BRAND_IMAGE_URL } from "@/lib/brandAsset";
 import { resolveWorkspaceGate } from "@/lib/authOnboarding";
+import { resolvePublicBranding } from "@/lib/publicBranding";
 import {
   dashboardMetricKeys,
   type DashboardMetricKey,
@@ -138,6 +139,7 @@ export default function Home() {
   const publicData = trpc.platform.publicData.useQuery(undefined, {
     enabled: isAuthenticated,
   });
+  const branding = resolvePublicBranding(publicData.data?.branding);
   const overview = trpc.platform.overview.useQuery(undefined, {
     enabled: isAuthenticated,
   });
@@ -202,7 +204,8 @@ export default function Home() {
 
   return (
     <div
-      className="min-h-screen bg-[#102621] text-white"
+      className="pep-page min-h-screen bg-[#102621] text-white"
+      data-pep-theme={branding.themeName}
       dir={language === "ur" ? "rtl" : "ltr"}
     >
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
@@ -215,9 +218,9 @@ export default function Home() {
             onClick={() => selectPage("dashboard")}
             className="flex min-w-0 items-center gap-2 text-left"
           >
-            <BrandMark />
+            <BrandMark src={branding.logoUrl} name={branding.websiteName} />
             <div className="hidden sm:block">
-              <p className="text-sm font-bold tracking-tight">{t("brand")}</p>
+              <p className="text-sm font-bold tracking-tight">{branding.websiteName}</p>
               <p className="text-[10px] text-amber-300">{t("tagline")}</p>
             </div>
           </button>
@@ -296,7 +299,7 @@ export default function Home() {
                 overview={overview.data}
                 overviewLoading={overview.isLoading}
                 packages={publicData.data?.packages ?? []}
-                settings={publicData.data?.settings}
+                settings={overview.data?.settings}
                 announcements={announcements.data ?? []}
                 wallet={wallet.data}
                 invalidateCore={invalidateCore}
@@ -327,11 +330,11 @@ export default function Home() {
   );
 }
 
-function BrandMark() {
+function BrandMark({ src = BRAND_IMAGE_URL, name = "Package Earn Pro" }: { src?: string | null; name?: string | null } = {}) {
   return (
     <img
-      src={BRAND_IMAGE_URL}
-      alt="Package Earn Pro"
+      src={src || BRAND_IMAGE_URL}
+      alt={name || "Package Earn Pro"}
       className="size-11 shrink-0 rounded-2xl border border-amber-300/30 object-cover shadow-lg shadow-amber-400/20"
     />
   );
@@ -421,11 +424,11 @@ function Landing({
       email: signUp.email,
       password: signUp.password,
       referralCode: signUp.referralCode || undefined,
-    });
+    } as never);
   };
   const submitSignIn = (event: React.FormEvent) => {
     event.preventDefault();
-    login.mutate(signIn);
+    login.mutate(signIn as never);
   };
   const busy = register.isPending || login.isPending;
   return (
@@ -1046,7 +1049,7 @@ function Workspace({
       />
     ),
     wallet: <Wallet t={t} wallet={wallet} setPage={setPage} />,
-    deposit: <Deposit t={t} settings={settings} onDone={invalidateCore} />,
+    deposit: <Deposit t={t} settings={settings} packages={packages} onDone={invalidateCore} />,
     withdrawal: (
       <Withdrawal
         t={t}
@@ -1503,10 +1506,14 @@ function Empty({ text }: { text: string }) {
   );
 }
 
-function Deposit({ t, settings, onDone }: any) {
+function Deposit({ t, settings, packages, onDone }: any) {
   const [currency, setCurrency] = useState<"PKR" | "USD">("PKR");
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("");
+  const [senderAccountNumber, setSenderAccountNumber] = useState("");
+  const [senderAccountName, setSenderAccountName] = useState("");
+  const [transactionId, setTransactionId] = useState("");
+  const [requestedPackageId, setRequestedPackageId] = useState("");
   const [proof, setProof] = useState("");
   const accounts = trpc.deposit.accounts.useQuery({ currency });
   const create = trpc.deposit.create.useMutation({
@@ -1514,6 +1521,10 @@ function Deposit({ t, settings, onDone }: any) {
       toast.success(t("submitted"));
       setAmount("");
       setProof("");
+      setSenderAccountNumber("");
+      setSenderAccountName("");
+      setTransactionId("");
+      setRequestedPackageId("");
       onDone();
     },
     onError: error => toast.error(error.message),
@@ -1561,6 +1572,12 @@ function Deposit({ t, settings, onDone }: any) {
                 currency,
                 amount: numeric,
                 method,
+                senderAccountNumber,
+                senderAccountName,
+                transactionId,
+                requestedPackageId: requestedPackageId
+                  ? Number(requestedPackageId)
+                  : undefined,
                 proofData: proof,
               });
             }}
@@ -1597,6 +1614,25 @@ function Deposit({ t, settings, onDone }: any) {
                       {account.provider}
                     </option>
                   ))}
+                </select>
+              </label>
+              <label>
+                <span className="field-label">{t("senderAccountName")}</span>
+                <input required className="field" value={senderAccountName} onChange={e => setSenderAccountName(e.target.value)} />
+              </label>
+              <label>
+                <span className="field-label">{t("senderAccountNumber")}</span>
+                <input required className="field" value={senderAccountNumber} onChange={e => setSenderAccountNumber(e.target.value)} />
+              </label>
+              <label>
+                <span className="field-label">{t("transactionId")}</span>
+                <input required className="field" value={transactionId} onChange={e => setTransactionId(e.target.value)} />
+              </label>
+              <label>
+                <span className="field-label">{t("requestedPackage")}</span>
+                <select className="field" value={requestedPackageId} onChange={e => setRequestedPackageId(e.target.value)}>
+                  <option value="">{t("walletDeposit")}</option>
+                  {packages.map((plan: any) => <option key={plan.id} value={plan.id}>{plan.name} · {money(plan.pricePkr)}</option>)}
                 </select>
               </label>
             </div>

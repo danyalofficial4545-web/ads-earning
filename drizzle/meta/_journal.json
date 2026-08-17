@@ -57,6 +57,13 @@
       "when": 1786809795614,
       "tag": "0007_thankful_moondragon",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1786926052739,
+      "tag": "0008_hot_absorbing_man",
+      "breakpoints": true
     }
   ]
 }

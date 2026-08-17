@@ -91,3 +91,19 @@
 - [x] Ensure image ads without a separately supplied link open their uploaded image in a new tab when started.
 - [x] Restrict new administrator ad creation to Image, Video, Link, and App Ad while retaining legacy text-ad rendering compatibility.
 - [x] Add targeted coverage for dashboard withdrawal-limit removal and custom-ad claim success versus expired-session behavior.
+- [x] Replace the shared ad-session panel with independent 10-second countdown, reward, watched, and expired states on each unlocked ad card, while retaining the Pakistan-midnight reset metadata.
+- [x] Add administrator user-detail views for identity, balances, package, referrals, totals, and linked deposit, withdrawal, and referral history without exposing password hashes.
+- [x] Enrich administrator deposit and withdrawal request views with the requested member, payment, proof, transaction, package, balance, referral, and withdrawal-limit details.
+- [x] Expand deposit records and the member deposit form for sender account number, sender account name, transaction ID, screenshot proof, payment method, and requested package context.
+- [x] Add administrator-managed theme, website name, and uploaded logo settings that apply safely to the public and member interface.
+- [x] Add server-validated human-verification challenges to custom sign-up and sign-in, with clear bilingual UI states and expiry handling.
+- [x] Add a privacy-conscious one-account-per-device registration guard using a non-reversible device marker and a rate-limited network signal; preserve all existing accounts.
+- [x] Add focused tests for per-card ad completion/expiry, enriched request payloads, admin detail authorization, theme settings, captcha validation, and account-abuse protections.
+- [x] Revalidate that withdrawal limits, 50% referral credits, and immediate withdrawal wallet deduction/refund behavior are unchanged.
+- [x] Replace the current math prompt with a server-validated image-select “I am not a robot” verification on both sign-up and sign-in forms.
+- [x] Revalidate administrator theme selection and logo upload, plus the privacy-preserving one-device-per-account registration guard, before final checkpointing.
+- [x] Add targeted coverage for protected administrator user-detail access, enriched financial-request data, saved theme/logo public payloads, and same-device/network registration rejection.
+- [x] Verify the public platform payload and the public/member brand shells use saved website name, theme, and logo values without exposing private settings.
+- [x] Return only safe branding fields from the public platform payload and add focused coverage for enriched administrator financial-request details.
+- [x] Verify a saved administrator website name, theme, and logo apply to both the public auth shell and member header without exposing global financial settings.
+- [x] Add direct focused coverage that both the public auth shell and signed-in member header consume saved safe branding values rather than global financial settings.

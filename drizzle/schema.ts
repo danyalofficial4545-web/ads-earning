@@ -16,12 +16,18 @@ export const users = mysqlTable("users", {
   name: text("name"),
   email: varchar("email", { length: 320 }),
   passwordHash: varchar("passwordHash", { length: 255 }),
+  deviceFingerprintHash: varchar("deviceFingerprintHash", { length: 64 }),
+  registrationIpHash: varchar("registrationIpHash", { length: 64 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-}, (table) => [uniqueIndex("users_email_unique").on(table.email)]);
+}, (table) => [
+  uniqueIndex("users_email_unique").on(table.email),
+  uniqueIndex("users_device_fingerprint_unique").on(table.deviceFingerprintHash),
+  uniqueIndex("users_registration_ip_unique").on(table.registrationIpHash),
+]);
 
 export const profiles = mysqlTable("profiles", {
   id: int("id").autoincrement().primaryKey(),
@@ -125,6 +131,10 @@ export const deposits = mysqlTable("deposits", {
   currency: mysqlEnum("currency", ["PKR", "USD"]).notNull(),
   amountPkr: int("amountPkr").notNull(),
   method: varchar("method", { length: 64 }).notNull(),
+  senderAccountNumber: varchar("senderAccountNumber", { length: 256 }),
+  senderAccountName: varchar("senderAccountName", { length: 128 }),
+  transactionId: varchar("transactionId", { length: 128 }),
+  requestedPackageId: int("requestedPackageId"),
   proofUrl: varchar("proofUrl", { length: 1024 }).notNull(),
   proofKey: varchar("proofKey", { length: 512 }).notNull(),
   status: mysqlEnum("status", ["pending", "approved", "rejected"]).notNull().default("pending"),
@@ -132,6 +142,17 @@ export const deposits = mysqlTable("deposits", {
   reviewedAt: timestamp("reviewedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => [index("deposits_user_status_idx").on(table.userId, table.status)]);
+
+export const authChallenges = mysqlTable("authChallenges", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  purpose: mysqlEnum("purpose", ["sign_in", "sign_up"]).notNull(),
+  prompt: varchar("prompt", { length: 140 }).notNull(),
+  answerHash: varchar("answerHash", { length: 64 }).notNull(),
+  deviceFingerprintHash: varchar("deviceFingerprintHash", { length: 64 }).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  consumedAt: timestamp("consumedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [index("auth_challenges_device_expiry_idx").on(table.deviceFingerprintHash, table.expiresAt)]);
 
 export const withdrawals = mysqlTable("withdrawals", {
   id: int("id").autoincrement().primaryKey(),
@@ -175,6 +196,10 @@ export const appSettings = mysqlTable("appSettings", {
   maximumWithdrawalPkr: int("maximumWithdrawalPkr").notNull().default(3000),
   adTimerSeconds: int("adTimerSeconds").notNull().default(10),
   referralCommissionPercent: int("referralCommissionPercent").notNull().default(50),
+  websiteName: varchar("websiteName", { length: 80 }).notNull().default("Package Earn Pro"),
+  themeName: mysqlEnum("themeName", ["green", "blue", "dark", "white"]).notNull().default("green"),
+  logoUrl: varchar("logoUrl", { length: 1024 }),
+  logoKey: varchar("logoKey", { length: 512 }),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 

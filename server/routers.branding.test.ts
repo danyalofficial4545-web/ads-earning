@@ -1,0 +1,35 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { TrpcContext } from "./_core/context";
+
+const mocks = vi.hoisted(() => ({
+  ensureProfile: vi.fn(), ensurePlatformData: vi.fn(), getActivePackageForUser: vi.fn(), getDb: vi.fn(), getDayKey: vi.fn(), getSettings: vi.fn(), isDesignatedAdmin: vi.fn(),
+}));
+vi.mock("./db", () => ({ ADMIN_EMAIL: "muhammaddanyal4545@gmail.com", ...mocks }));
+
+import { appRouter } from "./routers";
+
+const settings = { exchangeRatePkrPerUsd: 280, minimumWithdrawalPkr: 50, maximumWithdrawalPkr: 3000, adTimerSeconds: 10, referralCommissionPercent: 50, websiteName: "Trusted Package Earn", themeName: "blue" as const, logoUrl: "https://storage.example/brand.png", logoKey: "brand.png" };
+const context = (admin = false) => ({ user: admin ? { id: 1, openId: "admin", name: "Admin", email: "muhammaddanyal4545@gmail.com", loginMethod: "password", role: "admin", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() } : null, req: { protocol: "https", headers: {} }, res: { cookie: vi.fn(), clearCookie: vi.fn() } } as unknown as TrpcContext);
+
+describe("administrator branding settings", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.ensureProfile.mockResolvedValue({ id: 1, userId: 1, username: "admin", isBlocked: false });
+    mocks.isDesignatedAdmin.mockReturnValue(true);
+    mocks.getSettings.mockResolvedValue(settings);
+  });
+
+  it("persists safe website name and named theme settings and exposes saved branding to the public platform payload", async () => {
+    const updates: any[] = [];
+    const db = {
+      select: vi.fn(() => ({ from: () => ({ where: async () => [] }) })),
+      update: vi.fn(() => ({ set: (values: any) => { updates.push(values); return { where: async () => undefined }; } })),
+    };
+    mocks.getDb.mockResolvedValue(db);
+    const publicPayload = await appRouter.createCaller(context()).platform.publicData();
+    expect(publicPayload.branding).toEqual({ websiteName: settings.websiteName, themeName: "blue", logoUrl: settings.logoUrl });
+    expect(publicPayload).not.toHaveProperty("settings");
+    await appRouter.createCaller(context(true)).admin.saveSettings(settings);
+    expect(updates[0]).toMatchObject({ websiteName: settings.websiteName, themeName: "blue" });
+  });
+});

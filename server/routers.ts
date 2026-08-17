@@ -6,6 +6,7 @@ import {
   adSessions,
   ads,
   appSettings,
+  authChallenges,
   broadcasts,
   deposits,
   packages,
@@ -28,6 +29,7 @@ import {
   isDesignatedAdmin,
 } from "./db";
 import { storagePut } from "./storage";
+import { clientIpFromHeaders, createHumanChallenge, hashSecurityValue, matchesHumanChallenge } from "./security";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { systemRouter } from "./_core/systemRouter";
 import { COOKIE_NAME } from "@shared/const";
@@ -123,6 +125,42 @@ async function saveAdMedia(
   );
 }
 
+async function consumeHumanChallenge(
+  db: any,
+  input: {
+    challengeId: string;
+    challengeAnswer: string;
+    deviceId: string;
+    purpose: "sign_in" | "sign_up";
+  }
+) {
+  const deviceFingerprintHash = hashSecurityValue(input.deviceId);
+  const challenge = (
+    await db
+      .select()
+      .from(authChallenges)
+      .where(eq(authChallenges.id, input.challengeId))
+      .limit(1)
+  )[0];
+  if (
+    !challenge ||
+    challenge.purpose !== input.purpose ||
+    challenge.deviceFingerprintHash !== deviceFingerprintHash ||
+    challenge.consumedAt ||
+    challenge.expiresAt.getTime() < Date.now() ||
+    !matchesHumanChallenge(input.challengeAnswer, challenge.answerHash)
+  )
+    fail(
+      "Human verification failed. Please solve the new check and try again.",
+      "FORBIDDEN"
+    );
+  await db
+    .update(authChallenges)
+    .set({ consumedAt: new Date() })
+    .where(eq(authChallenges.id, challenge.id));
+  return deviceFingerprintHash;
+}
+
 async function buildOverview(userId: number) {
   const db = await getDb();
   if (!db)
@@ -197,6 +235,32 @@ export const appRouter = router({
     me: publicProcedure.query(opts =>
       opts.ctx.user ? publicUser(opts.ctx.user) : null
     ),
+    captcha: publicProcedure
+      .input(
+        z.object({
+          purpose: z.enum(["sign_in", "sign_up"]),
+          deviceId: z.string().trim().min(16).max(256),
+        })
+      )
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db)
+          fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const challenge = createHumanChallenge();
+        await db.insert(authChallenges).values({
+          id: challenge.id,
+          purpose: input.purpose,
+          prompt: challenge.prompt,
+          answerHash: challenge.answerHash,
+          deviceFingerprintHash: hashSecurityValue(input.deviceId),
+          expiresAt: challenge.expiresAt,
+        });
+        return {
+          id: challenge.id,
+          prompt: challenge.prompt,
+          expiresAt: challenge.expiresAt,
+        };
+      }),
     register: publicProcedure
       .input(
         z.object({
@@ -219,6 +283,9 @@ export const appRouter = router({
             .min(8, "Password must be at least 8 characters.")
             .max(128),
           referralCode: z.string().trim().max(32).optional(),
+          challengeId: z.string().uuid(),
+          challengeAnswer: z.string().trim().min(1).max(32),
+          deviceId: z.string().trim().min(16).max(256),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -227,6 +294,17 @@ export const appRouter = router({
           fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
         const email = input.email.toLowerCase();
         const username = input.username.toLowerCase();
+        const deviceFingerprintHash = await consumeHumanChallenge(db, {
+          challengeId: input.challengeId,
+          challengeAnswer: input.challengeAnswer,
+          deviceId: input.deviceId,
+          purpose: "sign_up",
+        });
+        const registrationIpHash = hashSecurityValue(
+          clientIpFromHeaders(
+            ctx.req.headers as Record<string, string | string[] | undefined>
+          )
+        );
         const isDesignated =
           email === ADMIN_EMAIL && username === "danyal955163";
         if (username === "danyal955163" && !isDesignated)
@@ -239,7 +317,8 @@ export const appRouter = router({
             "This email must use the designated administrator username.",
             "FORBIDDEN"
           );
-        const [emailMatch, usernameMatch] = await Promise.all([
+        const [emailMatch, usernameMatch, deviceMatch, networkMatch] =
+          await Promise.all([
           db
             .select({ id: users.id })
             .from(users)
@@ -250,11 +329,23 @@ export const appRouter = router({
             .from(profiles)
             .where(eq(profiles.username, username))
             .limit(1),
+          db
+            .select({ id: users.id })
+            .from(users)
+            .where(eq(users.deviceFingerprintHash, deviceFingerprintHash))
+            .limit(1),
+          db
+            .select({ id: users.id })
+            .from(users)
+            .where(eq(users.registrationIpHash, registrationIpHash))
+            .limit(1),
         ]);
         if (emailMatch[0])
           fail("An account already exists for this email address.", "CONFLICT");
         if (usernameMatch[0])
           fail("That username is already in use.", "CONFLICT");
+        if (deviceMatch[0] || networkMatch[0])
+          fail("Only one account per device or network is allowed.", "FORBIDDEN");
         let referredByUserId: number | null = null;
         if (input.referralCode) {
           const referralValue = input.referralCode.trim();
@@ -281,6 +372,8 @@ export const appRouter = router({
           name: username,
           email,
           passwordHash: await hashPassword(input.password),
+          deviceFingerprintHash,
+          registrationIpHash,
           loginMethod: "password",
           role: isDesignated ? "admin" : "user",
           lastSignedIn: new Date(),
@@ -318,12 +411,21 @@ export const appRouter = router({
             .email("Enter a valid Gmail or email address.")
             .max(320),
           password: z.string().min(1, "Enter your password."),
+          challengeId: z.string().uuid(),
+          challengeAnswer: z.string().trim().min(1).max(32),
+          deviceId: z.string().trim().min(16).max(256),
         })
       )
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
         if (!db)
           fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        await consumeHumanChallenge(db, {
+          challengeId: input.challengeId,
+          challengeAnswer: input.challengeAnswer,
+          deviceId: input.deviceId,
+          purpose: "sign_in",
+        });
         const user = (
           await db
             .select()
@@ -486,12 +588,17 @@ export const appRouter = router({
       const db = await getDb();
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const settings = await getSettings();
       return {
         packages: await db
           .select()
           .from(packages)
           .where(eq(packages.isActive, true)),
-        settings: await getSettings(),
+        branding: {
+          websiteName: settings.websiteName,
+          themeName: settings.themeName,
+          logoUrl: settings.logoUrl,
+        },
       };
     }),
     overview: protectedProcedure.query(async ({ ctx }) => {
@@ -702,6 +809,14 @@ export const appRouter = router({
           .filter(session => session.claimedAt)
           .map(session => session.adId)
       );
+      const expiredAdIds = new Set(
+        sessions
+          .filter(session => session.invalidatedAt)
+          .map(session => session.adId)
+      );
+      const unavailableAdIds = new Set(
+        Array.from(watchedAdIds).concat(Array.from(expiredAdIds))
+      );
       const quota = activePackage
         ? getDailyAdQuota(activePackage.plan.pricePkr)
         : 0;
@@ -709,13 +824,15 @@ export const appRouter = router({
         getDailyAdStates(
           activeAds.map(ad => ad.id),
           quota,
-          watchedAdIds
+          unavailableAdIds
         ).map(item => [item.id, item.state])
       );
       return {
         ads: activeAds.map(ad => ({
           ...ad,
-          state: stateById.get(ad.id) ?? "locked",
+          state: expiredAdIds.has(ad.id)
+            ? "expired"
+            : stateById.get(ad.id) ?? "locked",
         })),
         watched: watchedAdIds.size,
         total: Math.min(quota, activeAds.length),
@@ -757,12 +874,17 @@ export const appRouter = router({
             .filter(session => session.claimedAt)
             .map(session => session.adId)
         );
+        const unavailableAdIds = new Set(
+          sessions
+            .filter(session => session.claimedAt || session.invalidatedAt)
+            .map(session => session.adId)
+        );
         const quota = getDailyAdQuota(active.plan.pricePkr);
         const stateById = new Map(
           getDailyAdStates(
             activeAds.map(ad => ad.id),
             quota,
-            watchedAdIds
+            unavailableAdIds
           ).map(item => [item.id, item.state])
         );
         const available = activeAds.find(ad => ad.id === input.adId);
@@ -925,6 +1047,10 @@ export const appRouter = router({
           currency: z.enum(["PKR", "USD"]),
           amount: z.number().positive(),
           method: z.string().trim().min(2).max(64),
+          senderAccountNumber: z.string().trim().min(4).max(256),
+          senderAccountName: z.string().trim().min(2).max(128),
+          transactionId: z.string().trim().min(3).max(128),
+          requestedPackageId: z.number().int().positive().optional(),
           proofData: z.string().min(24),
         })
       )
@@ -946,11 +1072,34 @@ export const appRouter = router({
         );
         const depositError = validateDepositAmountPkr(amountPkr);
         if (depositError) fail(depositError);
+        const duplicateTransaction = (
+          await db
+            .select({ id: deposits.id })
+            .from(deposits)
+            .where(eq(deposits.transactionId, input.transactionId))
+            .limit(1)
+        )[0];
+        if (duplicateTransaction)
+          fail("This transaction ID has already been submitted.", "CONFLICT");
+        if (input.requestedPackageId) {
+          const requestedPackage = (
+            await db
+              .select({ id: packages.id })
+              .from(packages)
+              .where(eq(packages.id, input.requestedPackageId))
+              .limit(1)
+          )[0];
+          if (!requestedPackage) fail("Requested package was not found.", "NOT_FOUND");
+        }
         const result = await db.insert(deposits).values({
           userId: user.id,
           currency: input.currency,
           amountPkr,
           method: input.method,
+          senderAccountNumber: input.senderAccountNumber,
+          senderAccountName: input.senderAccountName,
+          transactionId: input.transactionId,
+          requestedPackageId: input.requestedPackageId ?? null,
           proofUrl: receipt.url,
           proofKey: receipt.key,
           status: "pending",
@@ -962,7 +1111,7 @@ export const appRouter = router({
           direction: "neutral",
           amountPkr,
           status: "pending",
-          note: `${input.method} deposit awaiting approval`,
+          note: `${input.method} deposit (${input.transactionId}) awaiting approval`,
           referenceType: "deposit",
           referenceId: depositId,
         });
@@ -1163,15 +1312,63 @@ export const appRouter = router({
       const db = await getDb();
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const [depositRows, withdrawalRows, memberRows, packageRows, referralRows, activePackageRows] =
+        await Promise.all([
+          db.select().from(deposits).orderBy(desc(deposits.createdAt)),
+          db.select().from(withdrawals).orderBy(desc(withdrawals.createdAt)),
+          db
+            .select({
+              userId: users.id,
+              email: users.email,
+              username: profiles.username,
+              balancePkr: profiles.balancePkr,
+              withdrawalLimitPkr: profiles.withdrawalLimitPkr,
+            })
+            .from(users)
+            .innerJoin(profiles, eq(users.id, profiles.userId)),
+          db.select({ id: packages.id, name: packages.name }).from(packages),
+          db.select({ referredByUserId: profiles.referredByUserId }).from(profiles),
+          db
+            .select({ userId: userPackages.userId, packageName: packages.name })
+            .from(userPackages)
+            .innerJoin(packages, eq(userPackages.packageId, packages.id))
+            .where(sql`${userPackages.expiresAt} > NOW()`),
+        ]);
+      const activePackageNames = new Map(
+        activePackageRows.map(row => [row.userId, row.packageName])
+      );
+      const members = new Map(
+        memberRows.map(member => [
+          member.userId,
+          { ...member, activePackageName: activePackageNames.get(member.userId) ?? null },
+        ])
+      );
+      const packageNames = new Map(packageRows.map(plan => [plan.id, plan.name]));
+      const referralCounts = new Map<number, number>();
+      referralRows.forEach(row => {
+        if (row.referredByUserId)
+          referralCounts.set(
+            row.referredByUserId,
+            (referralCounts.get(row.referredByUserId) ?? 0) + 1
+          );
+      });
       return {
-        deposits: await db
-          .select()
-          .from(deposits)
-          .orderBy(desc(deposits.createdAt)),
-        withdrawals: await db
-          .select()
-          .from(withdrawals)
-          .orderBy(desc(withdrawals.createdAt)),
+        deposits: depositRows.map(row => ({
+          ...row,
+          member: members.get(row.userId) ?? null,
+          requestedPackageName: row.requestedPackageId
+            ? packageNames.get(row.requestedPackageId) ?? null
+            : null,
+        })),
+        withdrawals: withdrawalRows.map(row => ({
+          ...row,
+          member: members.get(row.userId)
+            ? {
+                ...members.get(row.userId),
+                referralCount: referralCounts.get(row.userId) ?? 0,
+              }
+            : null,
+        })),
       };
     }),
     reviewDeposit: protectedProcedure
@@ -1317,6 +1514,79 @@ export const appRouter = router({
         .innerJoin(profiles, eq(users.id, profiles.userId))
         .orderBy(desc(users.createdAt));
     }),
+    userDetail: protectedProcedure
+      .input(z.object({ userId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        await getAdmin(ctx);
+        const db = await getDb();
+        if (!db)
+          fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const member = (
+          await db
+            .select({
+              id: users.id,
+              email: users.email,
+              name: users.name,
+              createdAt: users.createdAt,
+              hasPassword: sql<number>`case when ${users.passwordHash} is null then 0 else 1 end`,
+              profile: profiles,
+            })
+            .from(users)
+            .innerJoin(profiles, eq(users.id, profiles.userId))
+            .where(eq(users.id, input.userId))
+            .limit(1)
+        )[0];
+        if (!member) fail("Member was not found.", "NOT_FOUND");
+        const [memberDeposits, memberWithdrawals, memberTransactions, referrals] =
+          await Promise.all([
+            db
+              .select()
+              .from(deposits)
+              .where(eq(deposits.userId, input.userId))
+              .orderBy(desc(deposits.createdAt)),
+            db
+              .select()
+              .from(withdrawals)
+              .where(eq(withdrawals.userId, input.userId))
+              .orderBy(desc(withdrawals.createdAt)),
+            db
+              .select()
+              .from(transactions)
+              .where(eq(transactions.userId, input.userId))
+              .orderBy(desc(transactions.createdAt)),
+            db
+              .select({ count: sql<number>`count(*)` })
+              .from(profiles)
+              .where(eq(profiles.referredByUserId, input.userId)),
+          ]);
+        const activePackage = await getActivePackageForUser(input.userId);
+        return {
+          member: {
+            ...member,
+            passwordStatus: Number(member.hasPassword) ? "set" : "not_set",
+            hasPassword: undefined,
+          },
+          totals: {
+            depositAmountPkr: memberDeposits
+              .filter(row => row.status === "approved")
+              .reduce((sum, row) => sum + row.amountPkr, 0),
+            depositCount: memberDeposits.length,
+            withdrawalAmountPkr: memberWithdrawals
+              .filter(row => row.status === "approved")
+              .reduce((sum, row) => sum + row.amountPkr, 0),
+            withdrawalCount: memberWithdrawals.length,
+            referralCount: Number(referrals[0]?.count ?? 0),
+          },
+          activePackage: activePackage
+            ? { name: activePackage.plan.name, expiresAt: activePackage.ownership.expiresAt }
+            : null,
+          deposits: memberDeposits,
+          withdrawals: memberWithdrawals,
+          referralEarnings: memberTransactions.filter(
+            row => row.type === "referral_limit"
+          ),
+        };
+      }),
     setBlocked: protectedProcedure
       .input(
         z.object({ userId: z.number().int().positive(), blocked: z.boolean() })
@@ -1520,16 +1790,29 @@ export const appRouter = router({
           maximumWithdrawalPkr: z.number().int().min(1),
           adTimerSeconds: z.number().int().min(5).max(600),
           referralCommissionPercent: z.number().int().min(0).max(100),
+          websiteName: z.string().trim().min(2).max(80),
+          themeName: z.enum(["green", "blue", "dark", "white"]),
+          logoData: z.string().max(8_000_000).optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
-        await getAdmin(ctx);
+        const { user } = await getAdmin(ctx);
         if (input.maximumWithdrawalPkr < input.minimumWithdrawalPkr)
           fail("Maximum withdrawal must be greater than the minimum.");
         const db = await getDb();
         if (!db)
           fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-        await db.update(appSettings).set(input).where(eq(appSettings.id, 1));
+        const { logoData, ...settingsInput } = input;
+        const logo = logoData
+          ? await saveUpload(user.id, logoData, "brand-logos")
+          : null;
+        await db
+          .update(appSettings)
+          .set({
+            ...settingsInput,
+            ...(logo ? { logoUrl: logo.url, logoKey: logo.key } : {}),
+          })
+          .where(eq(appSettings.id, 1));
         return { success: true };
       }),
   }),

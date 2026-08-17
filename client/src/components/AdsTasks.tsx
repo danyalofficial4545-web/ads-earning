@@ -1,13 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import {
-  CheckCircle2,
-  Clock3,
-  ExternalLink,
-  Loader2,
-  LockKeyhole,
-  Play,
-  Video,
-} from "lucide-react";
+import { CheckCircle2, Clock3, ExternalLink, Loader2, LockKeyhole, Play } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -19,85 +11,32 @@ function formatCountdown(totalSeconds: number) {
 }
 
 function adDestination(ad: any) {
-  return (
-    ad.targetUrl ||
-    (["link", "app", "video", "image"].includes(ad.contentType)
-      ? ad.content
-      : null)
-  );
+  return ad.targetUrl || (["link", "app", "video", "image"].includes(ad.contentType) ? ad.content : null);
 }
 
 function AdVisual({ ad }: { ad: any }) {
-  if (ad.contentType === "image")
-    return (
-      <img
-        src={ad.content}
-        alt={ad.title}
-        className="mt-3 aspect-video w-full rounded-xl object-cover"
-      />
-    );
-  if (ad.contentType === "video")
-    return (
-      <video
-        controls
-        src={ad.content}
-        className="mt-3 aspect-video w-full rounded-xl bg-slate-950/40"
-      />
-    );
-  return (
-    <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300">
-      {ad.content}
-    </p>
-  );
+  if (ad.contentType === "image") return <img src={ad.content} alt={ad.title} className="mt-3 aspect-video w-full rounded-xl object-cover" />;
+  if (ad.contentType === "video") return <video controls src={ad.content} className="mt-3 aspect-video w-full rounded-xl bg-slate-950/40" />;
+  return <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300">{ad.content}</p>;
 }
 
-export function AdsTasks({
-  t,
-  onDone,
-}: {
-  t: (key: any) => string;
-  onDone: () => void;
-}) {
+export function AdsTasks({ t, onDone }: { t: (key: any) => string; onDone: () => void }) {
   const ads = trpc.earning.ads.useQuery();
   const [session, setSession] = useState<any>(null);
   const [seconds, setSeconds] = useState(0);
   const [resetSeconds, setResetSeconds] = useState(0);
-  const start = trpc.earning.startAd.useMutation({
-    onSuccess: data => {
-      setSession(data);
-      setSeconds(data.timerSeconds);
-    },
-    onError: error => toast.error(error.message),
-  });
-  const heartbeat = trpc.earning.heartbeat.useMutation({
-    onError: () => {
-      toast.error(t("adExpired"));
-      setSession(null);
-      ads.refetch();
-    },
-  });
-  const claim = trpc.earning.claimAd.useMutation({
-    onSuccess: () => {
-      toast.success(t("saved"));
-      setSession(null);
-      ads.refetch();
-      onDone();
-    },
-    onError: error => {
-      toast.error(error.message);
-      setSession(null);
-      ads.refetch();
-    },
-  });
+  const [expiredAdId, setExpiredAdId] = useState<number | null>(null);
+  const [autoClaiming, setAutoClaiming] = useState(false);
+  const start = trpc.earning.startAd.useMutation({ onSuccess: data => { setSession(data); setSeconds(data.timerSeconds); setExpiredAdId(null); setAutoClaiming(false); }, onError: error => toast.error(error.message) });
+  const heartbeat = trpc.earning.heartbeat.useMutation({ onError: () => { if (session?.ad?.id) setExpiredAdId(session.ad.id); toast.error(t("adExpired")); setSession(null); ads.refetch(); } });
+  const claim = trpc.earning.claimAd.useMutation({ onSuccess: () => { toast.success(t("saved")); setSession(null); setAutoClaiming(false); ads.refetch(); onDone(); }, onError: error => { toast.error(error.message); if (session?.ad?.id) setExpiredAdId(session.ad.id); setSession(null); setAutoClaiming(false); ads.refetch(); } });
 
   useEffect(() => {
     const tick = () => {
-      const resetAt = ads.data?.resetAt
-        ? new Date(ads.data.resetAt).getTime()
-        : Date.now();
+      const resetAt = ads.data?.resetAt ? new Date(ads.data.resetAt).getTime() : Date.now();
       const remaining = Math.max(0, Math.ceil((resetAt - Date.now()) / 1000));
       setResetSeconds(remaining);
-      if (remaining === 0) ads.refetch();
+      if (remaining === 0) { setExpiredAdId(null); ads.refetch(); }
     };
     tick();
     const timer = window.setInterval(tick, 1000);
@@ -106,25 +45,20 @@ export function AdsTasks({
 
   useEffect(() => {
     if (!session) return;
-    const tick = () =>
-      setSeconds(
-        Math.max(
-          0,
-          Math.ceil(
-            (new Date(session.availableAt).getTime() - Date.now()) / 1000
-          )
-        )
-      );
+    const tick = () => setSeconds(Math.max(0, Math.ceil((new Date(session.availableAt).getTime() - Date.now()) / 1000)));
     const beat = () => heartbeat.mutate({ sessionId: session.sessionId });
-    tick();
-    beat();
+    tick(); beat();
     const timer = window.setInterval(tick, 300);
     const heartbeatTimer = window.setInterval(beat, 4000);
-    return () => {
-      window.clearInterval(timer);
-      window.clearInterval(heartbeatTimer);
-    };
+    return () => { window.clearInterval(timer); window.clearInterval(heartbeatTimer); };
   }, [session]);
+
+  useEffect(() => {
+    if (session && seconds === 0 && !autoClaiming && !claim.isPending) {
+      setAutoClaiming(true);
+      claim.mutate({ sessionId: session.sessionId });
+    }
+  }, [session, seconds, autoClaiming, claim.isPending]);
 
   const begin = (ad: any) => {
     const destination = adDestination(ad);
@@ -132,130 +66,9 @@ export function AdsTasks({
     start.mutate({ adId: ad.id });
   };
 
-  if (ads.isLoading || !ads.data)
-    return (
-      <div className="panel">
-        <Loader2 className="size-5 animate-spin text-amber-300" />
-      </div>
-    );
-  const isBusy = Boolean(session);
-  return (
-    <>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="eyebrow">{t("earn")}</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">
-            {t("earnTitle")}
-          </h1>
-          <p className="mt-2 text-sm leading-6 text-slate-300">
-            {t("earnSubtitle")}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3">
-          <p className="flex items-center gap-2 text-xs font-bold text-amber-100">
-            <Clock3 className="size-4" />
-            {t("resetsIn")}: {formatCountdown(resetSeconds)}
-          </p>
-          <p className="mt-1 text-[11px] text-amber-100/70">
-            {t("adsResetDaily")}
-          </p>
-        </div>
-      </div>
-      {!ads.data.activePackage && (
-        <div className="mb-5 rounded-2xl border border-amber-300/15 bg-amber-300/10 p-4 text-sm leading-6 text-amber-100">
-          {t("noActive")}
-        </div>
-      )}
-      {session && (
-        <div className="panel mb-5 border-amber-300/35">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="eyebrow">{t("timer")}</p>
-              <h2 className="mt-2 text-4xl font-bold text-amber-300">
-                00:{String(seconds).padStart(2, "0")}
-              </h2>
-            </div>
-            <span className="rounded-full bg-amber-300/15 px-3 py-1 text-xs font-bold text-amber-200">
-              PKR 20
-            </span>
-          </div>
-          <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/15 p-4">
-            <p className="font-bold">{session.ad.title}</p>
-            <AdVisual ad={session.ad} />
-            <p className="mt-3 text-xs leading-5 text-amber-100">
-              {t("adWatchWarning")}
-            </p>
-          </div>
-          <button
-            disabled={seconds > 0 || claim.isPending}
-            onClick={() => claim.mutate({ sessionId: session.sessionId })}
-            className="mt-5 flex h-11 w-full items-center justify-center rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {claim.isPending ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              t("claimReward")
-            )}
-          </button>
-        </div>
-      )}
-      {ads.data.ads.length ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {ads.data.ads.map((ad: any, index: number) => {
-            const locked = ad.state === "locked";
-            const watched = ad.state === "watched";
-            return (
-              <article
-                key={ad.id}
-                className={`panel relative overflow-hidden ${locked ? "opacity-70" : ""}`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="eyebrow">
-                      {t(ad.contentType as any)} · #{index + 1}
-                    </p>
-                    <h2 className="mt-1 text-lg font-bold">{ad.title}</h2>
-                  </div>
-                  {locked ? (
-                    <LockKeyhole className="size-5 text-slate-400" />
-                  ) : watched ? (
-                    <CheckCircle2 className="size-5 text-emerald-300" />
-                  ) : (
-                    <Play className="size-5 text-amber-300" />
-                  )}
-                </div>
-                <AdVisual ad={ad} />
-                <div className="mt-4">
-                  {locked ? (
-                    <div className="flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-slate-950/25 text-xs font-bold text-slate-400">
-                      <LockKeyhole className="size-3.5" />
-                      {t("lockedAd")}
-                    </div>
-                  ) : watched ? (
-                    <div className="flex h-10 items-center justify-center gap-2 rounded-xl bg-emerald-400/15 text-xs font-bold text-emerald-200">
-                      <CheckCircle2 className="size-3.5" />
-                      {t("watched")}
-                    </div>
-                  ) : (
-                    <button
-                      disabled={isBusy || start.isPending}
-                      onClick={() => begin(ad)}
-                      className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-amber-300 text-xs font-bold text-slate-950 disabled:opacity-50"
-                    >
-                      <ExternalLink className="size-3.5" />
-                      {t("watchAd")}
-                    </button>
-                  )}
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="panel text-center text-sm text-slate-400">
-          {t("noAds")}
-        </div>
-      )}
-    </>
-  );
+  if (ads.isLoading || !ads.data) return <div className="panel"><Loader2 className="size-5 animate-spin text-amber-300" /></div>;
+  return <><div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p className="eyebrow">{t("earn")}</p><h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">{t("earnTitle")}</h1><p className="mt-2 text-sm leading-6 text-slate-300">{t("earnSubtitle")}</p></div><div className="rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3"><p className="flex items-center gap-2 text-xs font-bold text-amber-100"><Clock3 className="size-4" />{t("resetsIn")}: {formatCountdown(resetSeconds)}</p><p className="mt-1 text-[11px] text-amber-100/70">{t("adsResetDaily")}</p></div></div>
+    {!ads.data.activePackage && <div className="mb-5 rounded-2xl border border-amber-300/15 bg-amber-300/10 p-4 text-sm leading-6 text-amber-100">{t("noActive")}</div>}
+    {ads.data.ads.length ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{ads.data.ads.map((ad: any, index: number) => { const locked = ad.state === "locked"; const watched = ad.state === "watched"; const active = session?.ad?.id === ad.id; const expired = expiredAdId === ad.id; return <article key={ad.id} className={`panel relative overflow-hidden ${locked ? "opacity-70" : ""}`}><div className="flex items-start justify-between gap-3"><div><p className="eyebrow">{t(ad.contentType as any)} · #{index + 1}</p><h2 className="mt-1 text-lg font-bold">{ad.title}</h2></div>{locked ? <LockKeyhole className="size-5 text-slate-400" /> : watched ? <CheckCircle2 className="size-5 text-emerald-300" /> : active ? <Clock3 className="size-5 text-amber-300" /> : <Play className="size-5 text-amber-300" />}</div><AdVisual ad={ad}/><p className="mt-3 text-[11px] text-slate-500">{t("adsResetDaily")}</p><div className="mt-4">{locked ? <div className="flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-slate-950/25 text-xs font-bold text-slate-400"><LockKeyhole className="size-3.5" />{t("lockedAd")}</div> : watched ? <div className="flex h-10 items-center justify-center gap-2 rounded-xl bg-emerald-400/15 text-xs font-bold text-emerald-200"><CheckCircle2 className="size-3.5" />{t("watched")}</div> : expired ? <div className="rounded-xl border border-red-300/20 bg-red-300/10 p-3 text-center text-xs font-bold text-red-100">{t("adExpired")}</div> : active ? <div className="rounded-xl border border-amber-300/30 bg-amber-300/10 p-3 text-center"><p className="text-xl font-bold text-amber-300">{seconds > 0 ? `Wait ${seconds}s…` : t("claimReward")}</p><p className="mt-1 text-[11px] leading-4 text-amber-100">{t("adWatchWarning")}</p></div> : <button disabled={Boolean(session) || start.isPending} onClick={() => begin(ad)} className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-amber-300 text-xs font-bold text-slate-950 disabled:opacity-50"><ExternalLink className="size-3.5" />{t("watchAd")}</button>}</div></article>; })}</div> : <div className="panel text-center text-sm text-slate-400">{t("noAds")}</div>}
+  </>;
 }

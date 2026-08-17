@@ -63,6 +63,12 @@ describe("protected Package Earn Pro router access", () => {
     expect(mocks.getDb).not.toHaveBeenCalled();
   });
 
+  it("rejects a signed-in non-admin account from protected member detail records", async () => {
+    const caller = appRouter.createCaller(context());
+    await expect(caller.admin.userDetail({ userId: 301 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mocks.getDb).not.toHaveBeenCalled();
+  });
+
   it("rejects a blocked account before it can access a protected member procedure", async () => {
     mocks.ensureProfile.mockResolvedValue({ ...regularProfile, isBlocked: true });
     const caller = appRouter.createCaller(context());
