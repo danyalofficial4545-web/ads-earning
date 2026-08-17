@@ -1590,15 +1590,15 @@ function Deposit({ t, settings, packages, onDone }: any) {
                 <input
                   className="field"
                   type="number"
-                  min={currency === "PKR" ? "100" : "0.36"}
-                  max={currency === "PKR" ? "1000" : "3.57"}
+                  min={currency === "PKR" ? "100" : "0.35"}
+                  max={currency === "PKR" ? "5000" : "17.85"}
                   step="0.01"
                   value={amount}
                   onChange={e => setAmount(e.target.value)}
                 />
               </label>
               <p className="mb-4 rounded-xl border border-amber-300/15 bg-amber-300/10 p-3 text-xs text-amber-100">
-                {t("depositLimit")}
+                {currency === "PKR" ? t("depositLimit") : t("depositLimitUsd")}
               </p>
               <label>
                 <span className="field-label">{t("paymentMethod")}</span>
@@ -1857,9 +1857,6 @@ function Earn({ t, overview, onDone }: any) {
     },
     onError: error => toast.error(error.message),
   });
-  const heartbeat = trpc.earning.heartbeat.useMutation({
-    onError: () => setSession(null),
-  });
   const claim = trpc.earning.claimAd.useMutation({
     onSuccess: () => {
       toast.success(t("saved"));
@@ -1879,17 +1876,10 @@ function Earn({ t, overview, onDone }: any) {
           )
         )
       );
-    const beat = () => {
-      if (document.visibilityState === "visible")
-        heartbeat.mutate({ sessionId: session.sessionId });
-    };
     tick();
-    beat();
     const timerInterval = window.setInterval(tick, 300);
-    const heartbeatInterval = window.setInterval(beat, 4_000);
     return () => {
       window.clearInterval(timerInterval);
-      window.clearInterval(heartbeatInterval);
     };
   }, [session]);
   return (

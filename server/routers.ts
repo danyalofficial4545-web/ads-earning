@@ -41,6 +41,7 @@ import {
   verifyPassword,
 } from "./localAuth";
 import {
+  AD_REWARD_PKR,
   AD_TIMER_MESSAGE,
   applyWithdrawalRequest,
   canUseMemberWorkspace,
@@ -809,14 +810,6 @@ export const appRouter = router({
           .filter(session => session.claimedAt)
           .map(session => session.adId)
       );
-      const expiredAdIds = new Set(
-        sessions
-          .filter(session => session.invalidatedAt)
-          .map(session => session.adId)
-      );
-      const unavailableAdIds = new Set(
-        Array.from(watchedAdIds).concat(Array.from(expiredAdIds))
-      );
       const quota = activePackage
         ? getDailyAdQuota(activePackage.plan.pricePkr)
         : 0;
@@ -824,15 +817,13 @@ export const appRouter = router({
         getDailyAdStates(
           activeAds.map(ad => ad.id),
           quota,
-          unavailableAdIds
+          watchedAdIds
         ).map(item => [item.id, item.state])
       );
       return {
         ads: activeAds.map(ad => ({
           ...ad,
-          state: expiredAdIds.has(ad.id)
-            ? "expired"
-            : stateById.get(ad.id) ?? "locked",
+          state: stateById.get(ad.id) ?? "locked",
         })),
         watched: watchedAdIds.size,
         total: Math.min(quota, activeAds.length),
@@ -874,17 +865,12 @@ export const appRouter = router({
             .filter(session => session.claimedAt)
             .map(session => session.adId)
         );
-        const unavailableAdIds = new Set(
-          sessions
-            .filter(session => session.claimedAt || session.invalidatedAt)
-            .map(session => session.adId)
-        );
         const quota = getDailyAdQuota(active.plan.pricePkr);
         const stateById = new Map(
           getDailyAdStates(
             activeAds.map(ad => ad.id),
             quota,
-            unavailableAdIds
+            watchedAdIds
           ).map(item => [item.id, item.state])
         );
         const available = activeAds.find(ad => ad.id === input.adId);
@@ -913,6 +899,7 @@ export const appRouter = router({
           dayKey,
           startedAt,
           lastHeartbeatAt: startedAt,
+          rewardPkr: AD_REWARD_PKR,
         });
         const settings = await getSettings();
         return {
@@ -946,13 +933,6 @@ export const appRouter = router({
         )[0];
         if (!session || session.claimedAt || session.invalidatedAt)
           fail(AD_TIMER_MESSAGE, "FORBIDDEN");
-        if (Date.now() - session.lastHeartbeatAt.getTime() > 10_000) {
-          await db
-            .update(adSessions)
-            .set({ invalidatedAt: new Date() })
-            .where(eq(adSessions.id, session.id));
-          fail(AD_TIMER_MESSAGE, "FORBIDDEN");
-        }
         await db
           .update(adSessions)
           .set({ lastHeartbeatAt: new Date() })
@@ -988,14 +968,6 @@ export const appRouter = router({
           now: new Date(),
           timerSeconds: settings.adTimerSeconds,
         });
-        if (claimStatus === "expired") {
-          if (!session.invalidatedAt)
-            await db
-              .update(adSessions)
-              .set({ invalidatedAt: new Date() })
-              .where(eq(adSessions.id, session.id));
-          fail(AD_TIMER_MESSAGE);
-        }
         if (claimStatus === "early") fail(AD_TIMER_MESSAGE);
         const profile = (
           await db
@@ -1065,13 +1037,20 @@ export const appRouter = router({
           input.proofData,
           "deposit-proofs"
         );
-        const amountPkr = toPkr(
+        const convertedAmountPkr = toPkr(
           input.amount,
           input.currency,
           settings.exchangeRatePkrPerUsd
         );
-        const depositError = validateDepositAmountPkr(amountPkr);
+        const isUsdAmountWithinDisplayedRange =
+          input.currency === "USD" && input.amount >= 0.35 && input.amount <= 17.85;
+        const depositError = isUsdAmountWithinDisplayedRange
+          ? null
+          : validateDepositAmountPkr(convertedAmountPkr);
         if (depositError) fail(depositError);
+        const amountPkr = isUsdAmountWithinDisplayedRange
+          ? Math.max(100, Math.min(5000, convertedAmountPkr))
+          : convertedAmountPkr;
         const duplicateTransaction = (
           await db
             .select({ id: deposits.id })
@@ -1495,6 +1474,38 @@ export const appRouter = router({
               eq(transactions.status, "pending")
             )
           );
+        return { success: true };
+      }),
+    deleteDepositHistory: protectedProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        await getAdmin(ctx);
+        const db = await getDb();
+        if (!db)
+          fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const record = (
+          await db.select().from(deposits).where(eq(deposits.id, input.id)).limit(1)
+        )[0];
+        if (!record) fail("Deposit history record was not found.", "NOT_FOUND");
+        if (record.status === "pending")
+          fail("Review this deposit before deleting its history.", "CONFLICT");
+        await db.delete(deposits).where(eq(deposits.id, record.id));
+        return { success: true };
+      }),
+    deleteWithdrawalHistory: protectedProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        await getAdmin(ctx);
+        const db = await getDb();
+        if (!db)
+          fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const record = (
+          await db.select().from(withdrawals).where(eq(withdrawals.id, input.id)).limit(1)
+        )[0];
+        if (!record) fail("Withdrawal history record was not found.", "NOT_FOUND");
+        if (record.status === "pending")
+          fail("Review this withdrawal before deleting its history.", "CONFLICT");
+        await db.delete(withdrawals).where(eq(withdrawals.id, record.id));
         return { success: true };
       }),
     users: protectedProcedure.query(async ({ ctx }) => {

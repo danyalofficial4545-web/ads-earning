@@ -2,7 +2,8 @@ export const WITHDRAWAL_LOCK_MESSAGE =
   "Please invite someone. When your invited user buys a package, 50% of his package price will be added to your withdraw limit.";
 export const WITHDRAWAL_NO_PACKAGE_MESSAGE =
   "Withdrawal requires an active package before referral withdrawal access can be displayed.";
-export const AD_TIMER_MESSAGE = "Ad expired, no reward.";
+export const AD_TIMER_MESSAGE = "Please wait for the 10-second timer before claiming this reward.";
+export const AD_REWARD_PKR = 20;
 export const DESIGNATED_ADMIN_EMAIL = "muhammaddanyal4545@gmail.com";
 export const DESIGNATED_ADMIN_USERNAME = "danyal955163";
 
@@ -74,11 +75,6 @@ export function getAdClaimStatus(input: {
   now: Date;
   timerSeconds: number;
 }) {
-  if (
-    input.invalidatedAt ||
-    input.now.getTime() - input.lastHeartbeatAt.getTime() > 10_000
-  )
-    return "expired" as const;
   return canClaimAd(input.startedAt, input.now, input.timerSeconds)
     ? ("claimable" as const)
     : ("early" as const);
@@ -108,7 +104,7 @@ export function matchesRequestTransaction(
 }
 
 export const DEPOSIT_MIN_PKR = 100;
-export const DEPOSIT_MAX_PKR = 1000;
+export const DEPOSIT_MAX_PKR = 5000;
 export const WITHDRAWAL_MIN_PKR = 50;
 export const WITHDRAWAL_MAX_PKR = 3000;
 

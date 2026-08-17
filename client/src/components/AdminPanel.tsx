@@ -20,7 +20,8 @@ import {
 } from "lucide-react";
 
 type Tab =
-  | "approvals"
+  | "depositHistory"
+  | "withdrawalHistory"
   | "ads"
   | "payments"
   | "broadcasts"
@@ -29,7 +30,8 @@ type Tab =
   | "tickets";
 const tabItems: Array<{ id: Tab; label: string; icon: typeof ClipboardCheck }> =
   [
-    { id: "approvals", label: "approvals", icon: ClipboardCheck },
+    { id: "depositHistory", label: "depositHistory", icon: CreditCard },
+    { id: "withdrawalHistory", label: "withdrawalHistory", icon: ClipboardCheck },
     { id: "ads", label: "adsManagement", icon: PlaySquare },
     { id: "payments", label: "paymentAccounts", icon: CreditCard },
     { id: "broadcasts", label: "broadcast", icon: Megaphone },
@@ -67,7 +69,7 @@ const statusKeys: Record<string, TranslationKey> = {
 };
 
 export function AdminPanel({ t }: { t: (key: any) => string }) {
-  const [tab, setTab] = useState<Tab>("approvals");
+  const [tab, setTab] = useState<Tab>("depositHistory");
   const dashboard = trpc.admin.dashboard.useQuery();
   const metrics = [
     {
@@ -124,8 +126,11 @@ export function AdminPanel({ t }: { t: (key: any) => string }) {
           </nav>
         </aside>
         <section className="min-w-0">
-          {tab === "approvals" && (
-            <Approvals t={t} onChange={() => dashboard.refetch()} />
+          {tab === "depositHistory" && (
+            <Approvals t={t} mode="deposits" onChange={() => dashboard.refetch()} />
+          )}
+          {tab === "withdrawalHistory" && (
+            <Approvals t={t} mode="withdrawals" onChange={() => dashboard.refetch()} />
           )}
           {tab === "ads" && <Ads t={t} />}
           {tab === "payments" && <Payments t={t} />}
@@ -206,7 +211,7 @@ function Pill({
   );
 }
 
-function Approvals({ t, onChange }: any) {
+function Approvals({ t, onChange, mode }: any) {
   const data = trpc.admin.financialRequests.useQuery();
   const utils = trpc.useUtils();
   const refresh = () => {
@@ -222,15 +227,23 @@ function Approvals({ t, onChange }: any) {
     onSuccess: refresh,
     onError: e => toast.error(e.message),
   });
+  const deleteDeposit = trpc.admin.deleteDepositHistory.useMutation({
+    onSuccess: refresh,
+    onError: e => toast.error(e.message),
+  });
+  const deleteWithdrawal = trpc.admin.deleteWithdrawalHistory.useMutation({
+    onSuccess: refresh,
+    onError: e => toast.error(e.message),
+  });
   return (
     <>
       <Heading
-        title={t("financialApprovals")}
-        description={t("financialApprovalsText")}
+        title={mode === "deposits" ? t("depositHistory") : t("withdrawalHistory")}
+        description={mode === "deposits" ? t("depositHistoryText") : t("withdrawalHistoryText")}
       />
       <div className="space-y-5">
-        <div className="panel">
-          <h3 className="font-bold">{t("depositRequests")}</h3>
+        <div className={mode === "deposits" ? "panel" : "hidden"}>
+          <h3 className="font-bold">{t("depositHistory")}</h3>
           {data.data?.deposits.length ? (
             <div className="mt-4 space-y-3">
               {data.data.deposits.map(row => (
@@ -287,6 +300,19 @@ function Approvals({ t, onChange }: any) {
                         </Button>
                       </>
                     )}
+                    {row.status !== "pending" && (
+                      <Button
+                        danger
+                        onClick={() => {
+                          if (window.confirm(t("confirmDeleteHistory")))
+                            deleteDeposit.mutate({ id: row.id });
+                        }}
+                        disabled={deleteDeposit.isPending}
+                      >
+                        <Trash2 className="size-3.5" />
+                        {t("deleteRecord")}
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -295,8 +321,8 @@ function Approvals({ t, onChange }: any) {
             <Empty>{t("noDepositRequests")}</Empty>
           )}
         </div>
-        <div className="panel">
-          <h3 className="font-bold">{t("withdrawalRequests")}</h3>
+        <div className={mode === "withdrawals" ? "panel" : "hidden"}>
+          <h3 className="font-bold">{t("withdrawalHistory")}</h3>
           {data.data?.withdrawals.length ? (
             <div className="mt-4 space-y-3">
               {data.data.withdrawals.map(row => (
@@ -310,9 +336,10 @@ function Approvals({ t, onChange }: any) {
                         {money(row.amountPkr)} · {row.currency}
                       </p>
                       <p className="mt-1 text-xs text-slate-400">
-                        {row.member?.username ?? t("member")} · {row.member?.email ?? `#${row.userId}`} · {row.accountName} · {row.accountDetails}
+                        {row.member?.username ?? t("member")} · {row.member?.email ?? `#${row.userId}`} · {t("paymentMethod")}: {row.currency === "USD" ? "PayPal" : "PKR"} · {dateTime(row.createdAt)}
                       </p>
                       <p className="mt-2 text-xs leading-5 text-slate-300">
+                        {t("accountName")}: {row.accountName} · {t("accountDetails")}: {row.accountDetails}<br />
                         {t("balance")}: {money(row.member?.balancePkr ?? 0)} · {t("referralCount")}: {row.member?.referralCount ?? 0}<br />
                         {t("withdrawalLimit")}: {money(row.member?.withdrawalLimitPkr ?? 0)} · {t("activePackage")}: {row.member?.activePackageName ?? t("noPackage")}
                       </p>
@@ -337,6 +364,21 @@ function Approvals({ t, onChange }: any) {
                       >
                         <X className="size-3.5" />
                         {t("reject")}
+                      </Button>
+                    </div>
+                  )}
+                  {row.status !== "pending" && (
+                    <div className="mt-3">
+                      <Button
+                        danger
+                        onClick={() => {
+                          if (window.confirm(t("confirmDeleteHistory")))
+                            deleteWithdrawal.mutate({ id: row.id });
+                        }}
+                        disabled={deleteWithdrawal.isPending}
+                      >
+                        <Trash2 className="size-3.5" />
+                        {t("deleteRecord")}
                       </Button>
                     </div>
                   )}

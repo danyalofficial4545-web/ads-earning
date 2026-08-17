@@ -107,3 +107,10 @@
 - [x] Return only safe branding fields from the public platform payload and add focused coverage for enriched administrator financial-request details.
 - [x] Verify a saved administrator website name, theme, and logo apply to both the public auth shell and member header without exposing global financial settings.
 - [x] Add direct focused coverage that both the public auth shell and signed-in member header consume saved safe branding values rather than global financial settings.
+- [x] Change member deposit validation and bilingual display to 100–5000 PKR and $0.35–$17.85 USD at the fixed 280 PKR rate.
+- [x] Split administrator financial records into separate Deposit History and Withdrawal History menu pages showing all statuses and the requested member/payment details.
+- [x] Add administrator-only confirmed deletion controls for approved or rejected deposit and withdrawal history records without changing wallet, referral, or withdrawal accounting.
+- [x] Confirm package-priced daily ad quotas continue to unlock only the first eligible administrator ads from the complete list, with 20 PKR reward per completed ad and Pakistan-midnight reset.
+- [x] Add focused tests and browser verification for the requested deposit, history, and ad updates before the same-domain checkpoint.
+- [x] Remove early-link-close ad expiry and make the 10-second card timer continuously reward-claimable after the link or video tab is closed.
+- [x] Prevent automatic retry loops after a completed ad reward claim fails, while keeping a stable manual claim retry state.

@@ -10,11 +10,11 @@ import {
 } from "./rules";
 
 describe("pasted requirements rules", () => {
-  it("accepts only deposits from 100 to 1000 PKR", () => {
+  it("accepts only deposits from 100 to 5000 PKR", () => {
     expect(validateDepositAmountPkr(DEPOSIT_MIN_PKR)).toBeNull();
     expect(validateDepositAmountPkr(DEPOSIT_MAX_PKR)).toBeNull();
     expect(validateDepositAmountPkr(DEPOSIT_MIN_PKR - 1)).toContain("100 PKR");
-    expect(validateDepositAmountPkr(DEPOSIT_MAX_PKR + 1)).toContain("1000 PKR");
+    expect(validateDepositAmountPkr(DEPOSIT_MAX_PKR + 1)).toContain("5000 PKR");
   });
 
   it("uses the 50 to 3000 PKR withdrawal range and unlock threshold", () => {

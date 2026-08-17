@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  AD_REWARD_PKR,
   AD_TIMER_MESSAGE,
   applyWithdrawalRequest,
   canUseMemberWorkspace,
@@ -85,10 +86,11 @@ describe("Package Earn Pro server rules", () => {
     expect(
       canClaimAd(startedAt, new Date("2026-08-14T12:00:10.000Z"), 10)
     ).toBe(true);
-    expect(AD_TIMER_MESSAGE).toContain("expired");
+    expect(AD_TIMER_MESSAGE).toContain("10-second timer");
+    expect(AD_REWARD_PKR).toBe(20);
   });
 
-  it("permits a completed custom ad and expires stale or invalidated sessions without reward", () => {
+  it("permits a completed custom ad even when the external tab was closed before the timer completed", () => {
     const startedAt = new Date("2026-08-14T12:00:00.000Z");
     expect(
       getAdClaimStatus({
@@ -107,7 +109,7 @@ describe("Package Earn Pro server rules", () => {
         now: new Date("2026-08-14T12:00:10.001Z"),
         timerSeconds: 10,
       })
-    ).toBe("expired");
+    ).toBe("claimable");
     expect(
       getAdClaimStatus({
         startedAt,
@@ -116,7 +118,7 @@ describe("Package Earn Pro server rules", () => {
         now: new Date("2026-08-14T12:00:10.000Z"),
         timerSeconds: 10,
       })
-    ).toBe("expired");
+    ).toBe("claimable");
   });
 
   it("grants administrator capability only to the exact designated identity and denies blocked members", () => {

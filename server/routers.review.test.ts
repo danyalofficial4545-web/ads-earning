@@ -99,4 +99,16 @@ describe("admin financial review procedures", () => {
     expect(result.deposits[0]).toMatchObject({ senderAccountName: "Ali", senderAccountNumber: "03001234567", transactionId: "TID-500", requestedPackageName: "Platinum", member: { username: "ali", balancePkr: 900, activePackageName: "Platinum" } });
     expect(result.withdrawals[0]).toMatchObject({ member: { username: "ali", withdrawalLimitPkr: 300, referralCount: 2, activePackageName: "Platinum" } });
   });
+
+  it("allows an administrator to delete only reviewed financial history records", async () => {
+    const deleted: unknown[] = [];
+    const db = {
+      select: vi.fn(() => ({ from: () => ({ where: () => ({ limit: async () => [{ id: 71, userId: 22, status: "approved" }] }) }) })),
+      delete: vi.fn((table) => ({ where: async (condition: unknown) => deleted.push({ table, condition }) })),
+    };
+    mocks.getDb.mockResolvedValue(db);
+    await appRouter.createCaller(adminContext()).admin.deleteDepositHistory({ id: 71 });
+    await appRouter.createCaller(adminContext()).admin.deleteWithdrawalHistory({ id: 71 });
+    expect(deleted.map((item: any) => item.table)).toEqual([deposits, withdrawals]);
+  });
 });
