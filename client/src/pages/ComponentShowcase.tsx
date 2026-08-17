@@ -798,7 +798,7 @@ export default function ComponentsShowcase() {
                       <TableRow>
                         <TableCell className="font-medium">INV002</TableCell>
                         <TableCell>Pending</TableCell>
-                        <TableCell>PayPal</TableCell>
+                        <TableCell>USD account</TableCell>
                         <TableCell className="text-right">$150.00</TableCell>
                       </TableRow>
                       <TableRow>

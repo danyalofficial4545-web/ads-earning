@@ -66,9 +66,9 @@ const defaultAccounts = [
   },
   {
     currency: "USD" as const,
-    provider: "PayPal",
-    accountName: "Administrator",
-    accountDetails: "Configure in Admin Panel",
+    provider: "USD payment account",
+    accountName: "Configure in Admin Panel",
+    accountDetails: "Add account number, code, or address in Admin Panel",
   },
 ];
 

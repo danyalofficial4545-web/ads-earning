@@ -336,7 +336,7 @@ function Approvals({ t, onChange, mode }: any) {
                         {money(row.amountPkr)} · {row.currency}
                       </p>
                       <p className="mt-1 text-xs text-slate-400">
-                        {row.member?.username ?? t("member")} · {row.member?.email ?? `#${row.userId}`} · {t("paymentMethod")}: {row.currency === "USD" ? "PayPal" : "PKR"} · {dateTime(row.createdAt)}
+                        {row.member?.username ?? t("member")} · {row.member?.email ?? `#${row.userId}`} · {t("paymentMethod")}: {row.currency} · {dateTime(row.createdAt)}
                       </p>
                       <p className="mt-2 text-xs leading-5 text-slate-300">
                         {t("accountName")}: {row.accountName} · {t("accountDetails")}: {row.accountDetails}<br />
@@ -666,10 +666,10 @@ function Payments({ t }: any) {
               }
             >
               <option value="PKR">PKR</option>
-              <option value="USD">USD (PayPal)</option>
+              <option value="USD">USD</option>
             </select>
           </Field>
-          <Field label={t("provider")}>
+          <Field label={t("paymentMethodName")}>
             <input
               required
               className="field"
@@ -677,7 +677,7 @@ function Payments({ t }: any) {
               onChange={e => setForm({ ...form, provider: e.target.value })}
             />
           </Field>
-          <Field label={t("accountName")}>
+          <Field label={t("paymentAccountHolder")}>
             <input
               required
               className="field"
@@ -685,7 +685,7 @@ function Payments({ t }: any) {
               onChange={e => setForm({ ...form, accountName: e.target.value })}
             />
           </Field>
-          <Field label={t("numberOrDetails")}>
+          <Field label={t("paymentAccountCode")}>
             <input
               required
               className="field"

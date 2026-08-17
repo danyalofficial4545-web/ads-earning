@@ -981,7 +981,7 @@ function ProfileSetup({
               className="field"
             >
               <option value="PKR">PKR</option>
-              <option value="USD">USD (PayPal)</option>
+              <option value="USD">USD</option>
             </select>
           </label>
           <button
