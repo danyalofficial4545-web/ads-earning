@@ -129,3 +129,7 @@
 - [x] Replace hardcoded USD (PayPal) labels with USD and make administrator payment accounts editable through PKR/USD, method name, account-holder/email/wallet name, and account number/code/address fields only.
 - [x] Persist 50 Hi Fami administrator-created Link/App ads with varied bilingual titles, one supplied destination URL, and the existing 20 PKR reward.
 - [x] Add focused tests and same-domain verification for custom payment rendering, USD-only labels, and the 50 Hi Fami ads before checkpointing.
+
+### Current request: GitHub export
+
+- [ ] Push the complete Package Earn Pro project to the earn-from-packages GitHub repository on the main branch and verify the branch is not empty.
