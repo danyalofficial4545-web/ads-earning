@@ -8,9 +8,13 @@ const mocks = vi.hoisted(() => ({
   getDb: vi.fn(),
   getSettings: vi.fn(),
   isDesignatedAdmin: vi.fn(),
+  sendTelegramAlert: vi.fn(),
+  storagePut: vi.fn(),
 }));
 
 vi.mock("./db", () => ({ ADMIN_EMAIL: "muhammaddanyal4545@gmail.com", ...mocks }));
+vi.mock("./telegram", () => ({ sendTelegramAlert: mocks.sendTelegramAlert }));
+vi.mock("./storage", () => ({ storagePut: mocks.storagePut }));
 
 import { appRouter } from "./routers";
 
@@ -25,6 +29,7 @@ describe("router accounting flows", () => {
     vi.resetAllMocks();
     mocks.ensureProfile.mockResolvedValue(memberProfile);
     mocks.getSettings.mockResolvedValue({ referralCommissionPercent: 50, exchangeRatePkrPerUsd: 280, minimumWithdrawalPkr: 50, maximumWithdrawalPkr: 3000 });
+    mocks.sendTelegramAlert.mockResolvedValue(true);
   });
 
   it("deducts wallet balance immediately and reserves the one-time withdrawal limit", async () => {
@@ -42,6 +47,47 @@ describe("router accounting flows", () => {
 
     expect(updates[0]?.values).toEqual({ balancePkr: 500, withdrawalLimitPkr: 0 });
     expect(inserts[1]?.values).toMatchObject({ direction: "debit", status: "pending", amountPkr: 500, referenceId: 44 });
+    expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("💸 WITHDRAW REQUEST"));
+    expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("0123456789"));
+  });
+
+  it("alerts the administrator after a pending deposit has been recorded", async () => {
+    const inserts: any[] = [];
+    mocks.storagePut.mockResolvedValue({ url: "https://example.test/proof.png", key: "proof.png" });
+    mocks.getDb.mockResolvedValue({
+      select: vi.fn(() => ({ from: () => ({ where: () => ({ limit: async () => [] }) }) })),
+      insert: vi.fn(() => ({ values: async (values: any) => { inserts.push(values); return [{ insertId: 55 }]; } })),
+    });
+
+    await appRouter.createCaller(context()).deposit.create({
+      currency: "PKR",
+      amount: 500,
+      method: "Easypaisa",
+      senderAccountNumber: "03001234567",
+      senderAccountName: "Member Sender",
+      transactionId: "TRX-500",
+      proofData: "data:image/png;base64,AAAAAAAAAAAAAAAAAAAA",
+    });
+
+    expect(inserts[0]).toMatchObject({ status: "pending", transactionId: "TRX-500" });
+    expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("💰 NEW DEPOSIT"));
+    expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("TRX-500"));
+  });
+
+  it("alerts the administrator after a support ticket has been created", async () => {
+    const inserts: any[] = [];
+    mocks.getDb.mockResolvedValue({
+      insert: vi.fn(() => ({ values: async (values: any) => { inserts.push(values); return [{ insertId: 56 }]; } })),
+    });
+
+    await appRouter.createCaller(context()).support.create({
+      subject: "Need help",
+      description: "Please help me with my pending deposit request.",
+    });
+
+    expect(inserts[0]).toMatchObject({ subject: "Need help", status: "open" });
+    expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("🆘 SUPPORT"));
+    expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("member@example.com"));
   });
 
   it("credits referral commission only to the referrer withdrawal limit", async () => {

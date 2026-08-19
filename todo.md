@@ -133,3 +133,9 @@
 ### Current request: GitHub export
 
 - [x] Push the complete Package Earn Pro project to the earn-from-packages GitHub repository on the main branch and verify the branch is not empty.
+
+### Current request: Telegram support alerts
+
+- [x] Configure Telegram bot and chat credentials as secure project environment variables, then add a server alert utility that never exposes them to the client.
+- [x] Send Telegram alerts after member deposit requests, withdrawal requests, and support ticket submissions without blocking the underlying financial or support action when delivery fails.
+- [x] Add focused tests and send the requested Bot Connected Successfully test message before publishing the same project and pushing the integration to GitHub main.

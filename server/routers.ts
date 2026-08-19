@@ -30,6 +30,7 @@ import {
 } from "./db";
 import { storagePut } from "./storage";
 import { clientIpFromHeaders, createHumanChallenge, hashSecurityValue, matchesHumanChallenge } from "./security";
+import { sendTelegramAlert } from "./telegram";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { systemRouter } from "./_core/systemRouter";
 import { COOKIE_NAME } from "@shared/const";
@@ -1027,7 +1028,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const { user } = await getActor(ctx);
+        const { user, profile } = await getActor(ctx);
         const settings = await getSettings();
         const db = await getDb();
         if (!db)
@@ -1094,6 +1095,15 @@ export const appRouter = router({
           referenceType: "deposit",
           referenceId: depositId,
         });
+        void sendTelegramAlert(
+          [
+            "💰 NEW DEPOSIT",
+            `👤 User: ${profile.username} (ID:${user.id})`,
+            `💵 Amount: ${amountPkr} PKR`,
+            `🆔 TRX: ${input.transactionId}`,
+            `📱 From: ${input.senderAccountNumber}`,
+          ].join("\n")
+        );
         return { success: true };
       }),
     list: protectedProcedure.query(async ({ ctx }) => {
@@ -1168,6 +1178,14 @@ export const appRouter = router({
           referenceType: "withdrawal",
           referenceId: withdrawalId,
         });
+        void sendTelegramAlert(
+          [
+            "💸 WITHDRAW REQUEST",
+            `👤 User: ${profile.username}`,
+            `💵 Amount: ${input.amount} ${input.currency}`,
+            `📱 Easypaisa/JazzCash: ${input.accountDetails}`,
+          ].join("\n")
+        );
         return { success: true };
       }),
     list: protectedProcedure.query(async ({ ctx }) => {
@@ -1228,7 +1246,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const { user } = await getActor(ctx);
+        const { user, profile } = await getActor(ctx);
         const db = await getDb();
         if (!db)
           fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
@@ -1243,6 +1261,14 @@ export const appRouter = router({
           screenshotKey: upload?.key,
           status: "open",
         });
+        void sendTelegramAlert(
+          [
+            "🆘 SUPPORT",
+            `👤 User: ${profile.username}`,
+            `❓ Msg: ${input.description}`,
+            `📧 Email: ${user.email ?? "Not provided"}`,
+          ].join("\n")
+        );
         return { success: true };
       }),
     list: protectedProcedure.query(async ({ ctx }) => {
