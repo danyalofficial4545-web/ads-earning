@@ -16,4 +16,6 @@ When importing this repository into Vercel, open **Project Settings → Environm
 
 > Use the existing production values from the current Manus project configuration. The client must never receive `DATABASE_URL`, `JWT_SECRET`, `BUILT_IN_FORGE_API_KEY`, `BOT_TOKEN`, or `CHAT_ID`.
 
+The client-side Forge resolver now prefers `VITE_BUILT_IN_FORGE_API_URL` and `VITE_BUILT_IN_FORGE_API_KEY`, then retains compatibility with the existing built-in and frontend Forge names. The Ads Earning interface does not require those Vite-prefixed variables for its logo or storage routes: those routes use the server-only `BUILT_IN_FORGE_API_URL` and `BUILT_IN_FORGE_API_KEY` entries above. Do **not** copy the server-only Forge API key into a `VITE_` variable, because Vite exposes `VITE_` values to browser code.
+
 After saving the values, use **Deployments → Redeploy** in Vercel. The deployment can then be verified by opening `/api/trpc/platform.publicData` through the site; a successful response is JSON rather than a `Database unavailable` error.

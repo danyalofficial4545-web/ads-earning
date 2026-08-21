@@ -1,7 +1,7 @@
 import { startLogin } from "@/const";
 import { LanguageToggle } from "@/components/LanguageToggle";
+import { BrandLogo } from "@/components/BrandLogo";
 import { trpc } from "@/lib/trpc";
-import { BRAND_IMAGE_URL } from "@/lib/brandAsset";
 import { getDeviceMarker } from "@/lib/deviceMarker";
 import { resolvePublicBranding } from "@/lib/publicBranding";
 import type { Language, TranslationKey } from "@/lib/i18n";
@@ -12,14 +12,8 @@ import { toast } from "sonner";
 
 type Translate = (key: TranslationKey) => string;
 
-function Brand({ src = BRAND_IMAGE_URL, name = "Ads Earning" }: { src?: string | null; name?: string | null }) {
-  return (
-    <img
-      src={src || BRAND_IMAGE_URL}
-      alt={name || "Ads Earning"}
-      className="size-12 shrink-0 rounded-2xl border border-amber-300/30 object-cover shadow-lg shadow-amber-400/20"
-    />
-  );
+function Brand({ src, name }: { src?: string | null; name?: string | null }) {
+  return <BrandLogo src={src} name={name} className="size-12" />;
 }
 
 function GoogleMark({ compact = false }: { compact?: boolean }) {

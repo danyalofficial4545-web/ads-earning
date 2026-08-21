@@ -78,6 +78,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePersistFn } from "@/hooks/usePersistFn";
+import { forgeClientConfig } from "@/lib/forgeConfig";
 import { cn } from "@/lib/utils";
 
 declare global {
@@ -86,14 +87,17 @@ declare global {
   }
 }
 
-const API_KEY = import.meta.env.VITE_FRONTEND_FORGE_API_KEY;
-const FORGE_BASE_URL =
-  import.meta.env.VITE_FRONTEND_FORGE_API_URL ||
-  "https://forge.butterfly-effect.dev";
+const API_KEY = forgeClientConfig.apiKey;
+const FORGE_BASE_URL = forgeClientConfig.apiUrl;
 const MAPS_PROXY_URL = `${FORGE_BASE_URL}/v1/maps/proxy`;
 
 function loadMapScript() {
   return new Promise(resolve => {
+    if (!API_KEY) {
+      console.warn("Google Maps proxy key is not configured.");
+      resolve(null);
+      return;
+    }
     const script = document.createElement("script");
     script.src = `${MAPS_PROXY_URL}/maps/api/js?key=${API_KEY}&v=weekly&libraries=marker,places,geocoding,geometry`;
     script.async = true;
@@ -127,7 +131,7 @@ export function MapView({
 
   const init = usePersistFn(async () => {
     await loadMapScript();
-    if (!mapContainer.current) {
+    if (!mapContainer.current || !window.google) {
       console.error("Map container not found");
       return;
     }

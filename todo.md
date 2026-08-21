@@ -160,3 +160,13 @@
 - [x] Rename the user-facing application branding and project metadata from Package Earn Pro to Ads Earning without changing member, admin, payment, referral, ad, or security behavior.
 - [x] Create a new private GitHub repository for Ads Earning and export the complete renamed project to its main branch.
 - [x] Document the exact production environment variable names the user must enter when importing the new repository into Vercel.
+
+### Current request: Vercel variable values
+
+- [x] Prepare a safe, accurate copy-paste Vercel Production environment-variable handoff, including values that can be responsibly supplied and clear handling for platform-managed secrets.
+
+### Current request: Vercel client configuration and logo resilience
+
+- [x] Update client-side Forge configuration to prefer VITE_BUILT_IN_FORGE_API_URL and VITE_BUILT_IN_FORGE_API_KEY while retaining a safe fallback for the existing built-in URL configuration.
+- [x] Make public and member branding render a default Ads text mark when the configured logo URL is missing or cannot load, without changing saved administrator logo settings.
+- [x] Add focused tests, validate standard and Vercel builds, publish the same-project fix, and document the user’s Vercel redeploy step.

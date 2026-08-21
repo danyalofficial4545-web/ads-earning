@@ -5,8 +5,8 @@ import { AdminPanel } from "@/components/AdminPanel";
 import { GoogleOnboarding, PublicAuth } from "@/components/PublicAuth";
 import { WorkspaceAccessGate } from "@/components/WorkspaceAccessGate";
 import { AdsTasks } from "@/components/AdsTasks";
+import { BrandLogo } from "@/components/BrandLogo";
 import { trpc } from "@/lib/trpc";
-import { BRAND_IMAGE_URL } from "@/lib/brandAsset";
 import { resolveWorkspaceGate } from "@/lib/authOnboarding";
 import { resolvePublicBranding } from "@/lib/publicBranding";
 import { groupHistoryRows, historyDateLabel } from "@/lib/groupedHistory";
@@ -330,14 +330,8 @@ export default function Home() {
   );
 }
 
-function BrandMark({ src = BRAND_IMAGE_URL, name = "Ads Earning" }: { src?: string | null; name?: string | null } = {}) {
-  return (
-    <img
-      src={src || BRAND_IMAGE_URL}
-      alt={name || "Ads Earning"}
-      className="size-11 shrink-0 rounded-2xl border border-amber-300/30 object-cover shadow-lg shadow-amber-400/20"
-    />
-  );
+function BrandMark({ src, name }: { src?: string | null; name?: string | null } = {}) {
+  return <BrandLogo src={src} name={name} className="size-11" />;
 }
 function LoadingScreen({ text }: { text: string }) {
   return (
