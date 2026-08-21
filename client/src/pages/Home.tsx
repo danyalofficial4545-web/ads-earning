@@ -1594,15 +1594,15 @@ function Deposit({ t, settings, packages, onDone }: any) {
   const create = trpc.deposit.create.useMutation({
     onSuccess: () => {
       toast.success(t("submitted"));
-      setAmount("");
       setProof("");
+      setAmount("");
       setSenderAccountNumber("");
       setSenderAccountName("");
       setTransactionId("");
       setRequestedPackageId("");
       onDone();
     },
-    onError: error => toast.error(error.message),
+    onError: () => toast.error(t("operationFailed")),
   });
   const list = trpc.deposit.list.useQuery();
   return (
@@ -2149,7 +2149,7 @@ function Support({ t }: any) {
       setScreenshot("");
       tickets.refetch();
     },
-    onError: error => toast.error(error.message),
+    onError: () => toast.error(t("operationFailed")),
   });
   const tickets = trpc.support.list.useQuery();
   return (

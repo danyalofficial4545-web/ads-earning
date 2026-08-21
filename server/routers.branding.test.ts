@@ -45,4 +45,26 @@ describe("administrator branding settings", () => {
     expect(result).toEqual({ success: true, logoUrl: dataUrl });
     expect(updates[0]).toEqual({ logoData: dataUrl, logoUrl: null, logoKey: null });
   });
+
+  it("stores administrator gallery image data directly in the advertisement record", async () => {
+    const inserts: any[] = [];
+    const db = {
+      insert: vi.fn(() => ({ values: async (values: any) => { inserts.push(values); return [{ insertId: 1 }]; } })),
+    };
+    mocks.getDb.mockResolvedValue(db);
+    const mediaData = "data:image/png;base64,aGVsbG8=";
+
+    await appRouter.createCaller(context(true)).admin.saveAd({
+      packageTier: "bronze",
+      title: "Gallery image ad",
+      contentType: "image",
+      mediaData,
+      isActive: true,
+    });
+
+    expect(inserts[0]).toMatchObject({
+      contentType: "image",
+      mediaData,
+    });
+  });
 });

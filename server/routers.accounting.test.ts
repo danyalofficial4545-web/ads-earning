@@ -9,12 +9,10 @@ const mocks = vi.hoisted(() => ({
   getSettings: vi.fn(),
   isDesignatedAdmin: vi.fn(),
   sendTelegramAlert: vi.fn(),
-  storagePut: vi.fn(),
 }));
 
 vi.mock("./db", () => ({ ADMIN_EMAIL: "muhammaddanyal4545@gmail.com", ...mocks }));
 vi.mock("./telegram", () => ({ sendTelegramAlert: mocks.sendTelegramAlert }));
-vi.mock("./storage", () => ({ storagePut: mocks.storagePut }));
 
 import { appRouter } from "./routers";
 
@@ -53,7 +51,6 @@ describe("router accounting flows", () => {
 
   it("alerts the administrator after a pending deposit has been recorded", async () => {
     const inserts: any[] = [];
-    mocks.storagePut.mockResolvedValue({ url: "https://example.test/proof.png", key: "proof.png" });
     mocks.getDb.mockResolvedValue({
       select: vi.fn(() => ({ from: () => ({ where: () => ({ limit: async () => [] }) }) })),
       insert: vi.fn(() => ({ values: async (values: any) => { inserts.push(values); return [{ insertId: 55 }]; } })),
@@ -69,12 +66,18 @@ describe("router accounting flows", () => {
       proofData: "data:image/png;base64,AAAAAAAAAAAAAAAAAAAA",
     });
 
-    expect(inserts[0]).toMatchObject({ status: "pending", transactionId: "TRX-500" });
+    expect(inserts[0]).toMatchObject({
+      status: "pending",
+      transactionId: "TRX-500",
+      proofUrl: "database",
+      proofKey: "inline",
+      proofData: "data:image/png;base64,AAAAAAAAAAAAAAAAAAAA",
+    });
     expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("💰 NEW DEPOSIT"));
     expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("TRX-500"));
   });
 
-  it("alerts the administrator after a support ticket has been created", async () => {
+  it("alerts the administrator after a support ticket and optional database screenshot have been created", async () => {
     const inserts: any[] = [];
     mocks.getDb.mockResolvedValue({
       insert: vi.fn(() => ({ values: async (values: any) => { inserts.push(values); return [{ insertId: 56 }]; } })),
@@ -83,9 +86,16 @@ describe("router accounting flows", () => {
     await appRouter.createCaller(context()).support.create({
       subject: "Need help",
       description: "Please help me with my pending deposit request.",
+      screenshotData: "data:image/png;base64,AAAAAAAAAAAAAAAAAAAA",
     });
 
-    expect(inserts[0]).toMatchObject({ subject: "Need help", status: "open" });
+    expect(inserts[0]).toMatchObject({
+      subject: "Need help",
+      status: "open",
+      screenshotUrl: null,
+      screenshotKey: null,
+      screenshotData: "data:image/png;base64,AAAAAAAAAAAAAAAAAAAA",
+    });
     expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("🆘 SUPPORT"));
     expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("member@example.com"));
   });

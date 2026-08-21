@@ -28,7 +28,6 @@ import {
   getSettings,
   isDesignatedAdmin,
 } from "./db";
-import { storagePut } from "./storage";
 import { clientIpFromHeaders, createHumanChallenge, hashSecurityValue, matchesHumanChallenge } from "./security";
 import { sendTelegramAlert } from "./telegram";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
@@ -87,19 +86,20 @@ async function getAdmin(ctx: { user: NonNullable<unknown> }) {
   return actor;
 }
 
-async function saveUpload(userId: number, raw: string, category: string) {
+function validateInlineUpload(
+  raw: string,
+  options: { label: string; maxBytes: number; acceptedType: (contentType: string) => boolean }
+) {
   const match = raw.match(/^data:([^;]+);base64,(.+)$/);
-  if (!match) fail("Please upload a valid image file.");
+  if (!match) fail(`Please upload a valid ${options.label} file.`);
   const [, contentType, base64] = match;
-  if (!contentType.startsWith("image/"))
-    fail("Only image uploads are supported.");
-  const file = Buffer.from(base64, "base64");
-  if (file.length === 0 || file.length > 5 * 1024 * 1024)
-    fail("Image upload must be between 1 byte and 5 MB.");
-  const extension =
-    contentType.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || "png";
-  const key = `package-earn-pro/${category}/${userId}/${Date.now()}.${extension}`;
-  return storagePut(key, file, contentType);
+  if (!options.acceptedType(contentType))
+    fail(`Please upload a valid ${options.label} file.`);
+  const normalizedBase64 = base64.replace(/\s/g, "");
+  const file = Buffer.from(normalizedBase64, "base64");
+  if (file.length === 0 || file.length > options.maxBytes)
+    fail(`${options.label} must be between 1 byte and ${Math.floor(options.maxBytes / 1024 / 1024)} MB.`);
+  return `data:${contentType};base64,${normalizedBase64}`;
 }
 
 function validateDirectBrandLogo(raw: string) {
@@ -124,29 +124,15 @@ function validateDirectBrandLogo(raw: string) {
   }
 }
 
-async function saveAdMedia(
-  userId: number,
+function saveAdMedia(
   raw: string,
   contentType: "image" | "video"
 ) {
-  const match = raw.match(/^data:([^;]+);base64,(.+)$/);
-  if (!match) fail("Please upload a valid ad media file.");
-  const [, mimeType, base64] = match;
-  if (contentType === "image" && !mimeType.startsWith("image/"))
-    fail("Image ads require an image upload.");
-  if (contentType === "video" && !mimeType.startsWith("video/"))
-    fail("Video ads require a video upload.");
-  const file = Buffer.from(base64, "base64");
-  if (file.length === 0 || file.length > 25 * 1024 * 1024)
-    fail("Ad media must be between 1 byte and 25 MB.");
-  const extension =
-    mimeType.split("/")[1]?.replace(/[^a-z0-9]/gi, "") ||
-    (contentType === "video" ? "mp4" : "png");
-  return storagePut(
-    `package-earn-pro/ad-media/${userId}/${Date.now()}.${extension}`,
-    file,
-    mimeType
-  );
+  return validateInlineUpload(raw, {
+    label: contentType === "image" ? "image" : "video",
+    maxBytes: 5 * 1024 * 1024,
+    acceptedType: mimeType => mimeType.startsWith(`${contentType}/`),
+  });
 }
 
 async function consumeHumanChallenge(
@@ -1046,7 +1032,7 @@ export const appRouter = router({
           senderAccountName: z.string().trim().min(2).max(128),
           transactionId: z.string().trim().min(3).max(128),
           requestedPackageId: z.number().int().positive().optional(),
-          proofData: z.string().min(24),
+          proofData: z.string().min(24).max(2_000_000),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -1055,11 +1041,11 @@ export const appRouter = router({
         const db = await getDb();
         if (!db)
           fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-        const receipt = await saveUpload(
-          user.id,
-          input.proofData,
-          "deposit-proofs"
-        );
+        const proofData = validateInlineUpload(input.proofData, {
+          label: "image proof",
+          maxBytes: 1 * 1024 * 1024,
+          acceptedType: contentType => contentType.startsWith("image/"),
+        });
         const convertedAmountPkr = toPkr(
           input.amount,
           input.currency,
@@ -1102,8 +1088,9 @@ export const appRouter = router({
           senderAccountName: input.senderAccountName,
           transactionId: input.transactionId,
           requestedPackageId: input.requestedPackageId ?? null,
-          proofUrl: receipt.url,
-          proofKey: receipt.key,
+          proofUrl: "database",
+          proofKey: "inline",
+          proofData,
           status: "pending",
         });
         const depositId = Number(result[0].insertId);
@@ -1264,7 +1251,7 @@ export const appRouter = router({
         z.object({
           subject: z.string().trim().min(3).max(140),
           description: z.string().trim().min(10).max(5000),
-          screenshotData: z.string().optional(),
+          screenshotData: z.string().max(2_000_000).optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -1272,15 +1259,20 @@ export const appRouter = router({
         const db = await getDb();
         if (!db)
           fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-        const upload = input.screenshotData
-          ? await saveUpload(user.id, input.screenshotData, "support")
+        const screenshotData = input.screenshotData
+          ? validateInlineUpload(input.screenshotData, {
+              label: "screenshot",
+              maxBytes: 1 * 1024 * 1024,
+              acceptedType: contentType => contentType.startsWith("image/"),
+            })
           : null;
         await db.insert(supportTickets).values({
           userId: user.id,
           subject: input.subject,
           description: input.description,
-          screenshotUrl: upload?.url,
-          screenshotKey: upload?.key,
+          screenshotUrl: null,
+          screenshotKey: null,
+          screenshotData,
           status: "open",
         });
         void sendTelegramAlert(
@@ -1678,29 +1670,32 @@ export const appRouter = router({
           title: z.string().trim().min(3).max(128),
           contentType: z.enum(["text", "image", "video", "link", "app"]),
           content: z.string().trim().max(5000).optional(),
-          mediaData: z.string().max(36_000_000).optional(),
+          mediaData: z.string().max(8_000_000).optional(),
           targetUrl: z.string().url().optional(),
           isActive: z.boolean(),
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const { user } = await getAdmin(ctx);
+        await getAdmin(ctx);
         const db = await getDb();
         if (!db)
           fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
         if (!input.id && input.contentType === "text")
           fail("New advertisements must use Image, Video, Link, or App Ad.");
-        let content = input.content ?? "";
+        const content = input.content ?? "";
+        let mediaData: string | null | undefined =
+          input.contentType === "image" || input.contentType === "video"
+            ? undefined
+            : null;
         if (input.mediaData) {
           if (input.contentType !== "image" && input.contentType !== "video")
             fail("Only image or video ad types accept gallery uploads.");
-          content = (
-            await saveAdMedia(user.id, input.mediaData, input.contentType)
-          ).url;
+          mediaData = saveAdMedia(input.mediaData, input.contentType);
         }
         if (
           (input.contentType === "image" || input.contentType === "video") &&
-          !content
+          !mediaData &&
+          !input.id
         )
           fail("Please upload media for this ad type.");
         if (
@@ -1713,6 +1708,7 @@ export const appRouter = router({
           title: input.title,
           contentType: input.contentType,
           content: content || input.targetUrl || "Custom advertisement",
+          mediaData,
           targetUrl: input.targetUrl ?? null,
           isActive: input.isActive,
         };

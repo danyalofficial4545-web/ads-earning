@@ -12,12 +12,13 @@ function formatCountdown(totalSeconds: number) {
 }
 
 function adDestination(ad: any) {
-  return ad.targetUrl || (["link", "app", "video", "image"].includes(ad.contentType) ? ad.content : null);
+  return ad.targetUrl || (["link", "app", "video", "image"].includes(ad.contentType) ? ad.mediaData || ad.content : null);
 }
 
 function AdVisual({ ad }: { ad: any }) {
-  if (ad.contentType === "image") return <img src={ad.content} alt={ad.title} className="mt-3 aspect-video w-full rounded-xl object-cover" />;
-  if (ad.contentType === "video") return <video controls src={ad.content} className="mt-3 aspect-video w-full rounded-xl bg-slate-950/40" />;
+  const mediaSource = ad.mediaData || ad.content;
+  if (ad.contentType === "image") return <img src={mediaSource} alt={ad.title} className="mt-3 aspect-video w-full rounded-xl object-cover" />;
+  if (ad.contentType === "video") return <video controls src={mediaSource} className="mt-3 aspect-video w-full rounded-xl bg-slate-950/40" />;
   return <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300">{ad.content}</p>;
 }
 

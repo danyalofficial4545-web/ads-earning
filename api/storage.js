@@ -124,6 +124,7 @@ var ads = mysqlTable("ads", {
   title: varchar("title", { length: 128 }).notNull(),
   contentType: mysqlEnum("contentType", ["text", "image", "video", "link", "app"]).notNull().default("text"),
   content: text("content").notNull(),
+  mediaData: mediumtext("mediaData"),
   targetUrl: varchar("targetUrl", { length: 1024 }),
   isActive: boolean("isActive").notNull().default(true),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -168,6 +169,7 @@ var deposits = mysqlTable("deposits", {
   requestedPackageId: int("requestedPackageId"),
   proofUrl: varchar("proofUrl", { length: 1024 }).notNull(),
   proofKey: varchar("proofKey", { length: 512 }).notNull(),
+  proofData: mediumtext("proofData"),
   status: mysqlEnum("status", ["pending", "approved", "rejected"]).notNull().default("pending"),
   adminNote: varchar("adminNote", { length: 512 }),
   reviewedAt: timestamp("reviewedAt"),
@@ -202,6 +204,7 @@ var supportTickets = mysqlTable("supportTickets", {
   description: text("description").notNull(),
   screenshotUrl: varchar("screenshotUrl", { length: 1024 }),
   screenshotKey: varchar("screenshotKey", { length: 512 }),
+  screenshotData: mediumtext("screenshotData"),
   status: mysqlEnum("status", ["open", "in_review", "resolved"]).notNull().default("open"),
   adminResponse: text("adminResponse"),
   respondedAt: timestamp("respondedAt"),
@@ -885,52 +888,6 @@ import { and as and2, desc as desc2, eq as eq2, inArray, sql } from "drizzle-orm
 import { randomUUID as randomUUID2 } from "node:crypto";
 import { z as z2 } from "zod";
 
-// server/storage.ts
-function getForgeConfig() {
-  const forgeUrl = ENV.forgeApiUrl;
-  const forgeKey = ENV.forgeApiKey;
-  if (!forgeUrl || !forgeKey) {
-    throw new Error(
-      "Storage config missing: set BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY"
-    );
-  }
-  return { forgeUrl: forgeUrl.replace(/\/+$/, ""), forgeKey };
-}
-function normalizeKey(relKey) {
-  return relKey.replace(/^\/+/, "");
-}
-function appendHashSuffix(relKey) {
-  const hash = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
-  const lastDot = relKey.lastIndexOf(".");
-  if (lastDot === -1) return `${relKey}_${hash}`;
-  return `${relKey.slice(0, lastDot)}_${hash}${relKey.slice(lastDot)}`;
-}
-async function storagePut(relKey, data, contentType = "application/octet-stream") {
-  const { forgeUrl, forgeKey } = getForgeConfig();
-  const key = appendHashSuffix(normalizeKey(relKey));
-  const presignUrl = new URL("v1/storage/presign/put", forgeUrl + "/");
-  presignUrl.searchParams.set("path", key);
-  const presignResp = await fetch(presignUrl, {
-    headers: { Authorization: `Bearer ${forgeKey}` }
-  });
-  if (!presignResp.ok) {
-    const msg = await presignResp.text().catch(() => presignResp.statusText);
-    throw new Error(`Storage presign failed (${presignResp.status}): ${msg}`);
-  }
-  const { url: s3Url } = await presignResp.json();
-  if (!s3Url) throw new Error("Forge returned empty presign URL");
-  const blob = typeof data === "string" ? new Blob([data], { type: contentType }) : new Blob([data], { type: contentType });
-  const uploadResp = await fetch(s3Url, {
-    method: "PUT",
-    headers: { "Content-Type": contentType },
-    body: blob
-  });
-  if (!uploadResp.ok) {
-    throw new Error(`Storage upload to S3 failed (${uploadResp.status})`);
-  }
-  return { key, url: `/manus-storage/${key}` };
-}
-
 // server/security.ts
 import { createHash, randomInt, randomUUID } from "node:crypto";
 
@@ -1207,18 +1164,17 @@ async function getAdmin(ctx) {
     fail("Administrator access is restricted.", "FORBIDDEN");
   return actor;
 }
-async function saveUpload(userId, raw, category) {
+function validateInlineUpload(raw, options) {
   const match = raw.match(/^data:([^;]+);base64,(.+)$/);
-  if (!match) fail("Please upload a valid image file.");
+  if (!match) fail(`Please upload a valid ${options.label} file.`);
   const [, contentType, base64] = match;
-  if (!contentType.startsWith("image/"))
-    fail("Only image uploads are supported.");
-  const file = Buffer.from(base64, "base64");
-  if (file.length === 0 || file.length > 5 * 1024 * 1024)
-    fail("Image upload must be between 1 byte and 5 MB.");
-  const extension = contentType.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || "png";
-  const key = `package-earn-pro/${category}/${userId}/${Date.now()}.${extension}`;
-  return storagePut(key, file, contentType);
+  if (!options.acceptedType(contentType))
+    fail(`Please upload a valid ${options.label} file.`);
+  const normalizedBase64 = base64.replace(/\s/g, "");
+  const file = Buffer.from(normalizedBase64, "base64");
+  if (file.length === 0 || file.length > options.maxBytes)
+    fail(`${options.label} must be between 1 byte and ${Math.floor(options.maxBytes / 1024 / 1024)} MB.`);
+  return `data:${contentType};base64,${normalizedBase64}`;
 }
 function validateDirectBrandLogo(raw) {
   const value = raw.trim();
@@ -1240,23 +1196,12 @@ function validateDirectBrandLogo(raw) {
     fail("Please upload a valid image or provide a valid logo URL.");
   }
 }
-async function saveAdMedia(userId, raw, contentType) {
-  const match = raw.match(/^data:([^;]+);base64,(.+)$/);
-  if (!match) fail("Please upload a valid ad media file.");
-  const [, mimeType, base64] = match;
-  if (contentType === "image" && !mimeType.startsWith("image/"))
-    fail("Image ads require an image upload.");
-  if (contentType === "video" && !mimeType.startsWith("video/"))
-    fail("Video ads require a video upload.");
-  const file = Buffer.from(base64, "base64");
-  if (file.length === 0 || file.length > 25 * 1024 * 1024)
-    fail("Ad media must be between 1 byte and 25 MB.");
-  const extension = mimeType.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || (contentType === "video" ? "mp4" : "png");
-  return storagePut(
-    `package-earn-pro/ad-media/${userId}/${Date.now()}.${extension}`,
-    file,
-    mimeType
-  );
+function saveAdMedia(raw, contentType) {
+  return validateInlineUpload(raw, {
+    label: contentType === "image" ? "image" : "video",
+    maxBytes: 5 * 1024 * 1024,
+    acceptedType: (mimeType) => mimeType.startsWith(`${contentType}/`)
+  });
 }
 async function consumeHumanChallenge(db, input) {
   const deviceFingerprintHash = hashSecurityValue(input.deviceId);
@@ -1898,7 +1843,7 @@ var appRouter = router({
         senderAccountName: z2.string().trim().min(2).max(128),
         transactionId: z2.string().trim().min(3).max(128),
         requestedPackageId: z2.number().int().positive().optional(),
-        proofData: z2.string().min(24)
+        proofData: z2.string().min(24).max(2e6)
       })
     ).mutation(async ({ ctx, input }) => {
       const { user, profile } = await getActor(ctx);
@@ -1906,11 +1851,11 @@ var appRouter = router({
       const db = await getDb();
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-      const receipt = await saveUpload(
-        user.id,
-        input.proofData,
-        "deposit-proofs"
-      );
+      const proofData = validateInlineUpload(input.proofData, {
+        label: "image proof",
+        maxBytes: 1 * 1024 * 1024,
+        acceptedType: (contentType) => contentType.startsWith("image/")
+      });
       const convertedAmountPkr = toPkr(
         input.amount,
         input.currency,
@@ -1936,8 +1881,9 @@ var appRouter = router({
         senderAccountName: input.senderAccountName,
         transactionId: input.transactionId,
         requestedPackageId: input.requestedPackageId ?? null,
-        proofUrl: receipt.url,
-        proofKey: receipt.key,
+        proofUrl: "database",
+        proofKey: "inline",
+        proofData,
         status: "pending"
       });
       const depositId = Number(result[0].insertId);
@@ -2076,20 +2022,25 @@ var appRouter = router({
       z2.object({
         subject: z2.string().trim().min(3).max(140),
         description: z2.string().trim().min(10).max(5e3),
-        screenshotData: z2.string().optional()
+        screenshotData: z2.string().max(2e6).optional()
       })
     ).mutation(async ({ ctx, input }) => {
       const { user, profile } = await getActor(ctx);
       const db = await getDb();
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-      const upload = input.screenshotData ? await saveUpload(user.id, input.screenshotData, "support") : null;
+      const screenshotData = input.screenshotData ? validateInlineUpload(input.screenshotData, {
+        label: "screenshot",
+        maxBytes: 1 * 1024 * 1024,
+        acceptedType: (contentType) => contentType.startsWith("image/")
+      }) : null;
       await db.insert(supportTickets).values({
         userId: user.id,
         subject: input.subject,
         description: input.description,
-        screenshotUrl: upload?.url,
-        screenshotKey: upload?.key,
+        screenshotUrl: null,
+        screenshotKey: null,
+        screenshotData,
         status: "open"
       });
       void sendTelegramAlert(
@@ -2365,24 +2316,25 @@ var appRouter = router({
         title: z2.string().trim().min(3).max(128),
         contentType: z2.enum(["text", "image", "video", "link", "app"]),
         content: z2.string().trim().max(5e3).optional(),
-        mediaData: z2.string().max(36e6).optional(),
+        mediaData: z2.string().max(8e6).optional(),
         targetUrl: z2.string().url().optional(),
         isActive: z2.boolean()
       })
     ).mutation(async ({ ctx, input }) => {
-      const { user } = await getAdmin(ctx);
+      await getAdmin(ctx);
       const db = await getDb();
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
       if (!input.id && input.contentType === "text")
         fail("New advertisements must use Image, Video, Link, or App Ad.");
-      let content = input.content ?? "";
+      const content = input.content ?? "";
+      let mediaData = input.contentType === "image" || input.contentType === "video" ? void 0 : null;
       if (input.mediaData) {
         if (input.contentType !== "image" && input.contentType !== "video")
           fail("Only image or video ad types accept gallery uploads.");
-        content = (await saveAdMedia(user.id, input.mediaData, input.contentType)).url;
+        mediaData = saveAdMedia(input.mediaData, input.contentType);
       }
-      if ((input.contentType === "image" || input.contentType === "video") && !content)
+      if ((input.contentType === "image" || input.contentType === "video") && !mediaData && !input.id)
         fail("Please upload media for this ad type.");
       if ((input.contentType === "link" || input.contentType === "app") && !input.targetUrl)
         fail("Please paste a destination link for this ad type.");
@@ -2391,6 +2343,7 @@ var appRouter = router({
         title: input.title,
         contentType: input.contentType,
         content: content || input.targetUrl || "Custom advertisement",
+        mediaData,
         targetUrl: input.targetUrl ?? null,
         isActive: input.isActive
       };

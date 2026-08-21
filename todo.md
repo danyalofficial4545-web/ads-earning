@@ -177,3 +177,11 @@
 - [x] Persist administrator-provided logo URLs or validated base64 image data directly in the settings record without invoking Forge storage.
 - [x] Keep a visible Ads fallback icon and suppress client-facing storage configuration errors when no usable logo image is available.
 - [x] Add regression tests, validate standard and Vercel builds, publish the same-project fix, and provide redeployment guidance.
+
+### Current request: Vercel uploads without Forge storage
+
+- [x] Audit all logo, deposit proof, support screenshot, and ad gallery upload paths plus their file-serving and error-reporting behavior.
+- [x] Add direct database-backed file data persistence for uploads used by the application, including existing and future deposit proofs.
+- [x] Replace Forge-dependent logo, deposit proof, support screenshot, and ad gallery uploads with the database-backed flow and preserve safe rendering.
+- [x] Replace client-facing storage configuration errors with a generic bilingual upload-failed message.
+- [x] Add regression tests, validate Vercel build behavior, publish the same-project update, and document Vercel redeployment verification.

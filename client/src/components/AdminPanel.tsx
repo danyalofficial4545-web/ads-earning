@@ -268,9 +268,9 @@ function Approvals({ t, onChange, mode }: any) {
                     <Pill status={row.status}>{row.status}</Pill>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {row.proofUrl && (
+                    {(row.proofData || row.proofUrl) && (
                       <a
-                        href={row.proofUrl}
+                        href={row.proofData || row.proofUrl}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-bold"
@@ -1072,11 +1072,11 @@ function Tickets({ t }: any) {
             >
               <p className="font-bold">{selected.subject}</p>
               <p className="text-sm text-slate-300">{selected.description}</p>
-              {selected.screenshotUrl && (
+              {(selected.screenshotData || selected.screenshotUrl) && (
                 <a
                   target="_blank"
                   rel="noreferrer"
-                  href={selected.screenshotUrl}
+                  href={selected.screenshotData || selected.screenshotUrl}
                   className="text-sm font-bold text-amber-300 underline"
                 >
                   {t("viewScreenshot")}
