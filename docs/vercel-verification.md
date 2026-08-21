@@ -4,3 +4,4 @@
 - The first browser-console inspection reported no client-side errors.
 - The public screen showed its server-provided branding and sign-in/sign-up controls; authenticated database, storage, OAuth, and Telegram workflows still require the corresponding server-only production environment variables on Vercel.
 - After the API-route-priority deployment, a direct public tRPC call reached a Vercel Function instead of the SPA fallback, but returned `FUNCTION_INVOCATION_FAILED`. This confirms routing is corrected and the remaining issue is server runtime configuration or dependency resolution.
+- The subsequent deployment using Vercel-traced TypeScript handlers still returned `FUNCTION_INVOCATION_FAILED` for the public tRPC call. The production shell remains available; current runtime logs are the source of truth for the remaining function initialization diagnosis.

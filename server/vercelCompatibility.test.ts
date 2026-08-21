@@ -8,13 +8,13 @@ describe("Vercel deployment configuration", () => {
     const packageJson = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
     const config = JSON.parse(readFileSync(resolve(root, "vercel.json"), "utf8"));
 
-    expect(packageJson.scripts["build:vercel"]).toBe("vite build");
+    expect(packageJson.scripts["build:vercel"]).toContain("build:vercel:functions");
     expect(config.outputDirectory).toBe("dist/public");
-    expect(config.functions["api/[...path].ts"].maxDuration).toBe(30);
+    expect(config.functions["api/[...path].js"].maxDuration).toBe(30);
     expect(config.routes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ handle: "filesystem" }),
-        expect.objectContaining({ src: "/api/(.*)", dest: "/api/[...path].ts" }),
+        expect.objectContaining({ src: "/api/(.*)", dest: "/api/[...path].js" }),
         expect.objectContaining({ src: "/manus-storage/(.*)", dest: "/api/storage?key=$1" }),
         expect.objectContaining({ src: "/(.*)", dest: "/index.html" }),
       ])

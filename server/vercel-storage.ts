@@ -1,10 +1,10 @@
 import "dotenv/config";
 import type { Request, Response } from "express";
-import { createApp } from "../server/app";
+import { createApp } from "./app";
 
 const app = createApp();
 
-/** Preserves existing /manus-storage/* URLs through a Vercel Function rewrite. */
+/** Bundled by the Vercel build into api/storage.js. */
 export default function storageHandler(req: Request, res: Response) {
   const rawKey = req.query.key;
   const key = Array.isArray(rawKey) ? rawKey[0] : rawKey;
