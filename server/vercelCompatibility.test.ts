@@ -14,6 +14,7 @@ describe("Vercel deployment configuration", () => {
     expect(config.routes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ handle: "filesystem" }),
+        expect.objectContaining({ src: "/api/(.*)", dest: "/api/[...path].js" }),
         expect.objectContaining({ src: "/manus-storage/(.*)", dest: "/api/storage?key=$1" }),
         expect.objectContaining({ src: "/(.*)", dest: "/index.html" }),
       ])
