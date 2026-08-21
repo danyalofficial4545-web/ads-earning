@@ -139,3 +139,10 @@
 - [x] Configure Telegram bot and chat credentials as secure project environment variables, then add a server alert utility that never exposes them to the client.
 - [x] Send Telegram alerts after member deposit requests, withdrawal requests, and support ticket submissions without blocking the underlying financial or support action when delivery fails.
 - [x] Add focused tests and send the requested Bot Connected Successfully test message before publishing the same project and pushing the integration to GitHub main.
+
+### Current request: Vercel deployment
+
+- [x] Audit the current Express, tRPC, database, authentication, storage, and Telegram dependencies for Vercel serverless compatibility.
+- [x] Add Vercel deployment configuration and build scripts without changing existing member, administrator, financial, navigation, or ad behavior.
+- [ ] Configure the necessary production environment variables, deploy the GitHub main branch to Vercel, and verify the resulting deployment URL.
+- [ ] Save and push any Vercel compatibility changes to GitHub main with deployment instructions.
