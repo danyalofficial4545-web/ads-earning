@@ -145,7 +145,7 @@
 - [x] Audit the current Express, tRPC, database, authentication, storage, and Telegram dependencies for Vercel serverless compatibility.
 - [x] Add Vercel deployment configuration and build scripts without changing existing member, administrator, financial, navigation, or ad behavior.
 - [x] Deploy the GitHub main branch to Vercel, verify the resulting public URL, and identify the remaining production environment requirement.
-- [ ] Save and push any Vercel compatibility changes to GitHub main with deployment instructions.
+- [x] Save and push Vercel compatibility changes to GitHub main with deployment instructions.
 - [x] Resolve the Vercel function TypeScript build conflict while preserving the existing Express API, storage proxy, and SPA routing behavior.
 - [x] Correct the Vercel route order so relative /api/trpc requests reach the serverless Express handler rather than the SPA fallback.
 - [x] Resolve the Vercel serverless module-resolution error for the shared Express app so API functions can initialize at runtime.
@@ -158,5 +158,5 @@
 ### Current request: Ads Earning rename and new GitHub export
 
 - [x] Rename the user-facing application branding and project metadata from Package Earn Pro to Ads Earning without changing member, admin, payment, referral, ad, or security behavior.
-- [ ] Create a new private GitHub repository for Ads Earning and export the complete renamed project to its main branch.
+- [x] Create a new private GitHub repository for Ads Earning and export the complete renamed project to its main branch.
 - [x] Document the exact production environment variable names the user must enter when importing the new repository into Vercel.
