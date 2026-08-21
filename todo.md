@@ -146,3 +146,4 @@
 - [x] Add Vercel deployment configuration and build scripts without changing existing member, administrator, financial, navigation, or ad behavior.
 - [ ] Configure the necessary production environment variables, deploy the GitHub main branch to Vercel, and verify the resulting deployment URL.
 - [ ] Save and push any Vercel compatibility changes to GitHub main with deployment instructions.
+- [ ] Resolve the Vercel function TypeScript build conflict while preserving the existing Express API, storage proxy, and SPA routing behavior.

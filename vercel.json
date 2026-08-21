@@ -4,10 +4,10 @@
   "buildCommand": "pnpm run build:vercel",
   "outputDirectory": "dist/public",
   "functions": {
-    "api/[...path].ts": {
+    "api/[...path].js": {
       "maxDuration": 30
     },
-    "api/storage.ts": {
+    "api/storage.js": {
       "maxDuration": 30
     }
   },
