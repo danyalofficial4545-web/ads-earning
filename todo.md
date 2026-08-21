@@ -148,3 +148,4 @@
 - [ ] Save and push any Vercel compatibility changes to GitHub main with deployment instructions.
 - [ ] Resolve the Vercel function TypeScript build conflict while preserving the existing Express API, storage proxy, and SPA routing behavior.
 - [ ] Correct the Vercel route order so relative /api/trpc requests reach the serverless Express handler rather than the SPA fallback.
+- [ ] Resolve the Vercel serverless module-resolution error for the shared Express app so API functions can initialize at runtime.

@@ -10,11 +10,11 @@ describe("Vercel deployment configuration", () => {
 
     expect(packageJson.scripts["build:vercel"]).toBe("vite build");
     expect(config.outputDirectory).toBe("dist/public");
-    expect(config.functions["api/[...path].js"].maxDuration).toBe(30);
+    expect(config.functions["api/[...path].ts"].maxDuration).toBe(30);
     expect(config.routes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ handle: "filesystem" }),
-        expect.objectContaining({ src: "/api/(.*)", dest: "/api/[...path].js" }),
+        expect.objectContaining({ src: "/api/(.*)", dest: "/api/[...path].ts" }),
         expect.objectContaining({ src: "/manus-storage/(.*)", dest: "/api/storage?key=$1" }),
         expect.objectContaining({ src: "/(.*)", dest: "/index.html" }),
       ])
