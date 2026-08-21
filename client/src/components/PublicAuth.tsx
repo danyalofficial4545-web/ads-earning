@@ -12,11 +12,11 @@ import { toast } from "sonner";
 
 type Translate = (key: TranslationKey) => string;
 
-function Brand({ src = BRAND_IMAGE_URL, name = "Package Earn Pro" }: { src?: string | null; name?: string | null }) {
+function Brand({ src = BRAND_IMAGE_URL, name = "Ads Earning" }: { src?: string | null; name?: string | null }) {
   return (
     <img
       src={src || BRAND_IMAGE_URL}
-      alt={name || "Package Earn Pro"}
+      alt={name || "Ads Earning"}
       className="size-12 shrink-0 rounded-2xl border border-amber-300/30 object-cover shadow-lg shadow-amber-400/20"
     />
   );
@@ -385,7 +385,7 @@ export function GoogleOnboarding({
         <div className="flex items-center gap-3">
           <Brand />
           <div>
-            <p className="eyebrow">Package Earn Pro</p>
+            <p className="eyebrow">Ads Earning</p>
             <h1 className="mt-1 text-xl font-bold">{t("setupTitle")}</h1>
           </div>
         </div>

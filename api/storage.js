@@ -221,7 +221,7 @@ var appSettings = mysqlTable("appSettings", {
   maximumWithdrawalPkr: int("maximumWithdrawalPkr").notNull().default(3e3),
   adTimerSeconds: int("adTimerSeconds").notNull().default(10),
   referralCommissionPercent: int("referralCommissionPercent").notNull().default(50),
-  websiteName: varchar("websiteName", { length: 80 }).notNull().default("Package Earn Pro"),
+  websiteName: varchar("websiteName", { length: 80 }).notNull().default("Ads Earning"),
   themeName: mysqlEnum("themeName", ["green", "blue", "dark", "white"]).notNull().default("green"),
   logoUrl: varchar("logoUrl", { length: 1024 }),
   logoKey: varchar("logoKey", { length: 512 }),

@@ -1,0 +1,1 @@
+ALTER TABLE `appSettings` MODIFY COLUMN `websiteName` varchar(80) NOT NULL DEFAULT 'Ads Earning';

@@ -330,11 +330,11 @@ export default function Home() {
   );
 }
 
-function BrandMark({ src = BRAND_IMAGE_URL, name = "Package Earn Pro" }: { src?: string | null; name?: string | null } = {}) {
+function BrandMark({ src = BRAND_IMAGE_URL, name = "Ads Earning" }: { src?: string | null; name?: string | null } = {}) {
   return (
     <img
       src={src || BRAND_IMAGE_URL}
-      alt={name || "Package Earn Pro"}
+      alt={name || "Ads Earning"}
       className="size-11 shrink-0 rounded-2xl border border-amber-300/30 object-cover shadow-lg shadow-amber-400/20"
     />
   );
@@ -736,7 +736,7 @@ function PasswordSetup({
         <div className="flex items-center gap-3">
           <BrandMark />
           <div>
-            <p className="eyebrow">Package Earn Pro</p>
+            <p className="eyebrow">Ads Earning</p>
             <h1 className="mt-1 text-xl font-bold">{t("setPasswordTitle")}</h1>
           </div>
         </div>
@@ -940,7 +940,7 @@ function ProfileSetup({
         <div className="grid size-12 place-items-center rounded-2xl bg-amber-300 text-slate-950">
           <Settings2 className="size-5" />
         </div>
-        <p className="eyebrow mt-6">Package Earn Pro</p>
+        <p className="eyebrow mt-6">Ads Earning</p>
         <h1 className="mt-2 text-3xl font-bold">{t("setupTitle")}</h1>
         <p className="mt-3 leading-6 text-slate-300">{t("setupText")}</p>
         <form

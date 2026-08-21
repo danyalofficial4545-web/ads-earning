@@ -966,7 +966,7 @@ function GlobalSettings({ t }: any) {
           <p className="font-bold">{t("websiteSettings")}</p>
           <div className="mt-3 grid gap-4 md:grid-cols-2">
             <Field label={t("websiteName")}>
-              <input className="field" value={values.websiteName ?? "Package Earn Pro"} onChange={e => setForm({ ...values, websiteName: e.target.value })} />
+              <input className="field" value={values.websiteName ?? "Ads Earning"} onChange={e => setForm({ ...values, websiteName: e.target.value })} />
             </Field>
             <Field label={t("themeSettings")}>
               <select className="field" value={values.themeName ?? "green"} onChange={e => setForm({ ...values, themeName: e.target.value })}>

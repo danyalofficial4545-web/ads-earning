@@ -5,7 +5,7 @@ export type PublicBranding = {
 };
 
 const defaultBranding: PublicBranding = {
-  websiteName: "Package Earn Pro",
+  websiteName: "Ads Earning",
   themeName: "green",
   logoUrl: null,
 };
