@@ -926,8 +926,16 @@ function GlobalSettings({ t }: any) {
   const [form, setForm] = useState<any>(null);
   const [logoData, setLogoData] = useState("");
   const values = form ?? query.data;
-  const save = trpc.admin.saveSettings.useMutation({
+  const saveText = trpc.admin.saveSettings.useMutation({
     onSuccess: () => {
+      toast.success(t("saved"));
+      query.refetch();
+    },
+    onError: e => toast.error(e.message),
+  });
+  const saveLogo = trpc.admin.saveBrandLogo.useMutation({
+    onSuccess: () => {
+      setLogoData("");
       toast.success(t("saved"));
       query.refetch();
     },
@@ -959,7 +967,7 @@ function GlobalSettings({ t }: any) {
         className="panel"
         onSubmit={e => {
           e.preventDefault();
-          save.mutate({ ...values, logoData: logoData || undefined });
+          saveText.mutate(values);
         }}
       >
         <div className="mb-5 rounded-2xl border border-amber-300/15 bg-amber-300/10 p-4">
@@ -976,10 +984,14 @@ function GlobalSettings({ t }: any) {
                 <option value="white">{t("whiteTheme")}</option>
               </select>
             </Field>
-            <Field label={t("websiteLogo")}>
-              <input className="field h-auto py-2" type="file" accept="image/*" onChange={async e => { const file = e.target.files?.[0]; if (file) setLogoData(await toDataUrl(file)); }} />
-            </Field>
-            {values.logoUrl && <a className="self-end text-sm font-bold text-amber-300" href={values.logoUrl} target="_blank" rel="noreferrer">{t("viewProof")}</a>}
+          </div>
+        </div>
+        <div className="mb-5 rounded-2xl border border-white/10 bg-slate-950/15 p-4">
+          <p className="font-bold">{t("websiteLogo")}</p>
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <input className="field h-auto max-w-md py-2" type="file" accept="image/*" onChange={async e => { const file = e.target.files?.[0]; if (file) setLogoData(await toDataUrl(file)); }} />
+            <button type="button" disabled={!logoData || saveLogo.isPending} onClick={() => saveLogo.mutate({ logoData })} className="inline-flex h-10 items-center gap-2 rounded-xl bg-amber-300 px-4 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"><Settings2 className="size-4" />{t("save")}</button>
+            {(values.logoData || values.logoUrl) && <a className="self-end pb-2 text-sm font-bold text-amber-300" href={values.logoData || values.logoUrl} target="_blank" rel="noreferrer">{t("viewProof")}</a>}
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
@@ -990,7 +1002,7 @@ function GlobalSettings({ t }: any) {
           {field(t("referralCommission"), "referralCommissionPercent")}
         </div>
         <button
-          disabled={save.isPending}
+          disabled={saveText.isPending}
           className="mt-5 inline-flex h-10 items-center gap-2 rounded-xl bg-amber-300 px-4 text-sm font-bold text-slate-950"
         >
           <Settings2 className="size-4" />

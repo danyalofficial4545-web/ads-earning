@@ -39,6 +39,7 @@ import {
   boolean,
   index,
   int,
+  mediumtext,
   mysqlEnum,
   mysqlTable,
   text,
@@ -224,6 +225,7 @@ var appSettings = mysqlTable("appSettings", {
   websiteName: varchar("websiteName", { length: 80 }).notNull().default("Ads Earning"),
   themeName: mysqlEnum("themeName", ["green", "blue", "dark", "white"]).notNull().default("green"),
   logoUrl: varchar("logoUrl", { length: 1024 }),
+  logoData: mediumtext("logoData"),
   logoKey: varchar("logoKey", { length: 512 }),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
 });
@@ -1218,6 +1220,26 @@ async function saveUpload(userId, raw, category) {
   const key = `package-earn-pro/${category}/${userId}/${Date.now()}.${extension}`;
   return storagePut(key, file, contentType);
 }
+function validateDirectBrandLogo(raw) {
+  const value = raw.trim();
+  const dataUrl = value.match(/^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\s]+)$/i);
+  if (dataUrl) {
+    const [, contentType, encodedData] = dataUrl;
+    const base64 = encodedData.replace(/\s/g, "");
+    const file = Buffer.from(base64, "base64");
+    if (file.length === 0 || file.length > 1 * 1024 * 1024)
+      fail("Logo image must be between 1 byte and 1 MB.");
+    return `data:${contentType};base64,${base64}`;
+  }
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" && url.protocol !== "http:")
+      fail("Logo URL must use HTTP or HTTPS.");
+    return url.toString();
+  } catch {
+    fail("Please upload a valid image or provide a valid logo URL.");
+  }
+}
 async function saveAdMedia(userId, raw, contentType) {
   const match = raw.match(/^data:([^;]+);base64,(.+)$/);
   if (!match) fail("Please upload a valid ad media file.");
@@ -1557,7 +1579,7 @@ var appRouter = router({
         branding: {
           websiteName: settings.websiteName,
           themeName: settings.themeName,
-          logoUrl: settings.logoUrl
+          logoUrl: settings.logoData || settings.logoUrl
         }
       };
     }),
@@ -2479,23 +2501,26 @@ var appRouter = router({
         adTimerSeconds: z2.number().int().min(5).max(600),
         referralCommissionPercent: z2.number().int().min(0).max(100),
         websiteName: z2.string().trim().min(2).max(80),
-        themeName: z2.enum(["green", "blue", "dark", "white"]),
-        logoData: z2.string().max(8e6).optional()
+        themeName: z2.enum(["green", "blue", "dark", "white"])
       })
     ).mutation(async ({ ctx, input }) => {
-      const { user } = await getAdmin(ctx);
+      await getAdmin(ctx);
       if (input.maximumWithdrawalPkr < input.minimumWithdrawalPkr)
         fail("Maximum withdrawal must be greater than the minimum.");
       const db = await getDb();
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-      const { logoData, ...settingsInput } = input;
-      const logo = logoData ? await saveUpload(user.id, logoData, "brand-logos") : null;
-      await db.update(appSettings).set({
-        ...settingsInput,
-        ...logo ? { logoUrl: logo.url, logoKey: logo.key } : {}
-      }).where(eq2(appSettings.id, 1));
+      await db.update(appSettings).set(input).where(eq2(appSettings.id, 1));
       return { success: true };
+    }),
+    saveBrandLogo: protectedProcedure.input(z2.object({ logoData: z2.string().trim().min(1).max(2e6) })).mutation(async ({ ctx, input }) => {
+      await getAdmin(ctx);
+      const db = await getDb();
+      if (!db)
+        fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const logoData = validateDirectBrandLogo(input.logoData);
+      await db.update(appSettings).set({ logoData, logoUrl: null, logoKey: null }).where(eq2(appSettings.id, 1));
+      return { success: true, logoUrl: logoData };
     })
   })
 });

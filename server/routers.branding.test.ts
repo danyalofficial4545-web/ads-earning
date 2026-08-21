@@ -8,7 +8,7 @@ vi.mock("./db", () => ({ ADMIN_EMAIL: "muhammaddanyal4545@gmail.com", ...mocks }
 
 import { appRouter } from "./routers";
 
-const settings = { exchangeRatePkrPerUsd: 280, minimumWithdrawalPkr: 50, maximumWithdrawalPkr: 3000, adTimerSeconds: 10, referralCommissionPercent: 50, websiteName: "Trusted Package Earn", themeName: "blue" as const, logoUrl: "https://storage.example/brand.png", logoKey: "brand.png" };
+const settings = { exchangeRatePkrPerUsd: 280, minimumWithdrawalPkr: 50, maximumWithdrawalPkr: 3000, adTimerSeconds: 10, referralCommissionPercent: 50, websiteName: "Trusted Package Earn", themeName: "blue" as const, logoUrl: "https://storage.example/brand.png", logoKey: "brand.png", logoData: null };
 const context = (admin = false) => ({ user: admin ? { id: 1, openId: "admin", name: "Admin", email: "muhammaddanyal4545@gmail.com", loginMethod: "password", role: "admin", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() } : null, req: { protocol: "https", headers: {} }, res: { cookie: vi.fn(), clearCookie: vi.fn() } } as unknown as TrpcContext);
 
 describe("administrator branding settings", () => {
@@ -19,7 +19,7 @@ describe("administrator branding settings", () => {
     mocks.getSettings.mockResolvedValue(settings);
   });
 
-  it("persists safe website name and named theme settings and exposes saved branding to the public platform payload", async () => {
+  it("persists text settings without a storage upload and exposes saved branding to the public platform payload", async () => {
     const updates: any[] = [];
     const db = {
       select: vi.fn(() => ({ from: () => ({ where: async () => [] }) })),
@@ -31,5 +31,18 @@ describe("administrator branding settings", () => {
     expect(publicPayload).not.toHaveProperty("settings");
     await appRouter.createCaller(context(true)).admin.saveSettings(settings);
     expect(updates[0]).toMatchObject({ websiteName: settings.websiteName, themeName: "blue" });
+    expect(updates[0]).not.toHaveProperty("logoData");
+  });
+
+  it("stores a compact base64 brand image directly in settings without Forge storage", async () => {
+    const updates: any[] = [];
+    const db = {
+      update: vi.fn(() => ({ set: (values: any) => { updates.push(values); return { where: async () => undefined }; } })),
+    };
+    mocks.getDb.mockResolvedValue(db);
+    const dataUrl = "data:image/png;base64,aGVsbG8=";
+    const result = await appRouter.createCaller(context(true)).admin.saveBrandLogo({ logoData: dataUrl });
+    expect(result).toEqual({ success: true, logoUrl: dataUrl });
+    expect(updates[0]).toEqual({ logoData: dataUrl, logoUrl: null, logoKey: null });
   });
 });

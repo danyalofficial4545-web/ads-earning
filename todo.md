@@ -170,3 +170,10 @@
 - [x] Update client-side Forge configuration to prefer VITE_BUILT_IN_FORGE_API_URL and VITE_BUILT_IN_FORGE_API_KEY while retaining a safe fallback for the existing built-in URL configuration.
 - [x] Make public and member branding render a default Ads text mark when the configured logo URL is missing or cannot load, without changing saved administrator logo settings.
 - [x] Add focused tests, validate standard and Vercel builds, publish the same-project fix, and document the user’s Vercel redeploy step.
+
+### Current request: Admin Custom settings without Forge storage
+
+- [x] Separate administrator website-name and theme updates from logo upload processing so text-only saves never require storage configuration.
+- [x] Persist administrator-provided logo URLs or validated base64 image data directly in the settings record without invoking Forge storage.
+- [x] Keep a visible Ads fallback icon and suppress client-facing storage configuration errors when no usable logo image is available.
+- [x] Add regression tests, validate standard and Vercel builds, publish the same-project fix, and provide redeployment guidance.
