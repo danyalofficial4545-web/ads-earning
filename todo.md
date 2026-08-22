@@ -185,3 +185,16 @@
 - [x] Replace Forge-dependent logo, deposit proof, support screenshot, and ad gallery uploads with the database-backed flow and preserve safe rendering.
 - [x] Replace client-facing storage configuration errors with a generic bilingual upload-failed message.
 - [x] Add regression tests, validate Vercel build behavior, publish the same-project update, and document Vercel redeployment verification.
+
+### Current request: Vercel still serving stale upload build
+
+- [x] Identify the Vercel production project and source version currently serving the obsolete Forge storage configuration error.
+- [x] Verify the Ads Earning GitHub main commit and Vercel build configuration required to deploy the database-backed upload release.
+- [x] Provide the exact Vercel redeployment and post-deployment payment-proof verification steps.
+
+### Current request: Immediate pending histories and deposit instructions
+
+- [x] Show member deposit requests in Deposit History immediately after submission with their pending, approved, or rejected status.
+- [x] Show member withdrawal requests in Withdrawal History immediately after submission with their pending, approved, or rejected status.
+- [x] Add clear bilingual instructions above the deposit details explaining that the member must transfer to the displayed payment account before submitting transfer details and proof.
+- [x] Add regression tests, validate the member interface and build, then publish the same-project update without altering approval or accounting logic.

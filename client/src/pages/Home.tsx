@@ -1590,6 +1590,7 @@ function Deposit({ t, settings, packages, onDone }: any) {
   const [requestedPackageId, setRequestedPackageId] = useState("");
   const [proof, setProof] = useState("");
   const [showHistory, setShowHistory] = useState(false);
+  const utils = trpc.useUtils();
   const accounts = trpc.deposit.accounts.useQuery({ currency });
   const create = trpc.deposit.create.useMutation({
     onSuccess: () => {
@@ -1600,6 +1601,8 @@ function Deposit({ t, settings, packages, onDone }: any) {
       setSenderAccountName("");
       setTransactionId("");
       setRequestedPackageId("");
+      setShowHistory(true);
+      void utils.deposit.list.invalidate();
       onDone();
     },
     onError: () => toast.error(t("operationFailed")),
@@ -1637,6 +1640,9 @@ function Deposit({ t, settings, packages, onDone }: any) {
           </div>
         </div>
         <div className="panel">
+          <p className="mb-5 rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm leading-6 text-amber-50">
+            {t("depositTransferInstruction")}
+          </p>
           <form
             onSubmit={event => {
               event.preventDefault();
@@ -1765,10 +1771,13 @@ function Withdrawal({ t, profile, activePackage, settings, onDone }: any) {
   const [accountName, setAccountName] = useState("");
   const [accountDetails, setAccountDetails] = useState("");
   const [showHistory, setShowHistory] = useState(false);
+  const utils = trpc.useUtils();
   const create = trpc.withdrawal.create.useMutation({
     onSuccess: () => {
       toast.success(t("submitted"));
       setAmount("");
+      setShowHistory(true);
+      void utils.withdrawal.list.invalidate();
       onDone();
     },
     onError: error => toast.error(error.message),
