@@ -1095,7 +1095,7 @@ function PageHeading({
 }: {
   eyebrow: string;
   title: string;
-  description: string;
+  description?: string;
   action?: React.ReactNode;
 }) {
   return (
@@ -1105,9 +1105,11 @@ function PageHeading({
         <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">
           {title}
         </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-          {description}
-        </p>
+        {description && (
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+            {description}
+          </p>
+        )}
       </div>
       {action}
     </div>
@@ -2092,7 +2094,6 @@ function Referral({ t }: any) {
       <PageHeading
         eyebrow={t("invite")}
         title={t("invite")}
-        description={t("referralSubtitle")}
       />
       <div className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
         <div className="panel">

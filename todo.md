@@ -198,3 +198,8 @@
 - [x] Show member withdrawal requests in Withdrawal History immediately after submission with their pending, approved, or rejected status.
 - [x] Add clear bilingual instructions above the deposit details explaining that the member must transfer to the displayed payment account before submitting transfer details and proof.
 - [x] Add regression tests, validate the member interface and build, then publish the same-project update without altering approval or accounting logic.
+
+### Current request: Invite page copy cleanup
+
+- [x] Remove the visible Invite page explanation that states where referral rewards are credited, while preserving all existing referral calculations and withdrawal-limit rules.
+- [x] Add focused validation and publish the same-project copy-only update.
