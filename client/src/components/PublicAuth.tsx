@@ -5,7 +5,6 @@ import { trpc } from "@/lib/trpc";
 import { getDeviceMarker } from "@/lib/deviceMarker";
 import { resolvePublicBranding } from "@/lib/publicBranding";
 import type { Language, TranslationKey } from "@/lib/i18n";
-import { HUMAN_IMAGE_OPTIONS } from "../../../shared/humanVerification";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -44,8 +43,8 @@ function GoogleMark({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function HumanCheck({ t, prompt, answer, onAnswer, onRefresh }: { t: Translate; prompt?: string; answer: string; onAnswer: (value: string) => void; onRefresh: () => void }) {
-  return <div className="rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-3"><div className="flex items-center justify-between gap-3"><p className="text-xs font-bold text-emerald-100">{t("humanVerification")}</p><button type="button" onClick={onRefresh} className="text-xs font-bold text-amber-300">{t("refreshCheck")}</button></div><p className="mt-2 text-sm font-semibold text-white">{prompt ?? t("loading")}</p><div className="mt-3 grid grid-cols-4 gap-2">{HUMAN_IMAGE_OPTIONS.map(option => <button key={option.id} type="button" aria-label={option.label} aria-pressed={answer === option.id} onClick={() => onAnswer(option.id)} className={`rounded-xl border p-2 text-center transition ${answer === option.id ? "border-amber-300 bg-amber-300/20 ring-1 ring-amber-300" : "border-white/10 bg-slate-950/20 hover:border-emerald-200/60"}`}><span className="block text-2xl" aria-hidden="true">{option.emoji}</span><span className="mt-1 block text-[10px] font-bold text-slate-200">{option.label}</span></button>)}</div></div>;
+function VisualCodeCheck({ t, imageData, answer, onAnswer, onRefresh }: { t: Translate; imageData?: string; answer: string; onAnswer: (value: string) => void; onRefresh: () => void }) {
+  return <div className="rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-3"><div className="flex items-center justify-between gap-3"><p className="text-xs font-bold text-emerald-100">{t("humanVerification")}</p><button type="button" onClick={onRefresh} className="text-xs font-bold text-amber-300">{t("refreshCheck")}</button></div><p className="mt-2 text-xs leading-5 text-slate-200">{t("captchaCodeHelp")}</p>{imageData ? <img src={imageData} alt={t("humanVerification")} className="mt-3 h-[70px] w-full rounded-xl border border-white/10 object-cover" /> : <div className="mt-3 grid h-[70px] place-items-center rounded-xl border border-white/10 bg-slate-950/25"><Loader2 className="size-4 animate-spin text-amber-300" /></div>}<label className="mt-3 block"><span className="field-label">{t("captchaCodeLabel")}</span><input required value={answer} autoComplete="off" autoCapitalize="characters" maxLength={8} className="field tracking-[0.24em] uppercase" onChange={event => onAnswer(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} /></label></div>;
 }
 
 export function PublicAuth({
@@ -57,15 +56,22 @@ export function PublicAuth({
   setLanguage: (language: Language) => void;
   t: Translate;
 }) {
+  const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
   const [signIn, setSignIn] = useState({ email: "", password: "" });
+  const [signUp, setSignUp] = useState(() => ({ username: "", email: "", password: "", confirmPassword: "", referralCode: new URLSearchParams(window.location.search).get("ref") ?? "" }));
   const [challengeAnswer, setChallengeAnswer] = useState("");
+  const [signUpChallengeAnswer, setSignUpChallengeAnswer] = useState("");
   const [deviceId] = useState(() => getDeviceMarker());
   const branding = trpc.platform.publicData.useQuery();
   const brandSettings = resolvePublicBranding(branding.data?.branding);
   const utils = trpc.useUtils();
-  const captcha = trpc.auth.captcha.useQuery(
+  const signInCaptcha = trpc.auth.captcha.useQuery(
     { purpose: "sign_in", deviceId },
-    { staleTime: 0, refetchOnWindowFocus: false }
+    { staleTime: 0, refetchOnWindowFocus: false, enabled: mode === "signIn" }
+  );
+  const signUpCaptcha = trpc.auth.captcha.useQuery(
+    { purpose: "sign_up", deviceId },
+    { staleTime: 0, refetchOnWindowFocus: false, enabled: mode === "signUp" }
   );
   const complete = async (message: string) => {
     toast.success(message);
@@ -77,26 +83,41 @@ export function PublicAuth({
     onError: error => {
       toast.error(error.message);
       setChallengeAnswer("");
-      captcha.refetch();
+      signInCaptcha.refetch();
     },
   });
-  const busy = login.isPending;
+  const register = trpc.auth.register.useMutation({
+    onSuccess: () => complete(t("accountCreated")),
+    onError: error => {
+      toast.error(error.message);
+      setSignUpChallengeAnswer("");
+      signUpCaptcha.refetch();
+    },
+  });
+  const busy = login.isPending || register.isPending;
   const submitSignIn = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!captcha.data || !challengeAnswer.trim())
+    if (!signInCaptcha.data || !challengeAnswer.trim())
       return toast.error(t("verificationRequired"));
     login.mutate({
       ...signIn,
-      challengeId: captcha.data.id,
+      challengeId: signInCaptcha.data.id,
       challengeAnswer,
       deviceId,
     });
+  };
+  const submitSignUp = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (signUp.password !== signUp.confirmPassword) return toast.error(t("passwordMismatch"));
+    if (!signUpCaptcha.data || !signUpChallengeAnswer.trim()) return toast.error(t("verificationRequired"));
+    register.mutate({ username: signUp.username, email: signUp.email, password: signUp.password, referralCode: signUp.referralCode || undefined, challengeId: signUpCaptcha.data.id, challengeAnswer: signUpChallengeAnswer, deviceId });
   };
 
   return (
     <div
       className="pep-page min-h-screen bg-[#102621] p-4 text-white"
       data-pep-theme={brandSettings.themeName}
+      data-pep-button={brandSettings.buttonColor}
       dir={language === "ur" ? "rtl" : "ltr"}
     >
       <div className="mx-auto flex max-w-4xl items-center justify-between py-3 sm:py-6">
@@ -108,8 +129,12 @@ export function PublicAuth({
       </div>
       <main className="mx-auto grid max-w-4xl overflow-hidden rounded-3xl border border-white/10 bg-[#17342d]/90 shadow-2xl shadow-black/25 md:grid-cols-[1fr_.62fr]">
         <section className="p-5 sm:p-8">
-          <p className="eyebrow">{t("signIn")}</p>
-          <form className="mt-6 space-y-4" onSubmit={submitSignIn}>
+          <div className="flex rounded-xl border border-white/10 bg-slate-950/20 p-1">
+            <button type="button" onClick={() => setMode("signIn")} className={`flex-1 rounded-lg py-2 text-sm font-bold ${mode === "signIn" ? "bg-amber-300 text-slate-950" : "text-slate-300"}`}>{t("signIn")}</button>
+            <button type="button" onClick={() => setMode("signUp")} className={`flex-1 rounded-lg py-2 text-sm font-bold ${mode === "signUp" ? "bg-amber-300 text-slate-950" : "text-slate-300"}`}>{t("signUp")}</button>
+          </div>
+          {mode === "signIn" ? <form className="mt-6 space-y-4" onSubmit={submitSignIn}>
+              <p className="eyebrow">{t("signIn")}</p>
               <label>
                 <span className="field-label">{t("email")}</span>
                 <input
@@ -136,7 +161,7 @@ export function PublicAuth({
                   }
                 />
               </label>
-              <HumanCheck t={t} prompt={captcha.data?.prompt} answer={challengeAnswer} onAnswer={setChallengeAnswer} onRefresh={() => { setChallengeAnswer(""); captcha.refetch(); }} />
+              <VisualCodeCheck t={t} imageData={signInCaptcha.data?.imageData} answer={challengeAnswer} onAnswer={setChallengeAnswer} onRefresh={() => { setChallengeAnswer(""); signInCaptcha.refetch(); }} />
               <button
                 disabled={busy}
                 className="flex h-11 w-full items-center justify-center rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-60"
@@ -147,7 +172,16 @@ export function PublicAuth({
                   t("signIn")
                 )}
               </button>
-          </form>
+          </form> : <form className="mt-6 space-y-4" onSubmit={submitSignUp}>
+            <p className="eyebrow">{t("signUp")}</p>
+            <label><span className="field-label">{t("email")}</span><input required type="email" autoComplete="email" className="field" value={signUp.email} onChange={event => setSignUp({ ...signUp, email: event.target.value })} /></label>
+            <label><span className="field-label">{t("username")}</span><input required minLength={3} autoComplete="username" className="field" value={signUp.username} onChange={event => setSignUp({ ...signUp, username: event.target.value })} /></label>
+            <label><span className="field-label">{t("password")}</span><input required minLength={8} type="password" autoComplete="new-password" className="field" value={signUp.password} onChange={event => setSignUp({ ...signUp, password: event.target.value })} /></label>
+            <label><span className="field-label">{t("confirmPassword")}</span><input required minLength={8} type="password" autoComplete="new-password" className="field" value={signUp.confirmPassword} onChange={event => setSignUp({ ...signUp, confirmPassword: event.target.value })} /></label>
+            <label><span className="field-label">{t("referralInvite")}</span><input className="field" value={signUp.referralCode} onChange={event => setSignUp({ ...signUp, referralCode: event.target.value.toUpperCase() })} /></label>
+            <VisualCodeCheck t={t} imageData={signUpCaptcha.data?.imageData} answer={signUpChallengeAnswer} onAnswer={setSignUpChallengeAnswer} onRefresh={() => { setSignUpChallengeAnswer(""); signUpCaptcha.refetch(); }} />
+            <button disabled={busy} className="flex h-11 w-full items-center justify-center rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-60">{busy ? <Loader2 className="size-4 animate-spin" /> : t("createAccount")}</button>
+          </form>}
         </section>
         <aside className="flex flex-col items-center justify-center border-t border-white/10 bg-slate-950/20 p-7 text-center md:border-l md:border-t-0">
           <GoogleMark />

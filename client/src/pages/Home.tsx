@@ -206,6 +206,7 @@ export default function Home() {
     <div
       className="pep-page min-h-screen bg-[#102621] text-white"
       data-pep-theme={branding.themeName}
+      data-pep-button={branding.buttonColor}
       dir={language === "ur" ? "rtl" : "ltr"}
     >
       <div className="pointer-events-none fixed inset-0 overflow-hidden">

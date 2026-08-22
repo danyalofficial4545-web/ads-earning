@@ -217,3 +217,11 @@
 - [x] Ensure returning members can sign in either through Google or with the same Google Gmail address and saved password.
 - [x] Keep referral codes, invite links, referral credits, wallet, withdrawal-limit, package, deposit, withdrawal, and ad behavior unchanged.
 - [x] Add authentication and referral/financial regression tests, validate builds, and publish the same-project update.
+
+### Current request: Dual signup, visual captcha, and button color customisation
+
+- [x] Restore manual Gmail, username, password, confirm-password, and optional referral-code registration while preserving Google sign-up and Google sign-in.
+- [x] Replace image-select human verification with a server-validated visual code captcha that has a refresh action, expiry, and typed code input.
+- [x] Expand administrator website themes to include Black, Red, Green, and Yellow options while retaining existing saved theme compatibility.
+- [x] Add ten administrator-selectable global button color options that apply consistently to member and administrator controls without making text unreadable.
+- [x] Add authentication, captcha, theme, button-color, referral, and financial regression tests; validate builds; and publish the same-project update.

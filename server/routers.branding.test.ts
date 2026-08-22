@@ -8,7 +8,7 @@ vi.mock("./db", () => ({ ADMIN_EMAIL: "muhammaddanyal4545@gmail.com", ...mocks }
 
 import { appRouter } from "./routers";
 
-const settings = { exchangeRatePkrPerUsd: 280, minimumWithdrawalPkr: 50, maximumWithdrawalPkr: 3000, adTimerSeconds: 10, referralCommissionPercent: 50, websiteName: "Trusted Package Earn", themeName: "blue" as const, logoUrl: "https://storage.example/brand.png", logoKey: "brand.png", logoData: null };
+const settings = { exchangeRatePkrPerUsd: 280, minimumWithdrawalPkr: 50, maximumWithdrawalPkr: 3000, adTimerSeconds: 10, referralCommissionPercent: 50, websiteName: "Trusted Package Earn", themeName: "blue" as const, buttonColor: "purple", logoUrl: "https://storage.example/brand.png", logoKey: "brand.png", logoData: null };
 const context = (admin = false) => ({ user: admin ? { id: 1, openId: "admin", name: "Admin", email: "muhammaddanyal4545@gmail.com", loginMethod: "password", role: "admin", createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() } : null, req: { protocol: "https", headers: {} }, res: { cookie: vi.fn(), clearCookie: vi.fn() } } as unknown as TrpcContext);
 
 describe("administrator branding settings", () => {
@@ -27,10 +27,10 @@ describe("administrator branding settings", () => {
     };
     mocks.getDb.mockResolvedValue(db);
     const publicPayload = await appRouter.createCaller(context()).platform.publicData();
-    expect(publicPayload.branding).toEqual({ websiteName: settings.websiteName, themeName: "blue", logoUrl: settings.logoUrl });
+    expect(publicPayload.branding).toEqual({ websiteName: settings.websiteName, themeName: "blue", buttonColor: "purple", logoUrl: settings.logoUrl });
     expect(publicPayload).not.toHaveProperty("settings");
     await appRouter.createCaller(context(true)).admin.saveSettings(settings);
-    expect(updates[0]).toMatchObject({ websiteName: settings.websiteName, themeName: "blue" });
+    expect(updates[0]).toMatchObject({ websiteName: settings.websiteName, themeName: "blue", buttonColor: "purple" });
     expect(updates[0]).not.toHaveProperty("logoData");
   });
 

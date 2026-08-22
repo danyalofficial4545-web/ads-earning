@@ -13,8 +13,8 @@ import { appRouter } from "./routers";
 
 const context = (user: unknown = null) => ({ user, req: { protocol: "https", headers: {} }, res: { cookie: vi.fn(), clearCookie: vi.fn() } } as unknown as TrpcContext);
 const baseProfile = { id: 1, userId: 301, username: "newmember", referralCode: "PEP89", referredByUserId: null, balancePkr: 0, withdrawalLimitPkr: 0, preferredCurrency: "PKR" as const, isBlocked: false, createdAt: new Date(), updatedAt: new Date() };
-const challengeInput = { challengeId: "11111111-1111-4111-8111-111111111111", challengeAnswer: "3", deviceId: "device-marker-for-credential-router-tests" };
-const challengeRow = { id: challengeInput.challengeId, purpose: "sign_up" as const, prompt: "Human check: 1 + 2 = ?", answerHash: hashSecurityValue("3"), deviceFingerprintHash: hashSecurityValue(challengeInput.deviceId), expiresAt: new Date(Date.now() + 60_000), consumedAt: null, createdAt: new Date() };
+const challengeInput = { challengeId: "11111111-1111-4111-8111-111111111111", challengeAnswer: "A7K2M", deviceId: "device-marker-for-credential-router-tests" };
+const challengeRow = { id: challengeInput.challengeId, purpose: "sign_up" as const, prompt: "Enter the characters shown in the verification image.", answerHash: hashSecurityValue("A7K2M"), deviceFingerprintHash: hashSecurityValue(challengeInput.deviceId), expiresAt: new Date(Date.now() + 60_000), consumedAt: null, createdAt: new Date() };
 
 function registrationDatabase(options?: { emailExists?: boolean; usernameExists?: boolean; referralExists?: boolean; deviceExists?: boolean; networkExists?: boolean }) {
   const inserts: Array<{ table: unknown; values: any }> = [];
@@ -42,9 +42,14 @@ function registrationDatabase(options?: { emailExists?: boolean; usernameExists?
 describe("custom credential router", () => {
   beforeEach(() => { vi.resetAllMocks(); });
 
-  it("blocks manual registration so new accounts must begin with a verified Google identity", async () => {
-    await expect(appRouter.createCaller(context()).auth.register({ username: "newmember", email: "newmember@example.com", password: "StrongPass123", ...challengeInput })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    expect(mocks.getDb).not.toHaveBeenCalled();
+  it("creates a manual Gmail account only after the visual verification code is correct", async () => {
+    const { db, inserts } = registrationDatabase();
+    mocks.getDb.mockResolvedValue(db);
+    const ctx = context();
+    const result = await appRouter.createCaller(ctx).auth.register({ username: "newmember", email: "newmember@example.com", password: "StrongPass123", ...challengeInput });
+    expect(result.user).toMatchObject({ id: 301, email: "newmember@example.com" });
+    expect(inserts.map(entry => entry.table)).toEqual([users, profiles]);
+    expect((ctx.res.cookie as any)).toHaveBeenCalledOnce();
   });
 
   it("allows only the correct password to create a local sign-in session", async () => {

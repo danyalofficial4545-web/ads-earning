@@ -226,7 +226,8 @@ var appSettings = mysqlTable("appSettings", {
   adTimerSeconds: int("adTimerSeconds").notNull().default(10),
   referralCommissionPercent: int("referralCommissionPercent").notNull().default(50),
   websiteName: varchar("websiteName", { length: 80 }).notNull().default("Ads Earning"),
-  themeName: mysqlEnum("themeName", ["green", "blue", "dark", "white"]).notNull().default("green"),
+  themeName: mysqlEnum("themeName", ["green", "blue", "dark", "white", "black", "red", "yellow"]).notNull().default("green"),
+  buttonColor: varchar("buttonColor", { length: 24 }).notNull().default("amber"),
   logoUrl: varchar("logoUrl", { length: 1024 }),
   logoData: mediumtext("logoData"),
   logoKey: varchar("logoKey", { length: 512 }),
@@ -890,20 +891,6 @@ import { z as z2 } from "zod";
 
 // server/security.ts
 import { createHash, randomInt, randomUUID } from "node:crypto";
-
-// shared/humanVerification.ts
-var HUMAN_IMAGE_OPTIONS = [
-  { id: "apple", label: "Apple", emoji: "\u{1F34E}" },
-  { id: "car", label: "Car", emoji: "\u{1F697}" },
-  { id: "house", label: "House", emoji: "\u{1F3E0}" },
-  { id: "star", label: "Star", emoji: "\u2B50" }
-];
-function humanImagePrompt(optionId) {
-  const option = HUMAN_IMAGE_OPTIONS.find((item) => item.id === optionId);
-  return `Select the ${option?.label ?? "Apple"} image.`;
-}
-
-// server/security.ts
 function hashSecurityValue(value) {
   return createHash("sha256").update(value.trim()).digest("hex");
 }
@@ -912,17 +899,41 @@ function clientIpFromHeaders(headers) {
   const value = Array.isArray(forwarded) ? forwarded[0] : forwarded;
   return (value?.split(",")[0]?.trim() || "unknown-network").slice(0, 128);
 }
+var CAPTCHA_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function createVisualCode() {
+  return Array.from(
+    { length: 5 },
+    () => CAPTCHA_ALPHABET[randomInt(0, CAPTCHA_ALPHABET.length)]
+  ).join("");
+}
+function createVisualCodeImage(code) {
+  const glyphs = Array.from(code).map((character, index2) => {
+    const x = 28 + index2 * 42 + randomInt(-3, 4);
+    const y = 49 + randomInt(-6, 7);
+    const rotation = randomInt(-17, 18);
+    const color = ["#FDE68A", "#A7F3D0", "#BAE6FD", "#FBCFE8"][index2 % 4];
+    return `<text x="${x}" y="${y}" fill="${color}" font-family="Arial, sans-serif" font-size="33" font-weight="700" transform="rotate(${rotation} ${x} ${y})">${character}</text>`;
+  }).join("");
+  const lines = Array.from({ length: 4 }, (_, index2) => {
+    const y1 = 10 + index2 * 14 + randomInt(-3, 4);
+    const y2 = 12 + index2 * 12 + randomInt(-4, 5);
+    return `<path d="M 8 ${y1} Q 110 ${y2 - 9} 232 ${y2}" stroke="#ffffff" stroke-opacity=".18" stroke-width="1.5" fill="none"/>`;
+  }).join("");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="70" viewBox="0 0 240 70"><rect width="240" height="70" rx="12" fill="#132f2a"/>${lines}${glyphs}</svg>`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+}
 function createHumanChallenge() {
-  const selected = HUMAN_IMAGE_OPTIONS[randomInt(0, HUMAN_IMAGE_OPTIONS.length)];
+  const code = createVisualCode();
   return {
     id: randomUUID(),
-    prompt: humanImagePrompt(selected.id),
-    answerHash: hashSecurityValue(selected.id),
+    prompt: "Enter the characters shown in the verification image.",
+    imageData: createVisualCodeImage(code),
+    answerHash: hashSecurityValue(code),
     expiresAt: new Date(Date.now() + 5 * 6e4)
   };
 }
 function matchesHumanChallenge(answer, answerHash) {
-  return hashSecurityValue(answer) === answerHash;
+  return hashSecurityValue(answer.toUpperCase()) === answerHash;
 }
 
 // server/telegram.ts
@@ -1289,6 +1300,7 @@ var appRouter = router({
       return {
         id: challenge.id,
         prompt: challenge.prompt,
+        imageData: challenge.imageData,
         expiresAt: challenge.expiresAt
       };
     }),
@@ -1306,12 +1318,6 @@ var appRouter = router({
         deviceId: z2.string().trim().min(16).max(256)
       })
     ).mutation(async ({ ctx, input }) => {
-      const customRegistrationDisabled = true;
-      if (customRegistrationDisabled)
-        fail(
-          "New accounts must be created with Google so the Gmail address is verified.",
-          "FORBIDDEN"
-        );
       const db = await getDb();
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
@@ -1530,6 +1536,7 @@ var appRouter = router({
         branding: {
           websiteName: settings.websiteName,
           themeName: settings.themeName,
+          buttonColor: settings.buttonColor ?? "amber",
           logoUrl: settings.logoData || settings.logoUrl
         }
       };
@@ -2460,7 +2467,8 @@ var appRouter = router({
         adTimerSeconds: z2.number().int().min(5).max(600),
         referralCommissionPercent: z2.number().int().min(0).max(100),
         websiteName: z2.string().trim().min(2).max(80),
-        themeName: z2.enum(["green", "blue", "dark", "white"])
+        themeName: z2.enum(["green", "blue", "dark", "white", "black", "red", "yellow"]),
+        buttonColor: z2.enum(["amber", "white", "black", "red", "green", "yellow", "blue", "purple", "pink", "orange", "teal"]).default("amber")
       })
     ).mutation(async ({ ctx, input }) => {
       await getAdmin(ctx);

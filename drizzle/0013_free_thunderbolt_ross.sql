@@ -1,0 +1,2 @@
+ALTER TABLE `appSettings` MODIFY COLUMN `themeName` enum('green','blue','dark','white','black','red','yellow') NOT NULL DEFAULT 'green';--> statement-breakpoint
+ALTER TABLE `appSettings` ADD `buttonColor` varchar(24) DEFAULT 'amber' NOT NULL;

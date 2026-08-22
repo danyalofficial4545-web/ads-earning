@@ -268,6 +268,7 @@ export const appRouter = router({
         return {
           id: challenge.id,
           prompt: challenge.prompt,
+          imageData: challenge.imageData,
           expiresAt: challenge.expiresAt,
         };
       }),
@@ -299,12 +300,6 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const customRegistrationDisabled: boolean = true;
-        if (customRegistrationDisabled)
-          fail(
-            "New accounts must be created with Google so the Gmail address is verified.",
-            "FORBIDDEN"
-          );
         const db = await getDb();
         if (!db)
           fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
@@ -613,6 +608,7 @@ export const appRouter = router({
         branding: {
           websiteName: settings.websiteName,
           themeName: settings.themeName,
+          buttonColor: settings.buttonColor ?? "amber",
           logoUrl: settings.logoData || settings.logoUrl,
         },
       };
@@ -1852,7 +1848,8 @@ export const appRouter = router({
           adTimerSeconds: z.number().int().min(5).max(600),
           referralCommissionPercent: z.number().int().min(0).max(100),
           websiteName: z.string().trim().min(2).max(80),
-          themeName: z.enum(["green", "blue", "dark", "white"]),
+          themeName: z.enum(["green", "blue", "dark", "white", "black", "red", "yellow"]),
+          buttonColor: z.enum(["amber", "white", "black", "red", "green", "yellow", "blue", "purple", "pink", "orange", "teal"]).default("amber"),
         })
       )
       .mutation(async ({ ctx, input }) => {

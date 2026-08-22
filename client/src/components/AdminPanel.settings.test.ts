@@ -10,5 +10,10 @@ describe("Admin Custom settings", () => {
     expect(source).toContain("saveText.mutate(values)");
     expect(source).toContain("saveLogo.mutate({ logoData })");
     expect(source).not.toContain("Storage config missing");
+    expect(source).toContain('value="black"');
+    expect(source).toContain('value="red"');
+    expect(source).toContain('value="yellow"');
+    expect(source).toContain('value="purple"');
+    expect(source).toContain('value="teal"');
   });
 });

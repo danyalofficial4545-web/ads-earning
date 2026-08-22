@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { clientIpFromHeaders, createHumanChallenge, hashSecurityValue, matchesHumanChallenge } from "./security";
-import { HUMAN_IMAGE_OPTIONS } from "../shared/humanVerification";
 
 describe("authentication security helpers", () => {
   it("uses non-reversible stable markers for devices and networks", () => {
@@ -9,13 +8,14 @@ describe("authentication security helpers", () => {
     expect(clientIpFromHeaders({ "x-forwarded-for": "203.0.113.7, 10.0.0.1" })).toBe("203.0.113.7");
   });
 
-  it("creates expiring image-select challenges that accept only the matching image option", () => {
+  it("creates expiring visual code challenges that accept only the code shown in the image", () => {
     const challenge = createHumanChallenge();
-    const matching = HUMAN_IMAGE_OPTIONS.find(option => matchesHumanChallenge(option.id, challenge.answerHash));
-    expect(matching).toBeDefined();
-    expect(challenge.prompt).toContain(matching!.label);
-    const different = HUMAN_IMAGE_OPTIONS.find(option => option.id !== matching!.id)!;
-    expect(matchesHumanChallenge(different.id, challenge.answerHash)).toBe(false);
+    expect(challenge.imageData).toMatch(/^data:image\/svg\+xml;base64,/);
+    const svg = Buffer.from(challenge.imageData.split(",")[1]!, "base64").toString("utf8");
+    const code = Array.from(svg.matchAll(/>([A-Z0-9])<\/text>/g)).map(match => match[1]).join("");
+    expect(code).toHaveLength(5);
+    expect(matchesHumanChallenge(code.toLowerCase(), challenge.answerHash)).toBe(true);
+    expect(matchesHumanChallenge("WRONG", challenge.answerHash)).toBe(false);
     expect(challenge.expiresAt.getTime()).toBeGreaterThan(Date.now());
   });
 });
