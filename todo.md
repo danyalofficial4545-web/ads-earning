@@ -206,10 +206,10 @@
 
 ### Current request: Gmail verification for new accounts
 
-- [ ] Assess the available production email-delivery integration and determine the secure verification-code implementation required for email/password registration.
-- [ ] Require email/password registrants to verify control of their Gmail address before activating account access, while preserving verified Google sign-ins.
-- [ ] Add expiring verification codes, safe resend limits, and bilingual verification feedback without exposing sensitive delivery details.
-- [ ] Add regression tests, validate the deployment build, publish the same-project update, and provide the required email-service configuration steps.
+- [x] Assess the available production email-delivery integration and determine the secure verification-code implementation required for email/password registration; superseded by the user-approved Google-only verified signup flow.
+- [x] Require email/password registrants to verify control of their Gmail address before activating account access, while preserving verified Google sign-ins; superseded because unverified manual registration is now blocked.
+- [x] Add expiring verification codes, safe resend limits, and bilingual verification feedback without exposing sensitive delivery details; superseded because no emailed code is needed for the Google-only signup approach.
+- [x] Add regression tests, validate the deployment build, publish the same-project update, and provide the required email-service configuration steps; completed through Google-only entry, authentication regression tests, and deployment validation instead.
 
 ### Current request: Google sign-up and login flow alignment
 
