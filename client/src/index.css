@@ -67,18 +67,6 @@
 .pep-page[data-pep-theme="yellow"] .panel { background-color: rgb(133 106 13 / .25); border-color: rgb(254 240 138 / .2); }
 .pep-page[data-pep-theme="yellow"] .eyebrow { color: #fde68a; }
 
-.pep-page[data-pep-button] button:not(:disabled), .pep-page[data-pep-button] .nav-item-active { background-color: var(--pep-button) !important; color: var(--pep-button-text) !important; border-color: color-mix(in srgb, var(--pep-button), white 12%) !important; }
-.pep-page[data-pep-button="amber"] { --pep-button: #fbbf24; --pep-button-text: #111827; }
-.pep-page[data-pep-button="white"] { --pep-button: #f8fafc; --pep-button-text: #0f172a; }
-.pep-page[data-pep-button="black"] { --pep-button: #111827; --pep-button-text: #ffffff; }
-.pep-page[data-pep-button="red"] { --pep-button: #dc2626; --pep-button-text: #ffffff; }
-.pep-page[data-pep-button="green"] { --pep-button: #16a34a; --pep-button-text: #ffffff; }
-.pep-page[data-pep-button="yellow"] { --pep-button: #eab308; --pep-button-text: #1f2937; }
-.pep-page[data-pep-button="blue"] { --pep-button: #2563eb; --pep-button-text: #ffffff; }
-.pep-page[data-pep-button="purple"] { --pep-button: #7c3aed; --pep-button-text: #ffffff; }
-.pep-page[data-pep-button="pink"] { --pep-button: #db2777; --pep-button-text: #ffffff; }
-.pep-page[data-pep-button="orange"] { --pep-button: #ea580c; --pep-button-text: #ffffff; }
-.pep-page[data-pep-button="teal"] { --pep-button: #0f766e; --pep-button-text: #ffffff; }
 
 @media (prefers-reduced-motion: no-preference) {
   .panel, .glass { animation: rise .35s cubic-bezier(0.23, 1, 0.32, 1) both; }

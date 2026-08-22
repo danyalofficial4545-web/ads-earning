@@ -22,8 +22,8 @@ describe("safe public branding", () => {
     const home = readFileSync(new URL("../pages/Home.tsx", import.meta.url), "utf8");
     expect(publicAuth).toContain("resolvePublicBranding(branding.data?.branding)");
     expect(home).toContain("resolvePublicBranding(publicData.data?.branding)");
-    expect(publicAuth).toContain("data-pep-button={brandSettings.buttonColor}");
-    expect(home).toContain("data-pep-button={branding.buttonColor}");
+    expect(publicAuth).not.toContain("data-pep-button");
+    expect(home).not.toContain("data-pep-button");
     expect(publicAuth).not.toContain("branding.data?.settings");
     expect(home).not.toContain("publicData.data?.settings");
   });

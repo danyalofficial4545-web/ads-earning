@@ -117,7 +117,6 @@ export function PublicAuth({
     <div
       className="pep-page min-h-screen bg-[#102621] p-4 text-white"
       data-pep-theme={brandSettings.themeName}
-      data-pep-button={brandSettings.buttonColor}
       dir={language === "ur" ? "rtl" : "ltr"}
     >
       <div className="mx-auto flex max-w-4xl items-center justify-between py-3 sm:py-6">

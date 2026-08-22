@@ -13,7 +13,8 @@ describe("Admin Custom settings", () => {
     expect(source).toContain('value="black"');
     expect(source).toContain('value="red"');
     expect(source).toContain('value="yellow"');
-    expect(source).toContain('value="purple"');
-    expect(source).toContain('value="teal"');
+    expect(source).not.toContain('t("buttonColor")');
+    expect(source).not.toContain('value="purple"');
+    expect(source).not.toContain('value="teal"');
   });
 });

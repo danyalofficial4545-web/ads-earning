@@ -987,21 +987,6 @@ function GlobalSettings({ t }: any) {
                 <option value="yellow">{t("yellowTheme")}</option>
               </select>
             </Field>
-            <Field label={t("buttonColor")}>
-              <select className="field" value={values.buttonColor ?? "amber"} onChange={e => setForm({ ...values, buttonColor: e.target.value })}>
-                <option value="amber">{t("buttonAmber")}</option>
-                <option value="white">{t("buttonWhite")}</option>
-                <option value="black">{t("buttonBlack")}</option>
-                <option value="red">{t("buttonRed")}</option>
-                <option value="green">{t("buttonGreen")}</option>
-                <option value="yellow">{t("buttonYellow")}</option>
-                <option value="blue">{t("buttonBlue")}</option>
-                <option value="purple">{t("buttonPurple")}</option>
-                <option value="pink">{t("buttonPink")}</option>
-                <option value="orange">{t("buttonOrange")}</option>
-                <option value="teal">{t("buttonTeal")}</option>
-              </select>
-            </Field>
           </div>
         </div>
         <div className="mb-5 rounded-2xl border border-white/10 bg-slate-950/15 p-4">

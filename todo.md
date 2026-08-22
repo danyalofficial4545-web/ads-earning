@@ -225,3 +225,8 @@
 - [x] Expand administrator website themes to include Black, Red, Green, and Yellow options while retaining existing saved theme compatibility.
 - [x] Add ten administrator-selectable global button color options that apply consistently to member and administrator controls without making text unreadable.
 - [x] Add authentication, captcha, theme, button-color, referral, and financial regression tests; validate builds; and publish the same-project update.
+
+### Current request: Restore original button styling
+
+- [x] Remove the global custom button color override so controls return to their original contextual colors while retaining the website theme options.
+- [x] Validate and publish the same-project button styling restoration without changing authentication, referral, financial, or navigation behavior.
