@@ -1306,6 +1306,12 @@ var appRouter = router({
         deviceId: z2.string().trim().min(16).max(256)
       })
     ).mutation(async ({ ctx, input }) => {
+      const customRegistrationDisabled = true;
+      if (customRegistrationDisabled)
+        fail(
+          "New accounts must be created with Google so the Gmail address is verified.",
+          "FORBIDDEN"
+        );
       const db = await getDb();
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");

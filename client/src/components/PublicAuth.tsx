@@ -57,22 +57,14 @@ export function PublicAuth({
   setLanguage: (language: Language) => void;
   t: Translate;
 }) {
-  const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
   const [signIn, setSignIn] = useState({ email: "", password: "" });
   const [challengeAnswer, setChallengeAnswer] = useState("");
   const [deviceId] = useState(() => getDeviceMarker());
-  const [signUp, setSignUp] = useState(() => ({
-    username: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-    referralCode: new URLSearchParams(window.location.search).get("ref") ?? "",
-  }));
   const branding = trpc.platform.publicData.useQuery();
   const brandSettings = resolvePublicBranding(branding.data?.branding);
   const utils = trpc.useUtils();
   const captcha = trpc.auth.captcha.useQuery(
-    { purpose: mode === "signIn" ? "sign_in" : "sign_up", deviceId },
+    { purpose: "sign_in", deviceId },
     { staleTime: 0, refetchOnWindowFocus: false }
   );
   const complete = async (message: string) => {
@@ -80,22 +72,6 @@ export function PublicAuth({
     await utils.auth.me.invalidate();
     await utils.account.bootstrap.invalidate();
   };
-  const register = trpc.auth.register.useMutation({
-    onSuccess: () => complete(t("accountCreated")),
-    onError: error => {
-      toast.error(
-        error.data?.code === "CONFLICT"
-          ? `${error.message} ${t("duplicateRecovery")}`
-          : error.message
-      );
-      if (error.data?.code === "CONFLICT")
-        toast(t("googleAccountHelp"), {
-          action: { label: t("googleContinue"), onClick: startLogin },
-        });
-      setChallengeAnswer("");
-      captcha.refetch();
-    },
-  });
   const login = trpc.auth.signIn.useMutation({
     onSuccess: () => complete(t("signedIn")),
     onError: error => {
@@ -104,23 +80,7 @@ export function PublicAuth({
       captcha.refetch();
     },
   });
-  const busy = register.isPending || login.isPending;
-  const submitSignUp = (event: React.FormEvent) => {
-    event.preventDefault();
-    if (signUp.password !== signUp.confirmPassword)
-      return toast.error(t("passwordMismatch"));
-    if (!captcha.data || !challengeAnswer.trim())
-      return toast.error(t("verificationRequired"));
-    register.mutate({
-      username: signUp.username,
-      email: signUp.email,
-      password: signUp.password,
-      referralCode: signUp.referralCode || undefined,
-      challengeId: captcha.data.id,
-      challengeAnswer,
-      deviceId,
-    });
-  };
+  const busy = login.isPending;
   const submitSignIn = (event: React.FormEvent) => {
     event.preventDefault();
     if (!captcha.data || !challengeAnswer.trim())
@@ -148,22 +108,8 @@ export function PublicAuth({
       </div>
       <main className="mx-auto grid max-w-4xl overflow-hidden rounded-3xl border border-white/10 bg-[#17342d]/90 shadow-2xl shadow-black/25 md:grid-cols-[1fr_.62fr]">
         <section className="p-5 sm:p-8">
-          <div className="flex rounded-xl border border-white/10 bg-slate-950/20 p-1">
-            <button
-              onClick={() => setMode("signIn")}
-              className={`flex-1 rounded-lg py-2.5 text-sm font-bold ${mode === "signIn" ? "bg-amber-300 text-slate-950" : "text-slate-300"}`}
-            >
-              {t("signIn")}
-            </button>
-            <button
-              onClick={() => setMode("signUp")}
-              className={`flex-1 rounded-lg py-2.5 text-sm font-bold ${mode === "signUp" ? "bg-amber-300 text-slate-950" : "text-slate-300"}`}
-            >
-              {t("signUp")}
-            </button>
-          </div>
-          {mode === "signIn" ? (
-            <form className="mt-6 space-y-4" onSubmit={submitSignIn}>
+          <p className="eyebrow">{t("signIn")}</p>
+          <form className="mt-6 space-y-4" onSubmit={submitSignIn}>
               <label>
                 <span className="field-label">{t("email")}</span>
                 <input
@@ -201,115 +147,7 @@ export function PublicAuth({
                   t("signIn")
                 )}
               </button>
-              <p className="text-center text-xs text-slate-400">
-                {t("needAccount")}{" "}
-                <button
-                  type="button"
-                  onClick={() => setMode("signUp")}
-                  className="font-bold text-amber-300"
-                >
-                  {t("switchToSignUp")}
-                </button>
-              </p>
-            </form>
-          ) : (
-            <form className="mt-6 space-y-3" onSubmit={submitSignUp}>
-              <label>
-                <span className="field-label">{t("username")}</span>
-                <input
-                  required
-                  minLength={3}
-                  autoComplete="username"
-                  className="field"
-                  value={signUp.username}
-                  onChange={event =>
-                    setSignUp({ ...signUp, username: event.target.value })
-                  }
-                />
-              </label>
-              <label>
-                <span className="field-label">{t("email")}</span>
-                <input
-                  required
-                  type="email"
-                  autoComplete="email"
-                  className="field"
-                  value={signUp.email}
-                  onChange={event =>
-                    setSignUp({ ...signUp, email: event.target.value })
-                  }
-                />
-              </label>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label>
-                  <span className="field-label">{t("password")}</span>
-                  <input
-                    required
-                    minLength={8}
-                    type="password"
-                    autoComplete="new-password"
-                    className="field"
-                    value={signUp.password}
-                    onChange={event =>
-                      setSignUp({ ...signUp, password: event.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  <span className="field-label">{t("confirmPassword")}</span>
-                  <input
-                    required
-                    minLength={8}
-                    type="password"
-                    autoComplete="new-password"
-                    className="field"
-                    value={signUp.confirmPassword}
-                    onChange={event =>
-                      setSignUp({
-                        ...signUp,
-                        confirmPassword: event.target.value,
-                      })
-                    }
-                  />
-                </label>
-              </div>
-              <label>
-                <span className="field-label">{t("referralInvite")}</span>
-                <input
-                  className="field"
-                  value={signUp.referralCode}
-                  onChange={event =>
-                    setSignUp({
-                      ...signUp,
-                      referralCode: event.target.value.toUpperCase(),
-                    })
-                  }
-                  placeholder="PEP…"
-                />
-              </label>
-              <HumanCheck t={t} prompt={captcha.data?.prompt} answer={challengeAnswer} onAnswer={setChallengeAnswer} onRefresh={() => { setChallengeAnswer(""); captcha.refetch(); }} />
-              <button
-                disabled={busy}
-                className="flex h-11 w-full items-center justify-center rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-60"
-              >
-                {busy ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  t("createAccount")
-                )}
-              </button>
-              <p className="text-center text-xs text-slate-400">
-                {t("alreadyHaveAccount")}{" "}
-                <button
-                  type="button"
-                  onClick={() => setMode("signIn")}
-                  className="font-bold text-amber-300"
-                >
-                  {t("switchToSignIn")}
-                </button>
-              </p>
-            </form>
-          )}
+          </form>
         </section>
         <aside className="flex flex-col items-center justify-center border-t border-white/10 bg-slate-950/20 p-7 text-center md:border-l md:border-t-0">
           <GoogleMark />

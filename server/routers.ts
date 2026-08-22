@@ -299,6 +299,12 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
+        const customRegistrationDisabled: boolean = true;
+        if (customRegistrationDisabled)
+          fail(
+            "New accounts must be created with Google so the Gmail address is verified.",
+            "FORBIDDEN"
+          );
         const db = await getDb();
         if (!db)
           fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");

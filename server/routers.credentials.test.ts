@@ -42,36 +42,9 @@ function registrationDatabase(options?: { emailExists?: boolean; usernameExists?
 describe("custom credential router", () => {
   beforeEach(() => { vi.resetAllMocks(); });
 
-  it("creates a credential account with a password hash, profile, referral link, and local session", async () => {
-    const { db, inserts } = registrationDatabase({ referralExists: true });
-    mocks.getDb.mockResolvedValue(db);
-    const ctx = context();
-    const result = await appRouter.createCaller(ctx).auth.register({ username: "newmember", email: "newmember@example.com", password: "StrongPass123", referralCode: "PEPREF", ...challengeInput });
-    expect(result.user).toMatchObject({ id: 301, email: "newmember@example.com" });
-    expect(result.user).not.toHaveProperty("passwordHash");
-    expect(inserts.find((row) => row.table === users)?.values.passwordHash).not.toContain("StrongPass123");
-    expect(inserts.find((row) => row.table === profiles)?.values).toMatchObject({ username: "newmember", referredByUserId: 444 });
-    expect((ctx.res.cookie as any)).toHaveBeenCalledOnce();
-  });
-
-  it("rejects duplicate email, duplicate username, reserved administrator identity, and invalid referrals", async () => {
-    let testDb = registrationDatabase({ emailExists: true }); mocks.getDb.mockResolvedValue(testDb.db);
-    await expect(appRouter.createCaller(context()).auth.register({ username: "newmember", email: "newmember@example.com", password: "StrongPass123", ...challengeInput })).rejects.toMatchObject({ code: "CONFLICT" });
-    testDb = registrationDatabase({ usernameExists: true }); mocks.getDb.mockResolvedValue(testDb.db);
-    await expect(appRouter.createCaller(context()).auth.register({ username: "newmember", email: "other@example.com", password: "StrongPass123", ...challengeInput })).rejects.toMatchObject({ code: "CONFLICT" });
-    mocks.getDb.mockResolvedValue(registrationDatabase().db);
-    await expect(appRouter.createCaller(context()).auth.register({ username: "danyal955163", email: "other@example.com", password: "StrongPass123", ...challengeInput })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    testDb = registrationDatabase(); mocks.getDb.mockResolvedValue(testDb.db);
-    await expect(appRouter.createCaller(context()).auth.register({ username: "newmember", email: "referral@example.com", password: "StrongPass123", referralCode: "MISSING", ...challengeInput })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-  });
-
-  it("rejects a second registration from a previously registered device or network marker", async () => {
-    let testDb = registrationDatabase({ deviceExists: true });
-    mocks.getDb.mockResolvedValue(testDb.db);
+  it("blocks manual registration so new accounts must begin with a verified Google identity", async () => {
     await expect(appRouter.createCaller(context()).auth.register({ username: "newmember", email: "newmember@example.com", password: "StrongPass123", ...challengeInput })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    testDb = registrationDatabase({ networkExists: true });
-    mocks.getDb.mockResolvedValue(testDb.db);
-    await expect(appRouter.createCaller(context()).auth.register({ username: "othermember", email: "other@example.com", password: "StrongPass123", ...challengeInput })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(mocks.getDb).not.toHaveBeenCalled();
   });
 
   it("allows only the correct password to create a local sign-in session", async () => {

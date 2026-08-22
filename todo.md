@@ -203,3 +203,17 @@
 
 - [x] Remove the visible Invite page explanation that states where referral rewards are credited, while preserving all existing referral calculations and withdrawal-limit rules.
 - [x] Add focused validation and publish the same-project copy-only update.
+
+### Current request: Gmail verification for new accounts
+
+- [ ] Assess the available production email-delivery integration and determine the secure verification-code implementation required for email/password registration.
+- [ ] Require email/password registrants to verify control of their Gmail address before activating account access, while preserving verified Google sign-ins.
+- [ ] Add expiring verification codes, safe resend limits, and bilingual verification feedback without exposing sensitive delivery details.
+- [ ] Add regression tests, validate the deployment build, publish the same-project update, and provide the required email-service configuration steps.
+
+### Current request: Google sign-up and login flow alignment
+
+- [x] Verify the existing Google sign-up flow prompts new members to select a username and save/confirm an email-login password before dashboard access.
+- [x] Ensure returning members can sign in either through Google or with the same Google Gmail address and saved password.
+- [x] Keep referral codes, invite links, referral credits, wallet, withdrawal-limit, package, deposit, withdrawal, and ad behavior unchanged.
+- [x] Add authentication and referral/financial regression tests, validate builds, and publish the same-project update.
