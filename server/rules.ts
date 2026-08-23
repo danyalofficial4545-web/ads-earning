@@ -7,7 +7,8 @@ export const AD_REWARD_PKR = 20;
 export const WHATSAPP_JOIN_REWARD_PKR = 10;
 export const WITHDRAWAL_MAX_PKR = 3000;
 export const WITHDRAWAL_MAX_MESSAGE =
-  "Withdrawal limit is up to 3000 PKR, please enter a lower amount";
+  "Please enter 3000 or less amount";
+export const WITHDRAWAL_INVALID_AMOUNT_MESSAGE = "Please enter a valid amount";
 export const DESIGNATED_ADMIN_EMAIL = "muhammaddanyal4545@gmail.com";
 export const DESIGNATED_ADMIN_USERNAME = "danyal955163";
 
@@ -49,6 +50,7 @@ export function validateWithdrawalRequest(input: {
   amountPkr: number;
   activePackage?: boolean;
 }) {
+  if (input.amountPkr <= 0) return WITHDRAWAL_INVALID_AMOUNT_MESSAGE;
   if (input.amountPkr > WITHDRAWAL_MAX_PKR) return WITHDRAWAL_MAX_MESSAGE;
   if (input.withdrawalLimitPkr <= 0)
     return input.activePackage === false
@@ -101,11 +103,24 @@ export function matchesRequestTransaction(
 }
 
 export const DEPOSIT_MIN_PKR = 100;
-export const DEPOSIT_MAX_PKR = 5000;
+export const DEPOSIT_MAX_PKR = 15000;
 export const WITHDRAWAL_MIN_PKR = 0;
 
+export function normalizePakistanMobileNumber(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits.startsWith("92") && digits.length === 12
+    ? `0${digits.slice(2)}`
+    : digits;
+}
+
+export function isValidPakistanMobileNumber(value: string) {
+  return /^03\d{9}$/.test(normalizePakistanMobileNumber(value));
+}
+
 export function validateDepositAmountPkr(amountPkr: number) {
-  if (amountPkr < DEPOSIT_MIN_PKR || amountPkr > DEPOSIT_MAX_PKR)
-    return `Deposit Limit: ${DEPOSIT_MIN_PKR} PKR to ${DEPOSIT_MAX_PKR} PKR.`;
+  if (amountPkr < DEPOSIT_MIN_PKR)
+    return "Please deposit minimum 100 PKR";
+  if (amountPkr > DEPOSIT_MAX_PKR)
+    return "Maximum deposit is 15000 PKR";
   return null;
 }

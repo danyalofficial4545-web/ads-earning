@@ -4,7 +4,15 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { trpc } from "@/lib/trpc";
 import { getDeviceMarker } from "@/lib/deviceMarker";
 import { resolvePublicBranding } from "@/lib/publicBranding";
+import {
+  type FormErrors,
+  friendlyMessages,
+  friendlyServerError,
+  validateEmail,
+  validatePassword,
+} from "@/lib/formValidation";
 import type { Language, TranslationKey } from "@/lib/i18n";
+import { FieldError } from "@/components/ui/field";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -59,6 +67,8 @@ export function PublicAuth({
   const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
   const [signIn, setSignIn] = useState({ email: "", password: "" });
   const [signUp, setSignUp] = useState(() => ({ username: "", email: "", password: "", confirmPassword: "", referralCode: new URLSearchParams(window.location.search).get("ref") ?? "" }));
+  const [signInErrors, setSignInErrors] = useState<FormErrors>({});
+  const [signUpErrors, setSignUpErrors] = useState<FormErrors>({});
   const [challengeAnswer, setChallengeAnswer] = useState("");
   const [signUpChallengeAnswer, setSignUpChallengeAnswer] = useState("");
   const [deviceId] = useState(() => getDeviceMarker());
@@ -81,7 +91,8 @@ export function PublicAuth({
   const login = trpc.auth.signIn.useMutation({
     onSuccess: () => complete(t("signedIn")),
     onError: error => {
-      toast.error(error.message);
+      setSignInErrors(friendlyServerError(error, "password"));
+      toast.error(friendlyMessages.requestFailed);
       setChallengeAnswer("");
       signInCaptcha.refetch();
     },
@@ -89,7 +100,8 @@ export function PublicAuth({
   const register = trpc.auth.register.useMutation({
     onSuccess: () => complete(t("accountCreated")),
     onError: error => {
-      toast.error(error.message);
+      setSignUpErrors(friendlyServerError(error, "password"));
+      toast.error(friendlyMessages.requestFailed);
       setSignUpChallengeAnswer("");
       signUpCaptcha.refetch();
     },
@@ -97,8 +109,14 @@ export function PublicAuth({
   const busy = login.isPending || register.isPending;
   const submitSignIn = (event: React.FormEvent) => {
     event.preventDefault();
+    const errors: FormErrors = {
+      email: validateEmail(signIn.email),
+      password: validatePassword(signIn.password),
+    };
+    if (errors.email || errors.password) return setSignInErrors(errors);
     if (!signInCaptcha.data || !challengeAnswer.trim())
-      return toast.error(t("verificationRequired"));
+      return setSignInErrors({ general: t("verificationRequired") });
+    setSignInErrors({});
     login.mutate({
       ...signIn,
       challengeId: signInCaptcha.data.id,
@@ -108,8 +126,17 @@ export function PublicAuth({
   };
   const submitSignUp = (event: React.FormEvent) => {
     event.preventDefault();
-    if (signUp.password !== signUp.confirmPassword) return toast.error(t("passwordMismatch"));
-    if (!signUpCaptcha.data || !signUpChallengeAnswer.trim()) return toast.error(t("verificationRequired"));
+    const errors: FormErrors = {
+      email: validateEmail(signUp.email),
+      password: validatePassword(signUp.password),
+      confirmPassword:
+        signUp.password === signUp.confirmPassword ? undefined : friendlyMessages.password,
+    };
+    if (errors.email || errors.password || errors.confirmPassword)
+      return setSignUpErrors(errors);
+    if (!signUpCaptcha.data || !signUpChallengeAnswer.trim())
+      return setSignUpErrors({ general: t("verificationRequired") });
+    setSignUpErrors({});
     register.mutate({ username: signUp.username, email: signUp.email, password: signUp.password, referralCode: signUp.referralCode || undefined, challengeId: signUpCaptcha.data.id, challengeAnswer: signUpChallengeAnswer, deviceId });
   };
 
@@ -142,10 +169,13 @@ export function PublicAuth({
                   autoComplete="email"
                   className="field"
                   value={signIn.email}
-                  onChange={event =>
-                    setSignIn({ ...signIn, email: event.target.value })
-                  }
+                  aria-invalid={Boolean(signInErrors.email)}
+                  onChange={event => {
+                    setSignIn({ ...signIn, email: event.target.value });
+                    setSignInErrors(errors => ({ ...errors, email: undefined }));
+                  }}
                 />
+                <FieldError>{signInErrors.email}</FieldError>
               </label>
               <label>
                 <span className="field-label">{t("password")}</span>
@@ -155,12 +185,16 @@ export function PublicAuth({
                   autoComplete="current-password"
                   className="field"
                   value={signIn.password}
-                  onChange={event =>
-                    setSignIn({ ...signIn, password: event.target.value })
-                  }
+                  aria-invalid={Boolean(signInErrors.password)}
+                  onChange={event => {
+                    setSignIn({ ...signIn, password: event.target.value });
+                    setSignInErrors(errors => ({ ...errors, password: undefined }));
+                  }}
                 />
+                <FieldError>{signInErrors.password}</FieldError>
               </label>
               <VisualCodeCheck t={t} imageData={signInCaptcha.data?.imageData} answer={challengeAnswer} onAnswer={setChallengeAnswer} onRefresh={() => { setChallengeAnswer(""); signInCaptcha.refetch(); }} />
+              <FieldError>{signInErrors.general}</FieldError>
               <button
                 disabled={busy}
                 className="flex h-11 w-full items-center justify-center rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-60"
@@ -173,12 +207,13 @@ export function PublicAuth({
               </button>
           </form> : <form className="mt-6 space-y-4" onSubmit={submitSignUp}>
             <p className="eyebrow">{t("signUp")}</p>
-            <label><span className="field-label">{t("email")}</span><input required type="email" autoComplete="email" className="field" value={signUp.email} onChange={event => setSignUp({ ...signUp, email: event.target.value })} /></label>
+            <label><span className="field-label">{t("email")}</span><input required type="email" autoComplete="email" className="field" aria-invalid={Boolean(signUpErrors.email)} value={signUp.email} onChange={event => { setSignUp({ ...signUp, email: event.target.value }); setSignUpErrors(errors => ({ ...errors, email: undefined })); }} /><FieldError>{signUpErrors.email}</FieldError></label>
             <label><span className="field-label">{t("username")}</span><input required minLength={3} autoComplete="username" className="field" value={signUp.username} onChange={event => setSignUp({ ...signUp, username: event.target.value })} /></label>
-            <label><span className="field-label">{t("password")}</span><input required minLength={8} type="password" autoComplete="new-password" className="field" value={signUp.password} onChange={event => setSignUp({ ...signUp, password: event.target.value })} /></label>
-            <label><span className="field-label">{t("confirmPassword")}</span><input required minLength={8} type="password" autoComplete="new-password" className="field" value={signUp.confirmPassword} onChange={event => setSignUp({ ...signUp, confirmPassword: event.target.value })} /></label>
+            <label><span className="field-label">{t("password")}</span><input required minLength={8} type="password" autoComplete="new-password" className="field" aria-invalid={Boolean(signUpErrors.password)} value={signUp.password} onChange={event => { setSignUp({ ...signUp, password: event.target.value }); setSignUpErrors(errors => ({ ...errors, password: undefined })); }} /><FieldError>{signUpErrors.password}</FieldError></label>
+            <label><span className="field-label">{t("confirmPassword")}</span><input required minLength={8} type="password" autoComplete="new-password" className="field" aria-invalid={Boolean(signUpErrors.confirmPassword)} value={signUp.confirmPassword} onChange={event => { setSignUp({ ...signUp, confirmPassword: event.target.value }); setSignUpErrors(errors => ({ ...errors, confirmPassword: undefined })); }} /><FieldError>{signUpErrors.confirmPassword}</FieldError></label>
             <label><span className="field-label">{t("referralInvite")}</span><input className="field" value={signUp.referralCode} onChange={event => setSignUp({ ...signUp, referralCode: event.target.value.toUpperCase() })} /></label>
             <VisualCodeCheck t={t} imageData={signUpCaptcha.data?.imageData} answer={signUpChallengeAnswer} onAnswer={setSignUpChallengeAnswer} onRefresh={() => { setSignUpChallengeAnswer(""); signUpCaptcha.refetch(); }} />
+            <FieldError>{signUpErrors.general}</FieldError>
             <button disabled={busy} className="flex h-11 w-full items-center justify-center rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-60">{busy ? <Loader2 className="size-4 animate-spin" /> : t("createAccount")}</button>
           </form>}
         </section>
@@ -238,7 +273,7 @@ export function GoogleOnboarding({
       toast.success(t("saved"));
       await onDone();
     } catch (error: any) {
-      toast.error(error?.message ?? t("operationFailed"));
+      toast.error(friendlyMessages.requestFailed);
     }
   };
   return (

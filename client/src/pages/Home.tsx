@@ -13,6 +13,20 @@ import { groupHistoryRows, historyDateLabel } from "@/lib/groupedHistory";
 import { isMemberBottomNavigationId } from "@/lib/memberNavigation";
 import { buildInviteSummary } from "@/lib/inviteSummary";
 import {
+  type FormErrors,
+  friendlyMessages,
+  friendlyServerError,
+  isValidPakistanMobileNumber,
+  validateDepositAmount,
+  validateTransactionId,
+  validateWithdrawalAmount,
+} from "@/lib/formValidation";
+import {
+  proofContainsAccountNumber,
+  readPaymentProofNumbers,
+} from "@/lib/proofOcr";
+import { FieldError } from "@/components/ui/field";
+import {
   dashboardMetricKeys,
   type DashboardMetricKey,
 } from "@/lib/dashboardMetrics";
@@ -161,7 +175,7 @@ export default function Home() {
     return <LoadingScreen text={t("loading")} />;
   if (!isAuthenticated)
     return <PublicAuth language={language} setLanguage={setLanguage} t={t} />;
-  if (session.error) return <LoadingScreen text={session.error.message} />;
+  if (session.error) return <LoadingScreen text={t("operationFailed")} />;
   if (!session.data?.profile) return <LoadingScreen text={t("loading")} />;
   const profile = session.data.profile;
   const workspaceGate = resolveWorkspaceGate(
@@ -408,7 +422,7 @@ function Landing({
   });
   const login = trpc.auth.signIn.useMutation({
     onSuccess: () => complete(t("signedIn")),
-    onError: error => toast.error(error.message),
+    onError: () => toast.error(friendlyMessages.requestFailed),
   });
   const submitSignUp = (event: React.FormEvent) => {
     event.preventDefault();
@@ -715,7 +729,7 @@ function PasswordSetup({
       toast.success(t("passwordSaved"));
       await onDone();
     },
-    onError: error => toast.error(error.message),
+    onError: () => toast.error(friendlyMessages.requestFailed),
   });
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -936,7 +950,7 @@ function ProfileSetup({
       toast.success(t("saved"));
       onDone();
     },
-    onError: error => toast.error(error.message),
+    onError: () => toast.error(friendlyMessages.requestFailed),
   });
   return (
     <div className="mx-auto max-w-xl pt-8">
@@ -1033,7 +1047,7 @@ function Workspace({
       setShowChannelPrompt(false);
       invalidateCore();
     },
-    onError: error => toast.error(error.message),
+    onError: () => toast.error(friendlyMessages.requestFailed),
   });
   const handleJoinWhatsApp = () => {
     window.open(
@@ -1338,7 +1352,7 @@ function Packages({ t, plans, balance, active, onDone }: any) {
       toast.success(t("saved"));
       onDone();
     },
-    onError: error => toast.error(error.message),
+    onError: () => toast.error(friendlyMessages.requestFailed),
   });
   return (
     <>
@@ -1595,6 +1609,9 @@ function Deposit({ t, settings, packages, onDone }: any) {
   const [transactionId, setTransactionId] = useState("");
   const [requestedPackageId, setRequestedPackageId] = useState("");
   const [proof, setProof] = useState("");
+  const [proofNumbers, setProofNumbers] = useState<string[]>([]);
+  const [proofScanning, setProofScanning] = useState(false);
+  const [errors, setErrors] = useState<FormErrors>({});
   const [showHistory, setShowHistory] = useState(false);
   const utils = trpc.useUtils();
   const accounts = trpc.deposit.accounts.useQuery({ currency });
@@ -1611,7 +1628,10 @@ function Deposit({ t, settings, packages, onDone }: any) {
       void utils.deposit.list.invalidate();
       onDone();
     },
-    onError: () => toast.error(t("operationFailed")),
+    onError: error => {
+      setErrors(friendlyServerError(error, "transactionId"));
+      toast.error(friendlyMessages.requestFailed);
+    },
   });
   const list = trpc.deposit.list.useQuery();
   return (
@@ -1652,10 +1672,30 @@ function Deposit({ t, settings, packages, onDone }: any) {
           <form
             onSubmit={event => {
               event.preventDefault();
-              if (!proof) return toast.error(t("uploadRequired"));
+              const nextErrors: FormErrors = {
+                amount: validateDepositAmount(amount, currency),
+                transactionId: validateTransactionId(transactionId),
+                senderAccountNumber: isValidPakistanMobileNumber(senderAccountNumber)
+                  ? undefined
+                  : friendlyMessages.paymentNumber,
+                proof: !proof
+                  ? friendlyMessages.proofRequired
+                  : proofScanning ||
+                      !proofContainsAccountNumber(proofNumbers, senderAccountNumber)
+                    ? friendlyMessages.proofMismatch
+                    : undefined,
+              };
+              if (
+                nextErrors.amount ||
+                nextErrors.transactionId ||
+                nextErrors.senderAccountNumber ||
+                nextErrors.proof
+              ) {
+                setErrors(nextErrors);
+                return;
+              }
+              setErrors({});
               const numeric = Number(amount);
-              if (!numeric || numeric <= 0)
-                return toast.error(t("amountRequired"));
               create.mutate({
                 currency,
                 amount: numeric,
@@ -1678,12 +1718,15 @@ function Deposit({ t, settings, packages, onDone }: any) {
                 <input
                   className="field"
                   type="number"
-                  min={currency === "PKR" ? "100" : "0.35"}
-                  max={currency === "PKR" ? "5000" : "17.85"}
                   step="0.01"
                   value={amount}
-                  onChange={e => setAmount(e.target.value)}
+                  aria-invalid={Boolean(errors.amount)}
+                  onChange={e => {
+                    setAmount(e.target.value);
+                    setErrors(current => ({ ...current, amount: undefined }));
+                  }}
                 />
+                <FieldError>{errors.amount}</FieldError>
               </label>
               <p className="mb-4 rounded-xl border border-amber-300/15 bg-amber-300/10 p-3 text-xs text-amber-100">
                 {currency === "PKR" ? t("depositLimit") : t("depositLimitUsd")}
@@ -1710,11 +1753,13 @@ function Deposit({ t, settings, packages, onDone }: any) {
               </label>
               <label>
                 <span className="field-label">{t("senderAccountNumber")}</span>
-                <input required className="field" value={senderAccountNumber} onChange={e => setSenderAccountNumber(e.target.value)} />
+                <input required className="field" inputMode="numeric" aria-invalid={Boolean(errors.senderAccountNumber)} value={senderAccountNumber} onChange={e => { setSenderAccountNumber(e.target.value); setErrors(current => ({ ...current, senderAccountNumber: undefined, proof: undefined })); }} />
+                <FieldError>{errors.senderAccountNumber}</FieldError>
               </label>
               <label>
                 <span className="field-label">{t("transactionId")}</span>
-                <input required className="field" value={transactionId} onChange={e => setTransactionId(e.target.value)} />
+                <input required className="field" aria-invalid={Boolean(errors.transactionId)} value={transactionId} onChange={e => { setTransactionId(e.target.value); setErrors(current => ({ ...current, transactionId: undefined })); }} />
+                <FieldError>{errors.transactionId}</FieldError>
               </label>
               <label>
                 <span className="field-label">{t("requestedPackage")}</span>
@@ -1732,9 +1777,35 @@ function Deposit({ t, settings, packages, onDone }: any) {
                 accept="image/*"
                 onChange={async e => {
                   const file = e.target.files?.[0];
-                  if (file) setProof(await toDataUrl(file));
+                  if (!file) return;
+                  setProofScanning(true);
+                  setErrors(current => ({ ...current, proof: undefined }));
+                  try {
+                    const [proofData, numbers] = await Promise.all([
+                      toDataUrl(file),
+                      readPaymentProofNumbers(file),
+                    ]);
+                    setProof(proofData);
+                    setProofNumbers(numbers);
+                    if (!proofContainsAccountNumber(numbers, senderAccountNumber))
+                      setErrors(current => ({
+                        ...current,
+                        proof: friendlyMessages.proofMismatch,
+                      }));
+                  } catch {
+                    setProof("");
+                    setProofNumbers([]);
+                    setErrors(current => ({
+                      ...current,
+                      proof: friendlyMessages.proofMismatch,
+                    }));
+                  } finally {
+                    setProofScanning(false);
+                  }
                 }}
               />
+              <FieldError>{errors.proof}</FieldError>
+              {proofScanning && <p className="mt-2 text-xs font-semibold text-slate-300">Checking payment proof…</p>}
             </label>
             <button
               disabled={create.isPending}
@@ -1776,6 +1847,7 @@ function Withdrawal({ t, showRewardWithdrawalPrompt, onDone }: any) {
   const [amount, setAmount] = useState("");
   const [accountName, setAccountName] = useState("");
   const [accountDetails, setAccountDetails] = useState("");
+  const [errors, setErrors] = useState<FormErrors>({});
   const [showHistory, setShowHistory] = useState(false);
   const utils = trpc.useUtils();
   const create = trpc.withdrawal.create.useMutation({
@@ -1786,7 +1858,10 @@ function Withdrawal({ t, showRewardWithdrawalPrompt, onDone }: any) {
       void utils.withdrawal.list.invalidate();
       onDone();
     },
-    onError: error => toast.error(error.message),
+    onError: error => {
+      setErrors(friendlyServerError(error, "amount"));
+      toast.error(friendlyMessages.requestFailed);
+    },
   });
   const list = trpc.withdrawal.list.useQuery();
   return (
@@ -1807,8 +1882,19 @@ function Withdrawal({ t, showRewardWithdrawalPrompt, onDone }: any) {
           <form
             onSubmit={event => {
               event.preventDefault();
+              const nextErrors: FormErrors = {
+                amount: validateWithdrawalAmount(amount, currency),
+                accountDetails:
+                  currency === "PKR" && !isValidPakistanMobileNumber(accountDetails)
+                    ? friendlyMessages.paymentNumber
+                    : undefined,
+              };
+              if (nextErrors.amount || nextErrors.accountDetails) {
+                setErrors(nextErrors);
+                return;
+              }
+              setErrors({});
               const numeric = Number(amount);
-              if (!numeric) return toast.error(t("amountRequired"));
               create.mutate({
                 currency,
                 amount: numeric,
@@ -1830,8 +1916,13 @@ function Withdrawal({ t, showRewardWithdrawalPrompt, onDone }: any) {
                   type="number"
                   step="0.01"
                   value={amount}
-                  onChange={e => setAmount(e.target.value)}
+                  aria-invalid={Boolean(errors.amount)}
+                  onChange={e => {
+                    setAmount(e.target.value);
+                    setErrors(current => ({ ...current, amount: undefined }));
+                  }}
                 />
+                <FieldError>{errors.amount}</FieldError>
               </label>
               <label>
                 <span className="field-label">{t("accountName")}</span>
@@ -1849,8 +1940,14 @@ function Withdrawal({ t, showRewardWithdrawalPrompt, onDone }: any) {
                 required
                 className="field"
                 value={accountDetails}
-                onChange={e => setAccountDetails(e.target.value)}
+                inputMode={currency === "PKR" ? "numeric" : undefined}
+                aria-invalid={Boolean(errors.accountDetails)}
+                onChange={e => {
+                  setAccountDetails(e.target.value);
+                  setErrors(current => ({ ...current, accountDetails: undefined }));
+                }}
               />
+              <FieldError>{errors.accountDetails}</FieldError>
             </label>
             <button
               disabled={create.isPending}
@@ -1874,7 +1971,7 @@ function Earn({ t, overview, onDone }: any) {
       setSession(data);
       setSeconds(data.timerSeconds);
     },
-    onError: error => toast.error(error.message),
+    onError: () => toast.error(friendlyMessages.requestFailed),
   });
   const claim = trpc.earning.claimAd.useMutation({
     onSuccess: () => {
@@ -1882,7 +1979,7 @@ function Earn({ t, overview, onDone }: any) {
       setSession(null);
       onDone();
     },
-    onError: error => toast.error(error.message),
+    onError: () => toast.error(friendlyMessages.requestFailed),
   });
   useEffect(() => {
     if (!session) return;

@@ -8,7 +8,9 @@ import {
   getAdClaimStatus,
   fromPkr,
   isDesignatedAdministrator,
+  isValidPakistanMobileNumber,
   matchesRequestTransaction,
+  normalizePakistanMobileNumber,
   referralLimitCredit,
   refundRejectedWithdrawal,
   toPkr,
@@ -24,6 +26,12 @@ describe("Package Earn Pro server rules", () => {
     expect(toPkr(2.5, "USD", 280)).toBe(700);
     expect(toPkr(350, "PKR", 280)).toBe(350);
     expect(fromPkr(700, 280)).toBe(2.5);
+  });
+
+  it("normalizes and validates Pakistani JazzCash or Easypaisa-style mobile numbers", () => {
+    expect(normalizePakistanMobileNumber("+92 300 1234567")).toBe("03001234567");
+    expect(isValidPakistanMobileNumber("03001234567")).toBe(true);
+    expect(isValidPakistanMobileNumber("0123456789")).toBe(false);
   });
 
   it("credits referral value only to the withdrawal limit according to the configured percentage", () => {

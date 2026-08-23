@@ -41,12 +41,12 @@ describe("router accounting flows", () => {
     };
     mocks.getDb.mockResolvedValue(db);
 
-    await appRouter.createCaller(context()).withdrawal.create({ currency: "PKR", amount: 500, accountName: "Test Account", accountDetails: "0123456789" });
+    await appRouter.createCaller(context()).withdrawal.create({ currency: "PKR", amount: 500, accountName: "Test Account", accountDetails: "03001234567" });
 
     expect(updates[0]?.values).toEqual({ balancePkr: 500, withdrawalLimitPkr: 0 });
     expect(inserts[1]?.values).toMatchObject({ direction: "debit", status: "pending", amountPkr: 500, referenceId: 44 });
     expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("💸 WITHDRAW REQUEST"));
-    expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("0123456789"));
+    expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("03001234567"));
   });
 
   it("alerts the administrator after a pending deposit has been recorded", async () => {

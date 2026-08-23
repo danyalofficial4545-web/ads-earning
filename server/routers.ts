@@ -47,6 +47,7 @@ import {
   canUseMemberWorkspace,
   fromPkr,
   getAdClaimStatus,
+  isValidPakistanMobileNumber,
   referralLimitCredit,
   refundRejectedWithdrawal,
   toPkr,
@@ -288,11 +289,11 @@ export const appRouter = router({
           email: z
             .string()
             .trim()
-            .email("Enter a valid Gmail or email address.")
+            .email("Please correct your Email / Gmail")
             .max(320),
           password: z
             .string()
-            .min(8, "Password must be at least 8 characters.")
+            .min(8, "Please correct your Password")
             .max(128),
           referralCode: z.string().trim().max(32).optional(),
           challengeId: z.string().uuid(),
@@ -420,9 +421,9 @@ export const appRouter = router({
           email: z
             .string()
             .trim()
-            .email("Enter a valid Gmail or email address.")
+            .email("Please correct your Email / Gmail")
             .max(320),
-          password: z.string().min(1, "Enter your password."),
+          password: z.string().min(8, "Please correct your Password"),
           challengeId: z.string().uuid(),
           challengeAnswer: z.string().trim().min(1).max(32),
           deviceId: z.string().trim().min(16).max(256),
@@ -1035,17 +1036,30 @@ export const appRouter = router({
       .input(
         z.object({
           currency: z.enum(["PKR", "USD"]),
-          amount: z.number().positive(),
+          amount: z.number().positive("Please deposit minimum 100 PKR"),
           method: z.string().trim().min(2).max(64),
-          senderAccountNumber: z.string().trim().min(4).max(256),
+          senderAccountNumber: z
+            .string()
+            .trim()
+            .min(4, "Please enter correct JazzCash number linked with account")
+            .max(256),
           senderAccountName: z.string().trim().min(2).max(128),
-          transactionId: z.string().trim().min(3).max(128),
+          transactionId: z
+            .string()
+            .trim()
+            .min(3, "Please enter correct Transaction ID")
+            .max(128),
           requestedPackageId: z.number().int().positive().optional(),
           proofData: z.string().min(24).max(2_000_000),
         })
       )
       .mutation(async ({ ctx, input }) => {
         const { user, profile } = await getActor(ctx);
+        if (
+          input.currency === "PKR" &&
+          !isValidPakistanMobileNumber(input.senderAccountNumber)
+        )
+          fail("Please enter correct JazzCash number linked with account");
         const settings = await getSettings();
         const db = await getDb();
         if (!db)
@@ -1061,13 +1075,13 @@ export const appRouter = router({
           settings.exchangeRatePkrPerUsd
         );
         const isUsdAmountWithinDisplayedRange =
-          input.currency === "USD" && input.amount >= 0.35 && input.amount <= 17.85;
+          input.currency === "USD" && input.amount >= 0.35 && input.amount <= 53.57;
         const depositError = isUsdAmountWithinDisplayedRange
           ? null
           : validateDepositAmountPkr(convertedAmountPkr);
         if (depositError) fail(depositError);
         const amountPkr = isUsdAmountWithinDisplayedRange
-          ? Math.max(100, Math.min(5000, convertedAmountPkr))
+          ? Math.max(100, Math.min(15000, convertedAmountPkr))
           : convertedAmountPkr;
         const duplicateTransaction = (
           await db
@@ -1141,13 +1155,22 @@ export const appRouter = router({
       .input(
         z.object({
           currency: z.enum(["PKR", "USD"]),
-          amount: z.number().positive(),
+          amount: z.number().positive("Please enter a valid amount"),
           accountName: z.string().trim().min(2).max(128),
-          accountDetails: z.string().trim().min(4).max(512),
+          accountDetails: z
+            .string()
+            .trim()
+            .min(4, "Please enter correct JazzCash number linked with account")
+            .max(512),
         })
       )
       .mutation(async ({ ctx, input }) => {
         const { user, profile } = await getActor(ctx);
+        if (
+          input.currency === "PKR" &&
+          !isValidPakistanMobileNumber(input.accountDetails)
+        )
+          fail("Please enter correct JazzCash number linked with account");
         const settings = await getSettings();
         const amountPkr = toPkr(
           input.amount,

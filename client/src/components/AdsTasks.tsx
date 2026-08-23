@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { shouldAutoClaimAd } from "@/lib/adTimer";
+import { friendlyMessages } from "@/lib/formValidation";
 import { CheckCircle2, Clock3, ExternalLink, Loader2, LockKeyhole, Play } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -28,8 +29,8 @@ export function AdsTasks({ t, onDone }: { t: (key: any) => string; onDone: () =>
   const [seconds, setSeconds] = useState(0);
   const [resetSeconds, setResetSeconds] = useState(0);
   const [autoClaimAttempted, setAutoClaimAttempted] = useState(false);
-  const start = trpc.earning.startAd.useMutation({ onSuccess: data => { setSession(data); setSeconds(data.timerSeconds); setAutoClaimAttempted(false); }, onError: error => toast.error(error.message) });
-  const claim = trpc.earning.claimAd.useMutation({ onSuccess: () => { toast.success(t("saved")); setSession(null); setAutoClaimAttempted(false); ads.refetch(); onDone(); }, onError: error => { toast.error(error.message); setAutoClaimAttempted(true); } });
+  const start = trpc.earning.startAd.useMutation({ onSuccess: data => { setSession(data); setSeconds(data.timerSeconds); setAutoClaimAttempted(false); }, onError: () => toast.error(friendlyMessages.requestFailed) });
+  const claim = trpc.earning.claimAd.useMutation({ onSuccess: () => { toast.success(t("saved")); setSession(null); setAutoClaimAttempted(false); ads.refetch(); onDone(); }, onError: () => { toast.error(friendlyMessages.requestFailed); setAutoClaimAttempted(true); } });
 
   useEffect(() => {
     const tick = () => {

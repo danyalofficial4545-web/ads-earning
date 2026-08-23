@@ -238,3 +238,12 @@
 - [x] Show new members an attractive WhatsApp join popup/banner, credit the reward after the existing join action, and guide rewarded members to the Withdrawal flow without exposing internal rules.
 - [x] Preserve the existing post-withdrawal limit reset and later referral-credit behavior without displaying rule explanations.
 - [x] Add regression tests, validate the member interface and build, and publish the same-project update.
+
+### Current request: Friendly form validation and payment-proof matching
+
+- [x] Replace raw API, status-code, stack-trace, and exception text in member authentication and financial forms with safe user-friendly field-level messages.
+- [x] Add visible validation messages for email, password, transaction ID, deposit amount, withdrawal amount, and local JazzCash/Easypaisa-style mobile number format.
+- [x] Enforce the new 100–15000 PKR deposit validation messages and the requested withdrawal amount messages in both client and server validation paths.
+- [x] Extract normalized account-number candidates from payment-proof screenshots and prevent deposit submission when the entered sender number is not present in the proof.
+- [x] Add regression tests, validate production builds, and publish the same-project update without exposing sensitive server errors.
+- [x] Move every success and error notification to the top center with a large solid-black message box, white bold text, readable padding, and a 3–4 second display duration.
