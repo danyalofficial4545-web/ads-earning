@@ -260,7 +260,7 @@ export default function Home() {
               className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-emerald-200 md:flex"
             >
               <WalletCards className="size-4" />
-              {money(profile.balancePkr)}
+              {money(overview.data?.profile.balancePkr ?? 0)}
             </button>
           </div>
         </div>
@@ -1035,13 +1035,16 @@ function Workspace({
   const [showChannelPrompt, setShowChannelPrompt] = useState(
     () => !profile.whatsappJoined
   );
-  const [showRewardWithdrawalPrompt, setShowRewardWithdrawalPrompt] =
-    useState(false);
+  const [rewardPromptJustEarned, setRewardPromptJustEarned] = useState(false);
+  const showRewardWithdrawalPrompt = Boolean(
+    rewardPromptJustEarned ||
+      (profile.whatsappBonusClaimed && !profile.whatsappRewardWithdrawn)
+  );
   const joinWhatsApp = trpc.platform.joinWhatsApp.useMutation({
     onSuccess: data => {
       if (data.bonusPkr) {
         toast.success(t("whatsappRewardClaimed"));
-        setShowRewardWithdrawalPrompt(true);
+        setRewardPromptJustEarned(true);
         setPage("withdrawal");
       }
       setShowChannelPrompt(false);
@@ -1091,6 +1094,7 @@ function Workspace({
       <Withdrawal
         t={t}
         showRewardWithdrawalPrompt={showRewardWithdrawalPrompt}
+        activePackage={overview.activePackage}
         onDone={invalidateCore}
       />
     ),
@@ -1269,7 +1273,9 @@ function Dashboard({ t, overview, announcements, setPage }: any) {
               icon={ArrowUpRight}
               label={t("requestWithdrawal")}
               onClick={() => setPage("withdrawal")}
+              disabled={!active}
             />
+            {!active && <p className="px-1 text-xs font-semibold text-amber-200">{t("noPackageBalanceMessage")}</p>}
             <QuickAction
               icon={Users}
               label={t("inviteFriends")}
@@ -1331,11 +1337,12 @@ function StatCard({ icon: Icon, label, value, accent }: any) {
     </div>
   );
 }
-function QuickAction({ icon: Icon, label, onClick }: any) {
+function QuickAction({ icon: Icon, label, onClick, disabled = false }: any) {
   return (
     <button
       onClick={onClick}
-      className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/15 px-3 py-3 text-left text-sm font-semibold text-slate-200 transition hover:border-amber-300/30 hover:bg-white/5"
+      disabled={disabled}
+      className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/15 px-3 py-3 text-left text-sm font-semibold text-slate-200 transition hover:border-amber-300/30 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
     >
       <span className="flex items-center gap-2">
         <Icon className="size-4 text-amber-300" />
@@ -1419,6 +1426,7 @@ function ProfileWallet({
   if (!wallet) return <LoadingScreen text={t("loading")} />;
   const [showPassword, setShowPassword] = useState(false);
   const referral = trpc.referral.get.useQuery();
+  const canWithdraw = Boolean(activePackage);
   return (
     <>
       <PageHeading
@@ -1434,8 +1442,9 @@ function ProfileWallet({
               {t("deposit")}
             </button>
             <button
+              disabled={!canWithdraw}
               onClick={() => setPage("withdrawal")}
-              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold"
+              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
             >
               {t("withdrawal")}
             </button>
@@ -1456,6 +1465,7 @@ function ProfileWallet({
           accent="blue"
         />
       </div>
+      {!canWithdraw && <p className="mt-4 rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm font-semibold text-amber-50">{t("noPackageBalanceMessage")}</p>}
       <div className="mt-5 grid gap-5 xl:grid-cols-[1.05fr_.95fr]">
         <div className="panel space-y-4">
           <div className="flex items-center justify-between gap-3">
@@ -1842,8 +1852,9 @@ function CurrencyTabs({ value, onChange, t }: any) {
   );
 }
 
-function Withdrawal({ t, showRewardWithdrawalPrompt, onDone }: any) {
+function Withdrawal({ t, showRewardWithdrawalPrompt, activePackage, onDone }: any) {
   const [currency, setCurrency] = useState<"PKR" | "USD">("PKR");
+  const [walletType, setWalletType] = useState("");
   const [amount, setAmount] = useState("");
   const [accountName, setAccountName] = useState("");
   const [accountDetails, setAccountDetails] = useState("");
@@ -1853,6 +1864,7 @@ function Withdrawal({ t, showRewardWithdrawalPrompt, onDone }: any) {
   const create = trpc.withdrawal.create.useMutation({
     onSuccess: () => {
       toast.success(t("submitted"));
+      setWalletType("");
       setAmount("");
       setShowHistory(true);
       void utils.withdrawal.list.invalidate();
@@ -1873,6 +1885,12 @@ function Withdrawal({ t, showRewardWithdrawalPrompt, onDone }: any) {
         action={<button onClick={() => setShowHistory(!showHistory)} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-amber-300">{showHistory ? t("hideHistory") : t("viewWithdrawalHistory")}</button>}
       />
       <div className="max-w-2xl panel">
+        {!activePackage ? (
+          <p className="rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm font-semibold text-amber-50">
+            {t("noPackageBalanceMessage")}
+          </p>
+        ) : (
+          <>
         {showRewardWithdrawalPrompt && (
           <p className="mb-5 flex items-center gap-2 rounded-xl border border-emerald-300/25 bg-emerald-300/10 p-3 text-sm font-semibold text-emerald-50">
             <Gift className="size-4 shrink-0 text-amber-300" />
@@ -1883,13 +1901,14 @@ function Withdrawal({ t, showRewardWithdrawalPrompt, onDone }: any) {
             onSubmit={event => {
               event.preventDefault();
               const nextErrors: FormErrors = {
+                walletType: walletType ? undefined : friendlyMessages.walletType,
                 amount: validateWithdrawalAmount(amount, currency),
                 accountDetails:
                   currency === "PKR" && !isValidPakistanMobileNumber(accountDetails)
                     ? friendlyMessages.paymentNumber
                     : undefined,
               };
-              if (nextErrors.amount || nextErrors.accountDetails) {
+              if (nextErrors.walletType || nextErrors.amount || nextErrors.accountDetails) {
                 setErrors(nextErrors);
                 return;
               }
@@ -1898,6 +1917,7 @@ function Withdrawal({ t, showRewardWithdrawalPrompt, onDone }: any) {
               create.mutate({
                 currency,
                 amount: numeric,
+                walletType: walletType as "JazzCash" | "Easypaisa" | "SadaPay" | "NayaPay" | "Other",
                 accountName,
                 accountDetails,
               });
@@ -1907,6 +1927,47 @@ function Withdrawal({ t, showRewardWithdrawalPrompt, onDone }: any) {
               <CurrencyTabs value={currency} onChange={setCurrency} t={t} />
             </div>
             <div className="grid gap-4 md:grid-cols-2">
+              <label>
+                <span className="field-label">{t("walletType")}</span>
+                <select
+                  required
+                  className="field"
+                  value={walletType}
+                  aria-invalid={Boolean(errors.walletType)}
+                  onChange={e => {
+                    setWalletType(e.target.value);
+                    setErrors(current => ({ ...current, walletType: undefined }));
+                  }}
+                >
+                  <option value="">{t("selectWalletType")}</option>
+                  {["JazzCash", "Easypaisa", "SadaPay", "NayaPay", "Other"].map(type => <option key={type} value={type}>{type}</option>)}
+                </select>
+                <FieldError>{errors.walletType}</FieldError>
+              </label>
+              <label>
+                <span className="field-label">{t("walletAccountName")}</span>
+                <input
+                  required
+                  className="field"
+                  value={accountName}
+                  onChange={e => setAccountName(e.target.value)}
+                />
+              </label>
+              <label>
+                <span className="field-label">{t("walletNumber")}</span>
+                <input
+                  required
+                  className="field"
+                  value={accountDetails}
+                  inputMode={currency === "PKR" ? "numeric" : undefined}
+                  aria-invalid={Boolean(errors.accountDetails)}
+                  onChange={e => {
+                    setAccountDetails(e.target.value);
+                    setErrors(current => ({ ...current, accountDetails: undefined }));
+                  }}
+                />
+                <FieldError>{errors.accountDetails}</FieldError>
+              </label>
               <label>
                 <span className="field-label">
                   {t("amount")} ({currency})
@@ -1924,31 +1985,7 @@ function Withdrawal({ t, showRewardWithdrawalPrompt, onDone }: any) {
                 />
                 <FieldError>{errors.amount}</FieldError>
               </label>
-              <label>
-                <span className="field-label">{t("accountName")}</span>
-                <input
-                  required
-                  className="field"
-                  value={accountName}
-                  onChange={e => setAccountName(e.target.value)}
-                />
-              </label>
             </div>
-            <label className="mt-4 block">
-              <span className="field-label">{t("accountDetails")}</span>
-              <input
-                required
-                className="field"
-                value={accountDetails}
-                inputMode={currency === "PKR" ? "numeric" : undefined}
-                aria-invalid={Boolean(errors.accountDetails)}
-                onChange={e => {
-                  setAccountDetails(e.target.value);
-                  setErrors(current => ({ ...current, accountDetails: undefined }));
-                }}
-              />
-              <FieldError>{errors.accountDetails}</FieldError>
-            </label>
             <button
               disabled={create.isPending}
               className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-60"
@@ -1957,6 +1994,8 @@ function Withdrawal({ t, showRewardWithdrawalPrompt, onDone }: any) {
               {t("submitWithdrawal")}
             </button>
           </form>
+          </>
+        )}
       </div>
       {showHistory && <div className="panel mt-5"><p className="eyebrow">{t("viewWithdrawalHistory")}</p>{list.data?.length ? <GroupedFinancialHistory rows={list.data} t={t} kind="withdrawal" /> : <Empty text={t("noTransactions")} />}</div>}
     </>

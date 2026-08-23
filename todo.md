@@ -247,3 +247,12 @@
 - [x] Extract normalized account-number candidates from payment-proof screenshots and prevent deposit submission when the entered sender number is not present in the proof.
 - [x] Add regression tests, validate production builds, and publish the same-project update without exposing sensitive server errors.
 - [x] Move every success and error notification to the top center with a large solid-black message box, white bold text, readable padding, and a 3–4 second display duration.
+
+### Current request: Package-gated wallet access and administrator request workflow
+
+- [x] Show a zero balance and block withdrawal actions for members without an active package, with only the requested user-friendly purchase message.
+- [x] Add Wallet Type, Wallet Account Name, and Wallet Number fields to the withdrawal flow and persist the selected wallet type with the request.
+- [x] Automatically hide completed WhatsApp join/reward prompts at the correct account states without exposing referral or reward rules in page copy.
+- [x] Keep deposit and withdrawal requests visible to administrators until reviewed, then hide approved requests from active request views one hour after approval while preserving accounting history.
+- [x] Add a responsive fast username/email search to Administrator User List with existing account, balance, withdrawal, and package summaries.
+- [x] Add regression tests, validate the same-project production build, publish, and synchronize both GitHub branches.

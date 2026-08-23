@@ -1,7 +1,7 @@
 export const WITHDRAWAL_LOCK_MESSAGE =
   "Please invite someone. When your invited user buys a package, 50% of his package price will be added to your withdraw limit.";
 export const WITHDRAWAL_NO_PACKAGE_MESSAGE =
-  "Withdrawal requires an active package before referral withdrawal access can be displayed.";
+  "Your balance is zero, please purchase a package and start earning";
 export const AD_TIMER_MESSAGE = "Please wait for the 10-second timer before claiming this reward.";
 export const AD_REWARD_PKR = 20;
 export const WHATSAPP_JOIN_REWARD_PKR = 10;

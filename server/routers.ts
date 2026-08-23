@@ -221,8 +221,11 @@ async function buildOverview(userId: number) {
   const dailyQuota = activePackage
     ? getDailyAdQuota(activePackage.plan.pricePkr)
     : 0;
+  const visibleProfile = activePackage
+    ? profile
+    : { ...profile, balancePkr: 0, withdrawalLimitPkr: 0 };
   return {
-    profile,
+    profile: visibleProfile,
     settings,
     activePackage: activePackage
       ? {
@@ -1156,6 +1159,13 @@ export const appRouter = router({
         z.object({
           currency: z.enum(["PKR", "USD"]),
           amount: z.number().positive("Please enter a valid amount"),
+          walletType: z.enum([
+            "JazzCash",
+            "Easypaisa",
+            "SadaPay",
+            "NayaPay",
+            "Other",
+          ]),
           accountName: z.string().trim().min(2).max(128),
           accountDetails: z
             .string()
@@ -1192,6 +1202,7 @@ export const appRouter = router({
           userId: user.id,
           currency: input.currency,
           amountPkr,
+          walletType: input.walletType,
           accountName: input.accountName,
           accountDetails: input.accountDetails,
           status: "pending",
@@ -1220,7 +1231,7 @@ export const appRouter = router({
             "💸 WITHDRAW REQUEST",
             `👤 User: ${profile.username}`,
             `💵 Amount: ${input.amount} ${input.currency}`,
-            `📱 Easypaisa/JazzCash: ${input.accountDetails}`,
+            `📱 ${input.walletType}: ${input.accountName} · ${input.accountDetails}`,
           ].join("\n")
         );
         return { success: true };
@@ -1399,15 +1410,20 @@ export const appRouter = router({
             (referralCounts.get(row.referredByUserId) ?? 0) + 1
           );
       });
+      const approvedVisibilityCutoff = Date.now() - 60 * 60 * 1000;
+      const remainsVisibleInActiveRequests = (row: { status: string; reviewedAt: Date | null }) =>
+        row.status !== "approved" ||
+        !row.reviewedAt ||
+        row.reviewedAt.getTime() > approvedVisibilityCutoff;
       return {
-        deposits: depositRows.map(row => ({
+        deposits: depositRows.filter(remainsVisibleInActiveRequests).map(row => ({
           ...row,
           member: members.get(row.userId) ?? null,
           requestedPackageName: row.requestedPackageId
             ? packageNames.get(row.requestedPackageId) ?? null
             : null,
         })),
-        withdrawals: withdrawalRows.map(row => ({
+        withdrawals: withdrawalRows.filter(remainsVisibleInActiveRequests).map(row => ({
           ...row,
           member: members.get(row.userId)
             ? {
@@ -1529,6 +1545,16 @@ export const appRouter = router({
             reviewedAt: new Date(),
           })
           .where(eq(withdrawals.id, request.id));
+        if (
+          input.approved &&
+          profile.whatsappBonusClaimed &&
+          !profile.whatsappRewardWithdrawn &&
+          request.amountPkr >= WHATSAPP_JOIN_REWARD_PKR
+        )
+          await db
+            .update(profiles)
+            .set({ whatsappRewardWithdrawn: true })
+            .where(eq(profiles.userId, request.userId));
         await db
           .update(transactions)
           .set({

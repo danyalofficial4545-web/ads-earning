@@ -3,6 +3,7 @@ export type FormField =
   | "password"
   | "confirmPassword"
   | "amount"
+  | "walletType"
   | "transactionId"
   | "accountDetails"
   | "senderAccountNumber"
@@ -19,6 +20,7 @@ export const friendlyMessages = {
   email: "Please correct your Email / Gmail",
   password: "Please correct your Password",
   transactionId: "Please enter correct Transaction ID",
+  walletType: "Please select a wallet type",
   paymentNumber: "Please enter correct JazzCash number linked with account",
   proofMismatch:
     "Account number in screenshot and entered number does not match, please check and upload correct proof",
@@ -94,6 +96,8 @@ export function friendlyServerError(
   if (normalized.includes("password")) return { password: friendlyMessages.password };
   if (normalized.includes("transaction") || normalized.includes("tid"))
     return { transactionId: friendlyMessages.transactionId };
+  if (normalized.includes("wallet type"))
+    return { walletType: friendlyMessages.walletType };
   if (normalized.includes("account number") || normalized.includes("account details"))
     return { [preferredField]: friendlyMessages.paymentNumber };
   return { [preferredField]: friendlyMessages.requestFailed };

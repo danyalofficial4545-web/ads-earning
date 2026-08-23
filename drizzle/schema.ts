@@ -42,6 +42,9 @@ export const profiles = mysqlTable("profiles", {
   isBlocked: boolean("isBlocked").notNull().default(false),
   whatsappJoined: boolean("whatsappJoined").notNull().default(false),
   whatsappBonusClaimed: boolean("whatsappBonusClaimed").notNull().default(false),
+  whatsappRewardWithdrawn: boolean("whatsappRewardWithdrawn")
+    .notNull()
+    .default(false),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => [
@@ -164,6 +167,7 @@ export const withdrawals = mysqlTable("withdrawals", {
   userId: int("userId").notNull(),
   currency: mysqlEnum("currency", ["PKR", "USD"]).notNull(),
   amountPkr: int("amountPkr").notNull(),
+  walletType: varchar("walletType", { length: 64 }).notNull().default("Other"),
   accountName: varchar("accountName", { length: 128 }).notNull(),
   accountDetails: varchar("accountDetails", { length: 512 }).notNull(),
   status: mysqlEnum("status", ["pending", "approved", "rejected"]).notNull().default("pending"),

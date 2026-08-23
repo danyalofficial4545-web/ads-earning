@@ -1,7 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { translate, type Language, type TranslationKey } from "@/lib/i18n";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Check,
   ClipboardCheck,
@@ -339,7 +339,7 @@ function Approvals({ t, onChange, mode }: any) {
                         {row.member?.username ?? t("member")} · {row.member?.email ?? `#${row.userId}`} · {t("paymentMethod")}: {row.currency} · {dateTime(row.createdAt)}
                       </p>
                       <p className="mt-2 text-xs leading-5 text-slate-300">
-                        {t("accountName")}: {row.accountName} · {t("accountDetails")}: {row.accountDetails}<br />
+                        {t("walletType")}: {row.walletType} · {t("walletAccountName")}: {row.accountName} · {t("walletNumber")}: {row.accountDetails}<br />
                         {t("balance")}: {money(row.member?.balancePkr ?? 0)} · {t("referralCount")}: {row.member?.referralCount ?? 0}<br />
                         {t("withdrawalLimit")}: {money(row.member?.withdrawalLimitPkr ?? 0)} · {t("activePackage")}: {row.member?.activePackageName ?? t("noPackage")}
                       </p>
@@ -847,6 +847,7 @@ function Broadcasts({ t }: any) {
 
 function UserManagement({ t }: any) {
   const list = trpc.admin.users.useQuery();
+  const [search, setSearch] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const detail = trpc.admin.userDetail.useQuery(
     { userId: selectedUserId ?? 0 },
@@ -856,6 +857,15 @@ function UserManagement({ t }: any) {
     onSuccess: () => list.refetch(),
     onError: e => toast.error(e.message),
   });
+  const filteredUsers = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return list.data ?? [];
+    return (list.data ?? []).filter(row =>
+      [row.profile.username, row.email, String(row.id)]
+        .filter(Boolean)
+        .some(value => String(value).toLowerCase().includes(query))
+    );
+  }, [list.data, search]);
   return (
     <>
       <Heading
@@ -863,6 +873,15 @@ function UserManagement({ t }: any) {
         description={t("memberMonitoringText")}
       />
       <div className="panel overflow-x-auto">
+        <div className="mb-4 max-w-md">
+          <input
+            className="field"
+            value={search}
+            onChange={event => setSearch(event.target.value)}
+            placeholder="Search username, Gmail, or user ID"
+            aria-label="Search users"
+          />
+        </div>
         <table className="w-full min-w-[700px] text-left text-sm">
           <thead className="border-b border-white/10 text-xs text-slate-400">
             <tr>
@@ -875,7 +894,7 @@ function UserManagement({ t }: any) {
             </tr>
           </thead>
           <tbody>
-            {list.data?.map(row => (
+            {filteredUsers.map(row => (
               <tr key={row.id} className="border-b border-white/5">
                 <td className="py-4">
                   <p className="font-bold">{row.profile.username}</p>
