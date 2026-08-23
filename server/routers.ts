@@ -52,6 +52,7 @@ import {
   toPkr,
   validateDepositAmountPkr,
   validateWithdrawalRequest,
+  WHATSAPP_JOIN_REWARD_PKR,
 } from "./rules";
 import {
   getDailyAdQuota,
@@ -639,20 +640,26 @@ export const appRouter = router({
         .set({
           whatsappJoined: true,
           whatsappBonusClaimed: true,
-          balancePkr: profile.balancePkr + 30,
+          balancePkr: profile.balancePkr + WHATSAPP_JOIN_REWARD_PKR,
+          withdrawalLimitPkr:
+            profile.withdrawalLimitPkr + WHATSAPP_JOIN_REWARD_PKR,
         })
         .where(eq(profiles.userId, user.id));
       await db.insert(transactions).values({
         userId: user.id,
         type: "adjustment",
         direction: "credit",
-        amountPkr: 30,
+        amountPkr: WHATSAPP_JOIN_REWARD_PKR,
         status: "completed",
         note: "WhatsApp Channel join bonus",
         referenceType: "whatsapp_bonus",
         referenceId: user.id,
       });
-      return { success: true, bonusPkr: 30, alreadyJoined: false } as const;
+      return {
+        success: true,
+        bonusPkr: WHATSAPP_JOIN_REWARD_PKR,
+        alreadyJoined: false,
+      } as const;
     }),
   }),
   package: router({
@@ -1147,15 +1154,11 @@ export const appRouter = router({
           input.currency,
           settings.exchangeRatePkrPerUsd
         );
-        if (amountPkr < 50 || amountPkr > 3000)
-          fail("Withdraw Limit: 50 PKR to 3000 PKR.");
         const activePackage = Boolean(await getActivePackageForUser(user.id));
         const withdrawalError = validateWithdrawalRequest({
           balancePkr: profile.balancePkr,
           withdrawalLimitPkr: profile.withdrawalLimitPkr,
           amountPkr,
-          minimumWithdrawalPkr: settings.minimumWithdrawalPkr,
-          maximumWithdrawalPkr: settings.maximumWithdrawalPkr,
           activePackage,
         });
         if (withdrawalError) fail(withdrawalError);
@@ -1843,8 +1846,6 @@ export const appRouter = router({
       .input(
         z.object({
           exchangeRatePkrPerUsd: z.number().int().min(1),
-          minimumWithdrawalPkr: z.number().int().min(1),
-          maximumWithdrawalPkr: z.number().int().min(1),
           adTimerSeconds: z.number().int().min(5).max(600),
           referralCommissionPercent: z.number().int().min(0).max(100),
           websiteName: z.string().trim().min(2).max(80),
@@ -1854,14 +1855,16 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         await getAdmin(ctx);
-        if (input.maximumWithdrawalPkr < input.minimumWithdrawalPkr)
-          fail("Maximum withdrawal must be greater than the minimum.");
         const db = await getDb();
         if (!db)
           fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
         await db
           .update(appSettings)
-          .set(input)
+          .set({
+            ...input,
+            minimumWithdrawalPkr: 0,
+            maximumWithdrawalPkr: 3000,
+          })
           .where(eq(appSettings.id, 1));
         return { success: true };
       }),

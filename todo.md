@@ -230,3 +230,11 @@
 
 - [x] Remove the global custom button color override so controls return to their original contextual colors while retaining the website theme options.
 - [x] Validate and publish the same-project button styling restoration without changing authentication, referral, financial, or navigation behavior.
+
+### Current request: Withdrawal cleanup and WhatsApp join reward
+
+- [x] Remove all visible withdrawal-limit helper text while enforcing the maximum 3000 PKR withdrawal rule server-side and showing only the requested over-limit error.
+- [x] Change the one-time WhatsApp channel reward from 30 PKR to 10 PKR and preserve its one-time-accounting safeguards.
+- [x] Show new members an attractive WhatsApp join popup/banner, credit the reward after the existing join action, and guide rewarded members to the Withdrawal flow without exposing internal rules.
+- [x] Preserve the existing post-withdrawal limit reset and later referral-credit behavior without displaying rule explanations.
+- [x] Add regression tests, validate the member interface and build, and publish the same-project update.

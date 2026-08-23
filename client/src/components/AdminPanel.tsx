@@ -999,8 +999,6 @@ function GlobalSettings({ t }: any) {
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           {field(t("pkrPerUsd"), "exchangeRatePkrPerUsd")}
-          {field(t("minimumWithdrawal"), "minimumWithdrawalPkr")}
-          {field(t("maximumWithdrawal"), "maximumWithdrawalPkr")}
           {field(t("adTimerSeconds"), "adTimerSeconds")}
           {field(t("referralCommission"), "referralCommissionPercent")}
         </div>

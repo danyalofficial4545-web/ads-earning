@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   DEPOSIT_MAX_PKR,
   DEPOSIT_MIN_PKR,
+  WITHDRAWAL_MAX_MESSAGE,
   WITHDRAWAL_MAX_PKR,
-  WITHDRAWAL_MIN_PKR,
   WITHDRAWAL_LOCK_MESSAGE,
   validateDepositAmountPkr,
   validateWithdrawalRequest,
@@ -17,18 +17,17 @@ describe("pasted requirements rules", () => {
     expect(validateDepositAmountPkr(DEPOSIT_MAX_PKR + 1)).toContain("5000 PKR");
   });
 
-  it("uses the 50 to 3000 PKR withdrawal range and unlock threshold", () => {
-    const base = { balancePkr: 3000, amountPkr: 50, minimumWithdrawalPkr: WITHDRAWAL_MIN_PKR, maximumWithdrawalPkr: WITHDRAWAL_MAX_PKR };
-    expect(validateWithdrawalRequest({ ...base, withdrawalLimitPkr: 49, activePackage: true })).toBe(WITHDRAWAL_LOCK_MESSAGE);
-    expect(validateWithdrawalRequest({ ...base, withdrawalLimitPkr: 50, activePackage: true })).toBeNull();
-    expect(validateWithdrawalRequest({ ...base, withdrawalLimitPkr: 3000, amountPkr: 49 })).toContain("PKR 50");
-    expect(validateWithdrawalRequest({ ...base, withdrawalLimitPkr: 3000, amountPkr: 3001 })).toContain("PKR 3000");
+  it("allows the joined-channel reward amount and uses only the fixed maximum for excess withdrawal validation", () => {
+    const base = { balancePkr: WITHDRAWAL_MAX_PKR, amountPkr: 10 };
+    expect(validateWithdrawalRequest({ ...base, withdrawalLimitPkr: 0, activePackage: true })).toBe(WITHDRAWAL_LOCK_MESSAGE);
+    expect(validateWithdrawalRequest({ ...base, withdrawalLimitPkr: 10 })).toBeNull();
+    expect(validateWithdrawalRequest({ ...base, withdrawalLimitPkr: WITHDRAWAL_MAX_PKR, amountPkr: WITHDRAWAL_MAX_PKR + 1 })).toBe(WITHDRAWAL_MAX_MESSAGE);
   });
 
   it("shows the invite message only after package activation", () => {
-    const base = { balancePkr: 3000, amountPkr: 50, minimumWithdrawalPkr: WITHDRAWAL_MIN_PKR, maximumWithdrawalPkr: WITHDRAWAL_MAX_PKR };
+    const base = { balancePkr: 3000, amountPkr: 10 };
     expect(validateWithdrawalRequest({ ...base, withdrawalLimitPkr: 0, activePackage: false })).not.toBe(WITHDRAWAL_LOCK_MESSAGE);
     expect(validateWithdrawalRequest({ ...base, withdrawalLimitPkr: 0, activePackage: true })).toBe(WITHDRAWAL_LOCK_MESSAGE);
-    expect(validateWithdrawalRequest({ ...base, withdrawalLimitPkr: 50, activePackage: true })).toBeNull();
+    expect(validateWithdrawalRequest({ ...base, withdrawalLimitPkr: 10, activePackage: true })).toBeNull();
   });
 });

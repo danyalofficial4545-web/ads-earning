@@ -100,6 +100,47 @@ describe("router accounting flows", () => {
     expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("member@example.com"));
   });
 
+  it("credits the one-time WhatsApp reward to the wallet and withdrawal allowance", async () => {
+    mocks.ensureProfile.mockResolvedValue({
+      ...memberProfile,
+      balancePkr: 0,
+      withdrawalLimitPkr: 0,
+      whatsappJoined: false,
+      whatsappBonusClaimed: false,
+    });
+    const updates: Array<{ table: unknown; values: any }> = [];
+    const inserts: any[] = [];
+    mocks.getDb.mockResolvedValue({
+      update: vi.fn((table) => ({
+        set: (values: any) => ({
+          where: () => updates.push({ table, values }),
+        }),
+      })),
+      insert: vi.fn(() => ({
+        values: async (values: any) => {
+          inserts.push(values);
+          return [{ insertId: 1 }];
+        },
+      })),
+    });
+
+    const result = await appRouter.createCaller(context()).platform.joinWhatsApp();
+
+    expect(result).toMatchObject({ success: true, bonusPkr: 10, alreadyJoined: false });
+    expect(updates[0]?.values).toEqual({
+      whatsappJoined: true,
+      whatsappBonusClaimed: true,
+      balancePkr: 10,
+      withdrawalLimitPkr: 10,
+    });
+    expect(inserts[0]).toMatchObject({
+      type: "adjustment",
+      direction: "credit",
+      amountPkr: 10,
+      referenceType: "whatsapp_bonus",
+    });
+  });
+
   it("credits referral commission only to the referrer withdrawal limit", async () => {
     const plan = { id: 1, tier: "bronze", name: "Bronze", icon: "B", pricePkr: 1000, dailyAds: 2, durationDays: 30, isActive: true, createdAt: new Date(), updatedAt: new Date() };
     const updates: Array<{ table: unknown; values: any }> = [];

@@ -1,0 +1,1 @@
+ALTER TABLE `appSettings` MODIFY COLUMN `minimumWithdrawalPkr` int NOT NULL DEFAULT 0;

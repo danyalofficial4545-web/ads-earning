@@ -14,6 +14,9 @@ import {
   toPkr,
   validateWithdrawalRequest,
   WITHDRAWAL_LOCK_MESSAGE,
+  WITHDRAWAL_MAX_MESSAGE,
+  WITHDRAWAL_MAX_PKR,
+  WHATSAPP_JOIN_REWARD_PKR,
 } from "./rules";
 
 describe("Package Earn Pro server rules", () => {
@@ -42,29 +45,30 @@ describe("Package Earn Pro server rules", () => {
         balancePkr: 1000,
         withdrawalLimitPkr: 0,
         amountPkr: 100,
-        minimumWithdrawalPkr: 100,
-        maximumWithdrawalPkr: 3000,
       })
     ).toBe(WITHDRAWAL_LOCK_MESSAGE);
   });
 
-  it("rejects withdrawal amounts outside of limits or the available balance", () => {
+  it("allows the channel-reward withdrawal amount and rejects only amounts over the fixed maximum", () => {
     expect(
       validateWithdrawalRequest({
-        balancePkr: 1000,
-        withdrawalLimitPkr: 500,
-        amountPkr: 50,
-        minimumWithdrawalPkr: 100,
-        maximumWithdrawalPkr: 3000,
+        balancePkr: WHATSAPP_JOIN_REWARD_PKR,
+        withdrawalLimitPkr: WHATSAPP_JOIN_REWARD_PKR,
+        amountPkr: WHATSAPP_JOIN_REWARD_PKR,
       })
-    ).toContain("between PKR 100 and PKR 3000");
+    ).toBeNull();
+    expect(
+      validateWithdrawalRequest({
+        balancePkr: WITHDRAWAL_MAX_PKR + 1,
+        withdrawalLimitPkr: WITHDRAWAL_MAX_PKR + 1,
+        amountPkr: WITHDRAWAL_MAX_PKR + 1,
+      })
+    ).toBe(WITHDRAWAL_MAX_MESSAGE);
     expect(
       validateWithdrawalRequest({
         balancePkr: 1000,
         withdrawalLimitPkr: 500,
         amountPkr: 600,
-        minimumWithdrawalPkr: 100,
-        maximumWithdrawalPkr: 3000,
       })
     ).toContain("current withdrawal limit");
     expect(
@@ -72,8 +76,6 @@ describe("Package Earn Pro server rules", () => {
         balancePkr: 150,
         withdrawalLimitPkr: 500,
         amountPkr: 200,
-        minimumWithdrawalPkr: 100,
-        maximumWithdrawalPkr: 3000,
       })
     ).toContain("wallet balance is insufficient");
   });

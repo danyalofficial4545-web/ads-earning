@@ -4,6 +4,10 @@ export const WITHDRAWAL_NO_PACKAGE_MESSAGE =
   "Withdrawal requires an active package before referral withdrawal access can be displayed.";
 export const AD_TIMER_MESSAGE = "Please wait for the 10-second timer before claiming this reward.";
 export const AD_REWARD_PKR = 20;
+export const WHATSAPP_JOIN_REWARD_PKR = 10;
+export const WITHDRAWAL_MAX_PKR = 3000;
+export const WITHDRAWAL_MAX_MESSAGE =
+  "Withdrawal limit is up to 3000 PKR, please enter a lower amount";
 export const DESIGNATED_ADMIN_EMAIL = "muhammaddanyal4545@gmail.com";
 export const DESIGNATED_ADMIN_USERNAME = "danyal955163";
 
@@ -43,20 +47,13 @@ export function validateWithdrawalRequest(input: {
   balancePkr: number;
   withdrawalLimitPkr: number;
   amountPkr: number;
-  minimumWithdrawalPkr: number;
-  maximumWithdrawalPkr: number;
   activePackage?: boolean;
 }) {
-  if (input.withdrawalLimitPkr < 50)
+  if (input.amountPkr > WITHDRAWAL_MAX_PKR) return WITHDRAWAL_MAX_MESSAGE;
+  if (input.withdrawalLimitPkr <= 0)
     return input.activePackage === false
       ? WITHDRAWAL_NO_PACKAGE_MESSAGE
       : WITHDRAWAL_LOCK_MESSAGE;
-  if (
-    input.amountPkr < input.minimumWithdrawalPkr ||
-    input.amountPkr > input.maximumWithdrawalPkr
-  ) {
-    return `Withdrawal amount must be between PKR ${input.minimumWithdrawalPkr} and PKR ${input.maximumWithdrawalPkr}.`;
-  }
   if (input.amountPkr > input.withdrawalLimitPkr)
     return `Your current withdrawal limit is PKR ${input.withdrawalLimitPkr}. Invite friends to unlock more withdrawal limit.`;
   if (input.amountPkr > input.balancePkr)
@@ -105,8 +102,7 @@ export function matchesRequestTransaction(
 
 export const DEPOSIT_MIN_PKR = 100;
 export const DEPOSIT_MAX_PKR = 5000;
-export const WITHDRAWAL_MIN_PKR = 50;
-export const WITHDRAWAL_MAX_PKR = 3000;
+export const WITHDRAWAL_MIN_PKR = 0;
 
 export function validateDepositAmountPkr(amountPkr: number) {
   if (amountPkr < DEPOSIT_MIN_PKR || amountPkr > DEPOSIT_MAX_PKR)

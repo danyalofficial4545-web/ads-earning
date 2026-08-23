@@ -198,7 +198,7 @@ export const broadcasts = mysqlTable("broadcasts", {
 export const appSettings = mysqlTable("appSettings", {
   id: int("id").primaryKey(),
   exchangeRatePkrPerUsd: int("exchangeRatePkrPerUsd").notNull().default(280),
-  minimumWithdrawalPkr: int("minimumWithdrawalPkr").notNull().default(50),
+  minimumWithdrawalPkr: int("minimumWithdrawalPkr").notNull().default(0),
   maximumWithdrawalPkr: int("maximumWithdrawalPkr").notNull().default(3000),
   adTimerSeconds: int("adTimerSeconds").notNull().default(10),
   referralCommissionPercent: int("referralCommissionPercent").notNull().default(50),

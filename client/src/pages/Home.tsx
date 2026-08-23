@@ -38,6 +38,7 @@ import {
   LayoutDashboard,
   Loader2,
   LogOut,
+  MessageCircle,
   Menu,
   PackageCheck,
   PiggyBank,
@@ -796,44 +797,53 @@ function Metric({
   );
 }
 
-function WhatsAppBanner({ t, joined, onJoin }: any) {
+function WhatsAppJoinPrompt({ t, onJoin, onClose, joining }: any) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-4 py-3 text-sm">
-      <span className="font-semibold text-emerald-100">
-        {joined ? t("whatsappBonus") : t("whatsappBanner")}
-      </span>
-      {!joined && (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/75 p-4 backdrop-blur-sm">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="whatsapp-join-title"
+        className="relative w-full max-w-md overflow-hidden rounded-[2rem] border border-emerald-200/30 bg-[#133c31] p-6 shadow-2xl shadow-emerald-950/50"
+      >
+        <div className="pointer-events-none absolute -right-12 -top-12 size-44 rounded-full bg-emerald-300/20 blur-2xl" />
+        <div className="pointer-events-none absolute -bottom-16 -left-12 size-44 rounded-full bg-amber-300/15 blur-2xl" />
         <button
-          onClick={onJoin}
-          className="rounded-lg bg-amber-300 px-3 py-2 text-xs font-bold text-slate-950"
+          type="button"
+          onClick={onClose}
+          aria-label={t("close")}
+          className="absolute right-4 top-4 grid size-8 place-items-center rounded-full border border-white/10 bg-white/10 text-slate-100 transition hover:bg-white/15"
         >
-          {t("joinNow")}
+          <X className="size-4" />
         </button>
-      )}
-    </div>
-  );
-}
-function WhatsAppCard({ t, joined, onJoin }: any) {
-  return (
-    <div className="panel mt-5 border-emerald-300/20">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="eyebrow">{t("whatsappTitle")}</p>
-          <p className="mt-1 text-sm text-slate-300">{t("whatsappSubtitle")}</p>
-        </div>
-        {joined ? (
-          <span className="rounded-xl bg-emerald-400/15 px-3 py-2 text-xs font-bold text-emerald-200">
-            {t("whatsappBonus")}
-          </span>
-        ) : (
+        <div className="relative">
+          <div className="grid size-16 place-items-center rounded-2xl bg-emerald-400 text-[#063524] shadow-lg shadow-emerald-950/30">
+            <MessageCircle className="size-9" strokeWidth={2.4} />
+          </div>
+          <p className="mt-6 text-xs font-bold uppercase tracking-[0.18em] text-emerald-200">
+            WhatsApp Channel
+          </p>
+          <h2 id="whatsapp-join-title" className="mt-2 text-2xl font-extrabold leading-8 text-white">
+            {t("whatsappPromptTitle")}
+          </h2>
+          <p className="mt-3 text-sm leading-6 text-emerald-50/80">
+            {t("whatsappPromptSubtitle")}
+          </p>
+          <div className="mt-6 flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/20 p-3 text-xs text-emerald-100/90">
+            <BadgeCheck className="size-4 shrink-0 text-amber-300" />
+            <span>{t("whatsappPromptBenefit")}</span>
+          </div>
           <button
+            type="button"
+            disabled={joining}
             onClick={onJoin}
-            className="rounded-xl bg-amber-300 px-4 py-2 text-sm font-bold text-slate-950"
+            className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#25D366] px-4 text-sm font-extrabold text-[#073524] transition hover:bg-[#47df7e] active:scale-[.97] disabled:opacity-60"
           >
+            {joining ? <Loader2 className="size-4 animate-spin" /> : <MessageCircle className="size-4" />}
             {t("joinNow")}
           </button>
-        )}
-      </div>
+        </div>
+      </section>
     </div>
   );
 }
@@ -1008,9 +1018,19 @@ function Workspace({
 }: any) {
   if (overviewLoading || !overview)
     return <LoadingScreen text={t("loading")} />;
+  const [showChannelPrompt, setShowChannelPrompt] = useState(
+    () => !profile.whatsappJoined
+  );
+  const [showRewardWithdrawalPrompt, setShowRewardWithdrawalPrompt] =
+    useState(false);
   const joinWhatsApp = trpc.platform.joinWhatsApp.useMutation({
     onSuccess: data => {
-      if (data.bonusPkr) toast.success(t("whatsappBonus"));
+      if (data.bonusPkr) {
+        toast.success(t("whatsappRewardClaimed"));
+        setShowRewardWithdrawalPrompt(true);
+        setPage("withdrawal");
+      }
+      setShowChannelPrompt(false);
       invalidateCore();
     },
     onError: error => toast.error(error.message),
@@ -1030,7 +1050,6 @@ function Workspace({
         overview={overview}
         announcements={announcements}
         setPage={setPage}
-        onJoinWhatsApp={handleJoinWhatsApp}
       />
     ),
     packages: (
@@ -1051,17 +1070,13 @@ function Workspace({
         profile={profile}
         activePackage={overview.activePackage}
         totalEarnedPkr={overview.totalEarnedPkr}
-        joined={Boolean(profile.whatsappJoined)}
-        onJoin={handleJoinWhatsApp}
       />
     ),
     deposit: <Deposit t={t} settings={settings} packages={packages} onDone={invalidateCore} />,
     withdrawal: (
       <Withdrawal
         t={t}
-        profile={profile}
-        activePackage={overview.activePackage}
-        settings={settings}
+        showRewardWithdrawalPrompt={showRewardWithdrawalPrompt}
         onDone={invalidateCore}
       />
     ),
@@ -1073,11 +1088,14 @@ function Workspace({
   };
   return (
     <>
-      <WhatsAppBanner
-        t={t}
-        joined={Boolean(profile.whatsappJoined)}
-        onJoin={handleJoinWhatsApp}
-      />
+      {showChannelPrompt && (
+        <WhatsAppJoinPrompt
+          t={t}
+          joining={joinWhatsApp.isPending}
+          onJoin={handleJoinWhatsApp}
+          onClose={() => setShowChannelPrompt(false)}
+        />
+      )}
       <div className="mt-4">{content[page as Page]}</div>
       <p className="mt-8 text-center text-[11px] text-slate-500">
         {t("brand")} ·{" "}
@@ -1116,13 +1134,7 @@ function PageHeading({
   );
 }
 
-function Dashboard({
-  t,
-  overview,
-  announcements,
-  setPage,
-  onJoinWhatsApp,
-}: any) {
+function Dashboard({ t, overview, announcements, setPage }: any) {
   const active = overview.activePackage;
   const dashboardCards: Record<DashboardMetricKey, ReactNode> = {
     balance: (
@@ -1252,11 +1264,6 @@ function Dashboard({
           </div>
         </div>
       </div>
-      <WhatsAppCard
-        t={t}
-        joined={Boolean(overview.profile.whatsappJoined)}
-        onJoin={onJoinWhatsApp}
-      />
       {announcements.length > 0 && (
         <div className="panel mt-5">
           <div className="flex items-center gap-2">
@@ -1394,8 +1401,6 @@ function ProfileWallet({
   profile,
   activePackage,
   totalEarnedPkr,
-  joined,
-  onJoin,
 }: any) {
   if (!wallet) return <LoadingScreen text={t("loading")} />;
   const [showPassword, setShowPassword] = useState(false);
@@ -1423,7 +1428,6 @@ function ProfileWallet({
           </div>
         }
       />
-      <WhatsAppCard t={t} joined={joined} onJoin={onJoin} />
       <div className="mt-5 grid gap-4 md:grid-cols-2">
         <StatCard
           icon={WalletCards}
@@ -1767,7 +1771,7 @@ function CurrencyTabs({ value, onChange, t }: any) {
   );
 }
 
-function Withdrawal({ t, profile, activePackage, settings, onDone }: any) {
+function Withdrawal({ t, showRewardWithdrawalPrompt, onDone }: any) {
   const [currency, setCurrency] = useState<"PKR" | "USD">("PKR");
   const [amount, setAmount] = useState("");
   const [accountName, setAccountName] = useState("");
@@ -1785,10 +1789,6 @@ function Withdrawal({ t, profile, activePackage, settings, onDone }: any) {
     onError: error => toast.error(error.message),
   });
   const list = trpc.withdrawal.list.useQuery();
-  const displayLimit =
-    currency === "PKR"
-      ? money(profile.withdrawalLimitPkr)
-      : `$${(profile.withdrawalLimitPkr / settings.exchangeRatePkrPerUsd).toFixed(2)}`;
   return (
     <>
       <PageHeading
@@ -1797,34 +1797,13 @@ function Withdrawal({ t, profile, activePackage, settings, onDone }: any) {
         description={t("withdrawalNote")}
         action={<button onClick={() => setShowHistory(!showHistory)} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-amber-300">{showHistory ? t("hideHistory") : t("viewWithdrawalHistory")}</button>}
       />
-      <div className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]">
-        <div className="panel">
-          <ArrowUpRight className="size-6 text-amber-300" />
-          {profile.withdrawalLimitPkr >= 50 && (
-            <>
-              <p className="mt-5 text-sm text-slate-400">
-                {t("availableLimit")}
-              </p>
-              <p className="mt-1 text-3xl font-bold">{displayLimit}</p>
-            </>
-          )}
-          <p className="mt-6 rounded-xl border border-amber-300/15 bg-amber-300/10 p-3 text-xs leading-5 text-amber-100/80">
-            {t("withdrawLimit")}
-            <br />
-            {t("withdrawLimitUsd")}
+      <div className="max-w-2xl panel">
+        {showRewardWithdrawalPrompt && (
+          <p className="mb-5 flex items-center gap-2 rounded-xl border border-emerald-300/25 bg-emerald-300/10 p-3 text-sm font-semibold text-emerald-50">
+            <Gift className="size-4 shrink-0 text-amber-300" />
+            {t("whatsappWithdrawalPrompt")}
           </p>
-          {activePackage && (
-            <p className="mt-3 rounded-xl border border-red-300/20 bg-red-300/10 p-3 text-xs leading-5 text-red-100">
-              {t("inviteUnlock")}
-            </p>
-          )}
-          {profile.withdrawalLimitPkr >= 50 && (
-            <p className="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-3 text-xs leading-5 text-emerald-100">
-              {t("withdrawalUnlocked")}
-            </p>
-          )}
-        </div>
-        <div className="panel">
+        )}
           <form
             onSubmit={event => {
               event.preventDefault();
@@ -1849,8 +1828,6 @@ function Withdrawal({ t, profile, activePackage, settings, onDone }: any) {
                 <input
                   className="field"
                   type="number"
-                  min={currency === "PKR" ? "50" : "0.18"}
-                  max={currency === "PKR" ? "3000" : "10.71"}
                   step="0.01"
                   value={amount}
                   onChange={e => setAmount(e.target.value)}
@@ -1883,7 +1860,6 @@ function Withdrawal({ t, profile, activePackage, settings, onDone }: any) {
               {t("submitWithdrawal")}
             </button>
           </form>
-        </div>
       </div>
       {showHistory && <div className="panel mt-5"><p className="eyebrow">{t("viewWithdrawalHistory")}</p>{list.data?.length ? <GroupedFinancialHistory rows={list.data} t={t} kind="withdrawal" /> : <Empty text={t("noTransactions")} />}</div>}
     </>
