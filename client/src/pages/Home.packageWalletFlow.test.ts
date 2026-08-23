@@ -6,10 +6,10 @@ describe("package-gated wallet and withdrawal flow", () => {
 
   it("shows a zero-balance package prompt and disables withdrawal entry until an active package exists", () => {
     expect(source).toContain('money(overview.data?.profile.balancePkr ?? 0)');
-    expect(source).toContain('disabled={!active}');
     expect(source).toContain('disabled={!canWithdraw}');
+    expect(source).toContain('hasPendingChannelReward');
     expect(source).toContain('t("noPackageBalanceMessage")');
-    expect(source).toContain('function Withdrawal({ t, showRewardWithdrawalPrompt, activePackage, onDone }: any)');
+    expect(source).toContain('function Withdrawal({ t, showRewardWithdrawalPrompt, activePackage, hasPendingChannelReward, rewardWithdrawalCompleted, onDone }: any)');
   });
 
   it("collects wallet type, holder name, wallet number, and amount in the withdrawal form", () => {

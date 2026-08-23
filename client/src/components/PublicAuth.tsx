@@ -10,6 +10,7 @@ import {
   friendlyServerError,
   validateEmail,
   validatePassword,
+  validatePasswordConfirmation,
 } from "@/lib/formValidation";
 import type { Language, TranslationKey } from "@/lib/i18n";
 import { FieldError } from "@/components/ui/field";
@@ -92,7 +93,6 @@ export function PublicAuth({
     onSuccess: () => complete(t("signedIn")),
     onError: error => {
       setSignInErrors(friendlyServerError(error, "password"));
-      toast.error(friendlyMessages.requestFailed);
       setChallengeAnswer("");
       signInCaptcha.refetch();
     },
@@ -101,7 +101,6 @@ export function PublicAuth({
     onSuccess: () => complete(t("accountCreated")),
     onError: error => {
       setSignUpErrors(friendlyServerError(error, "password"));
-      toast.error(friendlyMessages.requestFailed);
       setSignUpChallengeAnswer("");
       signUpCaptcha.refetch();
     },
@@ -129,8 +128,10 @@ export function PublicAuth({
     const errors: FormErrors = {
       email: validateEmail(signUp.email),
       password: validatePassword(signUp.password),
-      confirmPassword:
-        signUp.password === signUp.confirmPassword ? undefined : friendlyMessages.password,
+      confirmPassword: validatePasswordConfirmation(
+        signUp.password,
+        signUp.confirmPassword
+      ),
     };
     if (errors.email || errors.password || errors.confirmPassword)
       return setSignUpErrors(errors);
@@ -208,7 +209,7 @@ export function PublicAuth({
           </form> : <form className="mt-6 space-y-4" onSubmit={submitSignUp}>
             <p className="eyebrow">{t("signUp")}</p>
             <label><span className="field-label">{t("email")}</span><input required type="email" autoComplete="email" className="field" aria-invalid={Boolean(signUpErrors.email)} value={signUp.email} onChange={event => { setSignUp({ ...signUp, email: event.target.value }); setSignUpErrors(errors => ({ ...errors, email: undefined })); }} /><FieldError>{signUpErrors.email}</FieldError></label>
-            <label><span className="field-label">{t("username")}</span><input required minLength={3} autoComplete="username" className="field" value={signUp.username} onChange={event => setSignUp({ ...signUp, username: event.target.value })} /></label>
+            <label><span className="field-label">{t("username")}</span><input required minLength={3} autoComplete="username" className="field" aria-invalid={Boolean(signUpErrors.username)} value={signUp.username} onChange={event => { setSignUp({ ...signUp, username: event.target.value }); setSignUpErrors(errors => ({ ...errors, username: undefined })); }} /><FieldError>{signUpErrors.username}</FieldError></label>
             <label><span className="field-label">{t("password")}</span><input required minLength={8} type="password" autoComplete="new-password" className="field" aria-invalid={Boolean(signUpErrors.password)} value={signUp.password} onChange={event => { setSignUp({ ...signUp, password: event.target.value }); setSignUpErrors(errors => ({ ...errors, password: undefined })); }} /><FieldError>{signUpErrors.password}</FieldError></label>
             <label><span className="field-label">{t("confirmPassword")}</span><input required minLength={8} type="password" autoComplete="new-password" className="field" aria-invalid={Boolean(signUpErrors.confirmPassword)} value={signUp.confirmPassword} onChange={event => { setSignUp({ ...signUp, confirmPassword: event.target.value }); setSignUpErrors(errors => ({ ...errors, confirmPassword: undefined })); }} /><FieldError>{signUpErrors.confirmPassword}</FieldError></label>
             <label><span className="field-label">{t("referralInvite")}</span><input className="field" value={signUp.referralCode} onChange={event => setSignUp({ ...signUp, referralCode: event.target.value.toUpperCase() })} /></label>
@@ -273,7 +274,8 @@ export function GoogleOnboarding({
       toast.success(t("saved"));
       await onDone();
     } catch (error: any) {
-      toast.error(friendlyMessages.requestFailed);
+      const feedback = friendlyServerError(error, "password");
+      toast.error(Object.values(feedback)[0] ?? friendlyMessages.password);
     }
   };
   return (

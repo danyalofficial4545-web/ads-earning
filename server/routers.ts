@@ -54,6 +54,7 @@ import {
   validateDepositAmountPkr,
   validateWithdrawalRequest,
   WHATSAPP_JOIN_REWARD_PKR,
+  WITHDRAWAL_NO_PACKAGE_MESSAGE,
 } from "./rules";
 import {
   getDailyAdQuota,
@@ -183,6 +184,8 @@ async function buildOverview(userId: number) {
   )[0];
   if (!profile) fail("Profile was not found.", "NOT_FOUND");
   const activePackage = await getActivePackageForUser(userId);
+  const hasPendingChannelReward =
+    profile.whatsappBonusClaimed && !profile.whatsappRewardWithdrawn;
   const dayKey = getDayKey();
   const watchedRows = await db
     .select({ count: sql<number>`count(*)` })
@@ -221,7 +224,7 @@ async function buildOverview(userId: number) {
   const dailyQuota = activePackage
     ? getDailyAdQuota(activePackage.plan.pricePkr)
     : 0;
-  const visibleProfile = activePackage
+  const visibleProfile = activePackage || hasPendingChannelReward
     ? profile
     : { ...profile, balancePkr: 0, withdrawalLimitPkr: 0 };
   return {
@@ -292,11 +295,11 @@ export const appRouter = router({
           email: z
             .string()
             .trim()
-            .email("Please correct your Email / Gmail")
+            .email("You entered wrong Gmail/Email, please correct your Gmail")
             .max(320),
           password: z
             .string()
-            .min(8, "Please correct your Password")
+            .min(8, "Your password is incorrect/weak, please enter strong password")
             .max(128),
           referralCode: z.string().trim().max(32).optional(),
           challengeId: z.string().uuid(),
@@ -357,11 +360,11 @@ export const appRouter = router({
             .limit(1),
         ]);
         if (emailMatch[0])
-          fail("An account already exists for this email address.", "CONFLICT");
+          fail("This Email/Gmail is already registered", "CONFLICT");
         if (usernameMatch[0])
-          fail("That username is already in use.", "CONFLICT");
+          fail("This username already exists, please choose another", "CONFLICT");
         if (deviceMatch[0] || networkMatch[0])
-          fail("Only one account per device or network is allowed.", "FORBIDDEN");
+          fail("You cannot create multiple accounts on same device, only one account allowed per device", "FORBIDDEN");
         let referredByUserId: number | null = null;
         if (input.referralCode) {
           const referralValue = input.referralCode.trim();
@@ -424,9 +427,9 @@ export const appRouter = router({
           email: z
             .string()
             .trim()
-            .email("Please correct your Email / Gmail")
+            .email("You entered wrong Gmail/Email, please correct your Gmail")
             .max(320),
-          password: z.string().min(8, "Please correct your Password"),
+          password: z.string().min(8, "Your password is incorrect/weak, please enter strong password"),
           challengeId: z.string().uuid(),
           challengeAnswer: z.string().trim().min(1).max(32),
           deviceId: z.string().trim().min(16).max(256),
@@ -1050,7 +1053,7 @@ export const appRouter = router({
           transactionId: z
             .string()
             .trim()
-            .min(3, "Please enter correct Transaction ID")
+            .min(3, "You entered wrong deposit number / Transaction ID, please enter correct TID")
             .max(128),
           requestedPackageId: z.number().int().positive().optional(),
           proofData: z.string().min(24).max(2_000_000),
@@ -1164,6 +1167,9 @@ export const appRouter = router({
             "Easypaisa",
             "SadaPay",
             "NayaPay",
+            "Skrill",
+            "Payoneer",
+            "Binance",
             "Other",
           ]),
           accountName: z.string().trim().min(2).max(128),
@@ -1188,11 +1194,19 @@ export const appRouter = router({
           settings.exchangeRatePkrPerUsd
         );
         const activePackage = Boolean(await getActivePackageForUser(user.id));
+        const hasPendingChannelReward =
+          profile.whatsappBonusClaimed && !profile.whatsappRewardWithdrawn;
+        if (
+          !activePackage &&
+          hasPendingChannelReward &&
+          amountPkr !== WHATSAPP_JOIN_REWARD_PKR
+        )
+          fail(WITHDRAWAL_NO_PACKAGE_MESSAGE);
         const withdrawalError = validateWithdrawalRequest({
           balancePkr: profile.balancePkr,
           withdrawalLimitPkr: profile.withdrawalLimitPkr,
           amountPkr,
-          activePackage,
+          activePackage: activePackage || hasPendingChannelReward,
         });
         if (withdrawalError) fail(withdrawalError);
         const db = await getDb();
@@ -1809,12 +1823,16 @@ export const appRouter = router({
         const db = await getDb();
         if (!db)
           fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const paymentAccountValues = {
+          ...input,
+          currencyType: input.currency,
+        };
         if (input.id)
           await db
             .update(paymentAccounts)
-            .set(input)
+            .set(paymentAccountValues)
             .where(eq(paymentAccounts.id, input.id));
-        else await db.insert(paymentAccounts).values(input);
+        else await db.insert(paymentAccounts).values(paymentAccountValues);
         return { success: true };
       }),
     deletePaymentAccount: protectedProcedure

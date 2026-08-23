@@ -1,5 +1,6 @@
 export type FormField =
   | "email"
+  | "username"
   | "password"
   | "confirmPassword"
   | "amount"
@@ -17,15 +18,19 @@ export const friendlyMessages = {
   validAmount: "Please enter a valid amount",
   depositMinimum: "Please deposit minimum 100 PKR",
   depositMaximum: "Maximum deposit is 15000 PKR",
-  email: "Please correct your Email / Gmail",
-  password: "Please correct your Password",
-  transactionId: "Please enter correct Transaction ID",
+  email: "You entered wrong Gmail/Email, please correct your Gmail",
+  password: "Your password is incorrect/weak, please enter strong password",
+  passwordMismatch: "Your passwords do not match, please enter same password",
+  emailRegistered: "This Email/Gmail is already registered",
+  usernameExists: "This username already exists, please choose another",
+  singleAccount: "You cannot create multiple accounts on same device, only one account allowed per device",
+  transactionId: "You entered wrong deposit number / Transaction ID, please enter correct TID",
   walletType: "Please select a wallet type",
   paymentNumber: "Please enter correct JazzCash number linked with account",
   proofMismatch:
     "Account number in screenshot and entered number does not match, please check and upload correct proof",
   proofRequired: "Please upload payment proof screenshot",
-  requestFailed: "We could not process your request. Please check the highlighted fields and try again.",
+  requestFailed: "Please correct the highlighted field and try again.",
 } as const;
 
 export function normalizePhoneNumber(value: string) {
@@ -51,6 +56,10 @@ export function validateEmail(value: string) {
 
 export function validatePassword(value: string) {
   return value.trim().length >= 8 ? undefined : friendlyMessages.password;
+}
+
+export function validatePasswordConfirmation(password: string, confirmation: string) {
+  return password === confirmation ? undefined : friendlyMessages.passwordMismatch;
 }
 
 export function validateTransactionId(value: string) {
@@ -85,6 +94,15 @@ export function friendlyServerError(
 
   if (normalized.includes("email") && normalized.includes("password"))
     return { email: friendlyMessages.email, password: friendlyMessages.password };
+  if (
+    normalized.includes("email") &&
+    (normalized.includes("already exists") || normalized.includes("registered"))
+  )
+    return { email: friendlyMessages.emailRegistered };
+  if (normalized.includes("username") && (normalized.includes("already") || normalized.includes("in use")))
+    return { username: friendlyMessages.usernameExists };
+  if (normalized.includes("one account") || normalized.includes("device") || normalized.includes("network"))
+    return { username: friendlyMessages.singleAccount };
   if (normalized.includes("3000") || normalized.includes("withdrawal amount"))
     return { amount: friendlyMessages.withdrawalOverMaximum };
   if (normalized.includes("deposit") && normalized.includes("100"))

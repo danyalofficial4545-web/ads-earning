@@ -256,3 +256,12 @@
 - [x] Keep deposit and withdrawal requests visible to administrators until reviewed, then hide approved requests from active request views one hour after approval while preserving accounting history.
 - [x] Add a responsive fast username/email search to Administrator User List with existing account, balance, withdrawal, and package summaries.
 - [x] Add regression tests, validate the same-project production build, publish, and synchronize both GitHub branches.
+
+### Current request: Pasted master fix prompt
+
+- [x] Reconcile the current withdrawal, reward, package-balance, and WhatsApp prompt behavior with the attached exact user-facing messages while retaining backend safeguards.
+- [x] Replace any remaining generic authentication, deposit, and withdrawal feedback with the attached exact field-level messages and keep raw errors hidden.
+- [x] Correct PKR/USD payment-account separation and verify screenshot-proof account-number matching remains enforced before deposit submission.
+- [x] Retain structured withdrawal wallet details, approved-request visibility behavior, and Administrator User List search while correcting any attached-prompt gaps.
+- [x] Make the Ads/Tasks cards compact and responsive with two columns and up to eight cards visible in a normal desktop viewport.
+- [x] Add focused regression coverage, test password-mismatch behavior, validate builds, publish the same domain, and synchronize both GitHub branches.

@@ -1040,6 +1040,8 @@ function Workspace({
     rewardPromptJustEarned ||
       (profile.whatsappBonusClaimed && !profile.whatsappRewardWithdrawn)
   );
+  const hasPendingChannelReward =
+    profile.whatsappBonusClaimed && !profile.whatsappRewardWithdrawn;
   const joinWhatsApp = trpc.platform.joinWhatsApp.useMutation({
     onSuccess: data => {
       if (data.bonusPkr) {
@@ -1095,6 +1097,8 @@ function Workspace({
         t={t}
         showRewardWithdrawalPrompt={showRewardWithdrawalPrompt}
         activePackage={overview.activePackage}
+        hasPendingChannelReward={hasPendingChannelReward}
+        rewardWithdrawalCompleted={profile.whatsappRewardWithdrawn}
         onDone={invalidateCore}
       />
     ),
@@ -1154,6 +1158,8 @@ function PageHeading({
 
 function Dashboard({ t, overview, announcements, setPage }: any) {
   const active = overview.activePackage;
+  const canWithdraw = Boolean(active) ||
+    (overview.profile.whatsappBonusClaimed && !overview.profile.whatsappRewardWithdrawn);
   const dashboardCards: Record<DashboardMetricKey, ReactNode> = {
     balance: (
       <StatCard
@@ -1273,9 +1279,9 @@ function Dashboard({ t, overview, announcements, setPage }: any) {
               icon={ArrowUpRight}
               label={t("requestWithdrawal")}
               onClick={() => setPage("withdrawal")}
-              disabled={!active}
+              disabled={!canWithdraw}
             />
-            {!active && <p className="px-1 text-xs font-semibold text-amber-200">{t("noPackageBalanceMessage")}</p>}
+            {!canWithdraw && <p className="px-1 text-xs font-semibold text-amber-200">{t("noPackageBalanceMessage")}</p>}
             <QuickAction
               icon={Users}
               label={t("inviteFriends")}
@@ -1426,7 +1432,8 @@ function ProfileWallet({
   if (!wallet) return <LoadingScreen text={t("loading")} />;
   const [showPassword, setShowPassword] = useState(false);
   const referral = trpc.referral.get.useQuery();
-  const canWithdraw = Boolean(activePackage);
+  const canWithdraw = Boolean(activePackage) ||
+    (profile.whatsappBonusClaimed && !profile.whatsappRewardWithdrawn);
   return (
     <>
       <PageHeading
@@ -1640,7 +1647,6 @@ function Deposit({ t, settings, packages, onDone }: any) {
     },
     onError: error => {
       setErrors(friendlyServerError(error, "transactionId"));
-      toast.error(friendlyMessages.requestFailed);
     },
   });
   const list = trpc.deposit.list.useQuery();
@@ -1852,9 +1858,12 @@ function CurrencyTabs({ value, onChange, t }: any) {
   );
 }
 
-function Withdrawal({ t, showRewardWithdrawalPrompt, activePackage, onDone }: any) {
+function Withdrawal({ t, showRewardWithdrawalPrompt, activePackage, hasPendingChannelReward, rewardWithdrawalCompleted, onDone }: any) {
   const [currency, setCurrency] = useState<"PKR" | "USD">("PKR");
   const [walletType, setWalletType] = useState("");
+  const walletTypes = currency === "PKR"
+    ? ["JazzCash", "Easypaisa", "SadaPay", "NayaPay", "Other"]
+    : ["Skrill", "Payoneer", "Binance", "Other"];
   const [amount, setAmount] = useState("");
   const [accountName, setAccountName] = useState("");
   const [accountDetails, setAccountDetails] = useState("");
@@ -1872,7 +1881,6 @@ function Withdrawal({ t, showRewardWithdrawalPrompt, activePackage, onDone }: an
     },
     onError: error => {
       setErrors(friendlyServerError(error, "amount"));
-      toast.error(friendlyMessages.requestFailed);
     },
   });
   const list = trpc.withdrawal.list.useQuery();
@@ -1885,9 +1893,9 @@ function Withdrawal({ t, showRewardWithdrawalPrompt, activePackage, onDone }: an
         action={<button onClick={() => setShowHistory(!showHistory)} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-amber-300">{showHistory ? t("hideHistory") : t("viewWithdrawalHistory")}</button>}
       />
       <div className="max-w-2xl panel">
-        {!activePackage ? (
+        {!activePackage && !hasPendingChannelReward ? (
           <p className="rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm font-semibold text-amber-50">
-            {t("noPackageBalanceMessage")}
+            {rewardWithdrawalCompleted ? t("postRewardBalanceMessage") : t("noPackageBalanceMessage")}
           </p>
         ) : (
           <>
@@ -1924,7 +1932,11 @@ function Withdrawal({ t, showRewardWithdrawalPrompt, activePackage, onDone }: an
             }}
           >
             <div className="mb-4">
-              <CurrencyTabs value={currency} onChange={setCurrency} t={t} />
+              <CurrencyTabs value={currency} onChange={(nextCurrency: "PKR" | "USD") => {
+                setCurrency(nextCurrency);
+                setWalletType("");
+                setErrors(current => ({ ...current, walletType: undefined, accountDetails: undefined }));
+              }} t={t} />
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <label>
@@ -1940,7 +1952,7 @@ function Withdrawal({ t, showRewardWithdrawalPrompt, activePackage, onDone }: an
                   }}
                 >
                   <option value="">{t("selectWalletType")}</option>
-                  {["JazzCash", "Easypaisa", "SadaPay", "NayaPay", "Other"].map(type => <option key={type} value={type}>{type}</option>)}
+                  {walletTypes.map(type => <option key={type} value={type}>{type}</option>)}
                 </select>
                 <FieldError>{errors.walletType}</FieldError>
               </label>
