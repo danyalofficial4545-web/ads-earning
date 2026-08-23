@@ -1,0 +1,11 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+
+describe("new-user-only WhatsApp reward presentation", () => {
+  it("gates channel prompts, reward withdrawal access, and post-reward guidance by persisted eligibility", () => {
+    const source = readFileSync(new URL("./Home.tsx", import.meta.url), "utf8");
+    expect(source).toContain("profile.whatsappRewardEligible && !profile.whatsappJoined");
+    expect(source).toContain("profile.whatsappRewardEligible &&\n        profile.whatsappBonusClaimed");
+    expect(source).toContain("profile.whatsappRewardEligible && profile.whatsappRewardWithdrawn");
+  });
+});

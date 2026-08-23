@@ -16,7 +16,7 @@ describe("friendly member feedback", () => {
     expect(sonner).toContain('!text-white');
   });
 
-  it("connects member forms to safe inline validation and proof-number matching", () => {
+  it("connects member forms to safe inline validation and simple proof upload without scanning", () => {
     const auth = readFileSync(
       new URL("../components/PublicAuth.tsx", import.meta.url),
       "utf8"
@@ -28,8 +28,9 @@ describe("friendly member feedback", () => {
     expect(auth).not.toContain("toast.error(error.message)");
     expect(home).toContain("validateDepositAmount(amount, currency)");
     expect(home).toContain("validateWithdrawalAmount(amount, currency)");
-    expect(home).toContain("readPaymentProofNumbers(file)");
-    expect(home).toContain("proofContainsAccountNumber(proofNumbers, senderAccountNumber)");
+    expect(home).toContain("setProof(await toDataUrl(file))");
+    expect(home).not.toContain("readPaymentProofNumbers");
+    expect(home).not.toContain("proofContainsAccountNumber");
     expect(home).not.toContain("if (session.error) return <LoadingScreen text={session.error.message}");
   });
 

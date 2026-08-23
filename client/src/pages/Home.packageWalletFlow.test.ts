@@ -21,7 +21,8 @@ describe("package-gated wallet and withdrawal flow", () => {
   });
 
   it("derives reward guidance from persisted completion state while retaining immediate join guidance", () => {
-    expect(source).toContain('profile.whatsappBonusClaimed && !profile.whatsappRewardWithdrawn');
+    expect(source).toContain('profile.whatsappRewardEligible &&');
+    expect(source).toContain('!profile.whatsappRewardWithdrawn');
     expect(source).toContain('setRewardPromptJustEarned(true)');
   });
 });

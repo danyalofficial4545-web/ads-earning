@@ -265,3 +265,11 @@
 - [x] Retain structured withdrawal wallet details, approved-request visibility behavior, and Administrator User List search while correcting any attached-prompt gaps.
 - [x] Make the Ads/Tasks cards compact and responsive with two columns and up to eight cards visible in a normal desktop viewport.
 - [x] Add focused regression coverage, test password-mismatch behavior, validate builds, publish the same domain, and synchronize both GitHub branches.
+
+### Current request: Remove proof matching and limit channel reward to new users
+
+- [x] Remove all client-side deposit screenshot OCR, number-extraction, and entered-account-number matching while retaining normal screenshot upload and TID validation.
+- [x] Establish a persisted reward-eligibility boundary so only users registered after this correction can receive or see the 10 PKR WhatsApp channel flow.
+- [x] Suppress all 10 PKR reward and withdrawal prompts for legacy users, including users who previously joined, received, or withdrew the reward.
+- [x] Preserve the new-user reward journey through join, reward withdrawal, automatic prompt removal, and the requested post-reward package guidance.
+- [x] Add regression coverage, validate builds, publish the same domain, and synchronize both GitHub branches without other product changes.

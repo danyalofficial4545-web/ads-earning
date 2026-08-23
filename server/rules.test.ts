@@ -8,6 +8,7 @@ import {
   getAdClaimStatus,
   fromPkr,
   isDesignatedAdministrator,
+  isEligibleForNewUserWhatsappReward,
   isValidPakistanMobileNumber,
   matchesRequestTransaction,
   normalizePakistanMobileNumber,
@@ -32,6 +33,11 @@ describe("Package Earn Pro server rules", () => {
     expect(normalizePakistanMobileNumber("+92 300 1234567")).toBe("03001234567");
     expect(isValidPakistanMobileNumber("03001234567")).toBe(true);
     expect(isValidPakistanMobileNumber("0123456789")).toBe(false);
+  });
+
+  it("allows the channel reward only for profiles created after the correction boundary", () => {
+    expect(isEligibleForNewUserWhatsappReward(new Date("2026-08-23T15:59:59.999Z"))).toBe(false);
+    expect(isEligibleForNewUserWhatsappReward(new Date("2026-08-23T16:00:00.000Z"))).toBe(true);
   });
 
   it("credits referral value only to the withdrawal limit according to the configured percentage", () => {

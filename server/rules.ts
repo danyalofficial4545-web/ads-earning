@@ -5,6 +5,11 @@ export const WITHDRAWAL_NO_PACKAGE_MESSAGE =
 export const AD_TIMER_MESSAGE = "Please wait for the 10-second timer before claiming this reward.";
 export const AD_REWARD_PKR = 20;
 export const WHATSAPP_JOIN_REWARD_PKR = 10;
+export const WHATSAPP_REWARD_NEW_USER_STARTS_AT = new Date("2026-08-23T16:00:00.000Z");
+
+export function isEligibleForNewUserWhatsappReward(createdAt: Date) {
+  return createdAt.getTime() >= WHATSAPP_REWARD_NEW_USER_STARTS_AT.getTime();
+}
 export const WITHDRAWAL_MAX_PKR = 3000;
 export const WITHDRAWAL_MAX_MESSAGE =
   "Please enter 3000 or less amount";

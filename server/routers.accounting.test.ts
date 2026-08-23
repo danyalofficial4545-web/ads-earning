@@ -107,6 +107,7 @@ describe("router accounting flows", () => {
       balancePkr: 0,
       withdrawalLimitPkr: 0,
       whatsappJoined: false,
+      whatsappRewardEligible: true,
       whatsappBonusClaimed: false,
     });
     const updates: Array<{ table: unknown; values: any }> = [];
@@ -140,6 +141,58 @@ describe("router accounting flows", () => {
       amountPkr: 10,
       referenceType: "whatsapp_bonus",
     });
+  });
+
+  it("does not credit the channel reward to a legacy profile", async () => {
+    mocks.ensureProfile.mockResolvedValue({
+      ...memberProfile,
+      whatsappRewardEligible: false,
+      whatsappJoined: false,
+      whatsappBonusClaimed: false,
+    });
+    const update = vi.fn();
+    const insert = vi.fn();
+    mocks.getDb.mockResolvedValue({ update, insert });
+
+    const result = await appRouter.createCaller(context()).platform.joinWhatsApp();
+
+    expect(result).toMatchObject({ success: true, bonusPkr: 0, alreadyJoined: true });
+    expect(update).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("removes the pending new-user reward prompt when its exact reward withdrawal is submitted", async () => {
+    mocks.ensureProfile.mockResolvedValue({
+      ...memberProfile,
+      balancePkr: 10,
+      withdrawalLimitPkr: 10,
+      whatsappRewardEligible: true,
+      whatsappJoined: true,
+      whatsappBonusClaimed: true,
+      whatsappRewardWithdrawn: false,
+    });
+    mocks.getActivePackageForUser.mockResolvedValue(null);
+    const updates: Array<{ table: unknown; values: any }> = [];
+    const inserts: any[] = [];
+    mocks.getDb.mockResolvedValue({
+      update: vi.fn((table) => ({ set: (values: any) => ({ where: () => updates.push({ table, values }) }) })),
+      insert: vi.fn(() => ({ values: async (values: any) => { inserts.push(values); return [{ insertId: 57 }]; } })),
+    });
+
+    await appRouter.createCaller(context()).withdrawal.create({
+      currency: "PKR",
+      amount: 10,
+      walletType: "JazzCash",
+      accountName: "New Reward Member",
+      accountDetails: "03001234567",
+    });
+
+    expect(updates[0]?.values).toEqual({
+      balancePkr: 0,
+      withdrawalLimitPkr: 0,
+      whatsappRewardWithdrawn: true,
+    });
+    expect(inserts[0]).toMatchObject({ amountPkr: 10, status: "pending" });
   });
 
   it("credits referral commission only to the referrer withdrawal limit", async () => {

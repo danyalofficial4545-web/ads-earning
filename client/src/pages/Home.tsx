@@ -21,10 +21,6 @@ import {
   validateTransactionId,
   validateWithdrawalAmount,
 } from "@/lib/formValidation";
-import {
-  proofContainsAccountNumber,
-  readPaymentProofNumbers,
-} from "@/lib/proofOcr";
 import { FieldError } from "@/components/ui/field";
 import {
   dashboardMetricKeys,
@@ -1033,15 +1029,19 @@ function Workspace({
   if (overviewLoading || !overview)
     return <LoadingScreen text={t("loading")} />;
   const [showChannelPrompt, setShowChannelPrompt] = useState(
-    () => !profile.whatsappJoined
+    () => profile.whatsappRewardEligible && !profile.whatsappJoined
   );
   const [rewardPromptJustEarned, setRewardPromptJustEarned] = useState(false);
   const showRewardWithdrawalPrompt = Boolean(
     rewardPromptJustEarned ||
-      (profile.whatsappBonusClaimed && !profile.whatsappRewardWithdrawn)
+      (profile.whatsappRewardEligible &&
+        profile.whatsappBonusClaimed &&
+        !profile.whatsappRewardWithdrawn)
   );
   const hasPendingChannelReward =
-    profile.whatsappBonusClaimed && !profile.whatsappRewardWithdrawn;
+    profile.whatsappRewardEligible &&
+    profile.whatsappBonusClaimed &&
+    !profile.whatsappRewardWithdrawn;
   const joinWhatsApp = trpc.platform.joinWhatsApp.useMutation({
     onSuccess: data => {
       if (data.bonusPkr) {
@@ -1098,7 +1098,9 @@ function Workspace({
         showRewardWithdrawalPrompt={showRewardWithdrawalPrompt}
         activePackage={overview.activePackage}
         hasPendingChannelReward={hasPendingChannelReward}
-        rewardWithdrawalCompleted={profile.whatsappRewardWithdrawn}
+        rewardWithdrawalCompleted={
+          profile.whatsappRewardEligible && profile.whatsappRewardWithdrawn
+        }
         onDone={invalidateCore}
       />
     ),
@@ -1159,7 +1161,9 @@ function PageHeading({
 function Dashboard({ t, overview, announcements, setPage }: any) {
   const active = overview.activePackage;
   const canWithdraw = Boolean(active) ||
-    (overview.profile.whatsappBonusClaimed && !overview.profile.whatsappRewardWithdrawn);
+    (overview.profile.whatsappRewardEligible &&
+      overview.profile.whatsappBonusClaimed &&
+      !overview.profile.whatsappRewardWithdrawn);
   const dashboardCards: Record<DashboardMetricKey, ReactNode> = {
     balance: (
       <StatCard
@@ -1433,7 +1437,9 @@ function ProfileWallet({
   const [showPassword, setShowPassword] = useState(false);
   const referral = trpc.referral.get.useQuery();
   const canWithdraw = Boolean(activePackage) ||
-    (profile.whatsappBonusClaimed && !profile.whatsappRewardWithdrawn);
+    (profile.whatsappRewardEligible &&
+      profile.whatsappBonusClaimed &&
+      !profile.whatsappRewardWithdrawn);
   return (
     <>
       <PageHeading
@@ -1626,8 +1632,6 @@ function Deposit({ t, settings, packages, onDone }: any) {
   const [transactionId, setTransactionId] = useState("");
   const [requestedPackageId, setRequestedPackageId] = useState("");
   const [proof, setProof] = useState("");
-  const [proofNumbers, setProofNumbers] = useState<string[]>([]);
-  const [proofScanning, setProofScanning] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [showHistory, setShowHistory] = useState(false);
   const utils = trpc.useUtils();
@@ -1694,12 +1698,7 @@ function Deposit({ t, settings, packages, onDone }: any) {
                 senderAccountNumber: isValidPakistanMobileNumber(senderAccountNumber)
                   ? undefined
                   : friendlyMessages.paymentNumber,
-                proof: !proof
-                  ? friendlyMessages.proofRequired
-                  : proofScanning ||
-                      !proofContainsAccountNumber(proofNumbers, senderAccountNumber)
-                    ? friendlyMessages.proofMismatch
-                    : undefined,
+                proof: !proof ? friendlyMessages.proofRequired : undefined,
               };
               if (
                 nextErrors.amount ||
@@ -1769,7 +1768,7 @@ function Deposit({ t, settings, packages, onDone }: any) {
               </label>
               <label>
                 <span className="field-label">{t("senderAccountNumber")}</span>
-                <input required className="field" inputMode="numeric" aria-invalid={Boolean(errors.senderAccountNumber)} value={senderAccountNumber} onChange={e => { setSenderAccountNumber(e.target.value); setErrors(current => ({ ...current, senderAccountNumber: undefined, proof: undefined })); }} />
+                <input required className="field" inputMode="numeric" aria-invalid={Boolean(errors.senderAccountNumber)} value={senderAccountNumber} onChange={e => { setSenderAccountNumber(e.target.value); setErrors(current => ({ ...current, senderAccountNumber: undefined })); }} />
                 <FieldError>{errors.senderAccountNumber}</FieldError>
               </label>
               <label>
@@ -1794,34 +1793,19 @@ function Deposit({ t, settings, packages, onDone }: any) {
                 onChange={async e => {
                   const file = e.target.files?.[0];
                   if (!file) return;
-                  setProofScanning(true);
                   setErrors(current => ({ ...current, proof: undefined }));
                   try {
-                    const [proofData, numbers] = await Promise.all([
-                      toDataUrl(file),
-                      readPaymentProofNumbers(file),
-                    ]);
-                    setProof(proofData);
-                    setProofNumbers(numbers);
-                    if (!proofContainsAccountNumber(numbers, senderAccountNumber))
-                      setErrors(current => ({
-                        ...current,
-                        proof: friendlyMessages.proofMismatch,
-                      }));
+                    setProof(await toDataUrl(file));
                   } catch {
                     setProof("");
-                    setProofNumbers([]);
                     setErrors(current => ({
                       ...current,
-                      proof: friendlyMessages.proofMismatch,
+                      proof: friendlyMessages.proofRequired,
                     }));
-                  } finally {
-                    setProofScanning(false);
                   }
                 }}
               />
               <FieldError>{errors.proof}</FieldError>
-              {proofScanning && <p className="mt-2 text-xs font-semibold text-slate-300">Checking payment proof…</p>}
             </label>
             <button
               disabled={create.isPending}

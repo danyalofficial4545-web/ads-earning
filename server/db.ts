@@ -16,6 +16,7 @@ import {
   DESIGNATED_ADMIN_EMAIL,
   DESIGNATED_ADMIN_USERNAME,
   isDesignatedAdministrator,
+  isEligibleForNewUserWhatsappReward,
 } from "./rules";
 import { getPakistanDayKey } from "../shared/adRules";
 
@@ -230,6 +231,7 @@ export async function ensureProfile(user: User): Promise<Profile> {
     referralCode,
     balancePkr: 0,
     withdrawalLimitPkr: 0,
+    whatsappRewardEligible: isEligibleForNewUserWhatsappReward(user.createdAt),
   });
   const created = await db
     .select()

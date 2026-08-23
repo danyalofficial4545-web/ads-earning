@@ -27,8 +27,6 @@ export const friendlyMessages = {
   transactionId: "You entered wrong deposit number / Transaction ID, please enter correct TID",
   walletType: "Please select a wallet type",
   paymentNumber: "Please enter correct JazzCash number linked with account",
-  proofMismatch:
-    "Account number in screenshot and entered number does not match, please check and upload correct proof",
   proofRequired: "Please upload payment proof screenshot",
   requestFailed: "Please correct the highlighted field and try again.",
 } as const;
@@ -38,10 +36,6 @@ export function normalizePhoneNumber(value: string) {
   if (digits.startsWith("92") && digits.length === 12)
     return `0${digits.slice(2)}`;
   return digits;
-}
-
-export function normalizeProofNumber(value: string) {
-  return value.replace(/\D/g, "");
 }
 
 export function isValidPakistanMobileNumber(value: string) {

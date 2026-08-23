@@ -41,6 +41,9 @@ export const profiles = mysqlTable("profiles", {
   preferredCurrency: mysqlEnum("preferredCurrency", ["PKR", "USD"]).notNull().default("PKR"),
   isBlocked: boolean("isBlocked").notNull().default(false),
   whatsappJoined: boolean("whatsappJoined").notNull().default(false),
+  whatsappRewardEligible: boolean("whatsappRewardEligible")
+    .notNull()
+    .default(false),
   whatsappBonusClaimed: boolean("whatsappBonusClaimed").notNull().default(false),
   whatsappRewardWithdrawn: boolean("whatsappRewardWithdrawn")
     .notNull()

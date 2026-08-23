@@ -1,0 +1,1 @@
+ALTER TABLE `profiles` ADD `whatsappRewardEligible` boolean DEFAULT false NOT NULL;

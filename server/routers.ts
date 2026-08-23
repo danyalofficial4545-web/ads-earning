@@ -185,7 +185,9 @@ async function buildOverview(userId: number) {
   if (!profile) fail("Profile was not found.", "NOT_FOUND");
   const activePackage = await getActivePackageForUser(userId);
   const hasPendingChannelReward =
-    profile.whatsappBonusClaimed && !profile.whatsappRewardWithdrawn;
+    profile.whatsappRewardEligible &&
+    profile.whatsappBonusClaimed &&
+    !profile.whatsappRewardWithdrawn;
   const dayKey = getDayKey();
   const watchedRows = await db
     .select({ count: sql<number>`count(*)` })
@@ -406,6 +408,7 @@ export const appRouter = router({
           balancePkr: 0,
           withdrawalLimitPkr: 0,
           preferredCurrency: "PKR",
+          whatsappRewardEligible: true,
         });
         const user = (
           await db.select().from(users).where(eq(users.id, userId)).limit(1)
@@ -640,6 +643,8 @@ export const appRouter = router({
       const db = await getDb();
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      if (!profile.whatsappRewardEligible)
+        return { success: true, bonusPkr: 0, alreadyJoined: true } as const;
       if (profile.whatsappJoined || profile.whatsappBonusClaimed)
         return { success: true, bonusPkr: 0, alreadyJoined: true } as const;
       await db
@@ -1195,7 +1200,9 @@ export const appRouter = router({
         );
         const activePackage = Boolean(await getActivePackageForUser(user.id));
         const hasPendingChannelReward =
-          profile.whatsappBonusClaimed && !profile.whatsappRewardWithdrawn;
+          profile.whatsappRewardEligible &&
+          profile.whatsappBonusClaimed &&
+          !profile.whatsappRewardWithdrawn;
         if (
           !activePackage &&
           hasPendingChannelReward &&
@@ -1223,11 +1230,16 @@ export const appRouter = router({
         });
         const withdrawalId = Number(result[0].insertId);
         const reserved = applyWithdrawalRequest(profile.balancePkr, amountPkr);
+        const completedChannelRewardWithdrawal =
+          hasPendingChannelReward && amountPkr === WHATSAPP_JOIN_REWARD_PKR;
         await db
           .update(profiles)
           .set({
             balancePkr: reserved.balancePkr,
             withdrawalLimitPkr: reserved.withdrawalLimitPkr,
+            ...(completedChannelRewardWithdrawal
+              ? { whatsappRewardWithdrawn: true }
+              : {}),
           })
           .where(eq(profiles.userId, user.id));
         await db.insert(transactions).values({
@@ -1561,6 +1573,7 @@ export const appRouter = router({
           .where(eq(withdrawals.id, request.id));
         if (
           input.approved &&
+          profile.whatsappRewardEligible &&
           profile.whatsappBonusClaimed &&
           !profile.whatsappRewardWithdrawn &&
           request.amountPkr >= WHATSAPP_JOIN_REWARD_PKR
