@@ -273,3 +273,10 @@
 - [x] Suppress all 10 PKR reward and withdrawal prompts for legacy users, including users who previously joined, received, or withdrew the reward.
 - [x] Preserve the new-user reward journey through join, reward withdrawal, automatic prompt removal, and the requested post-reward package guidance.
 - [x] Add regression coverage, validate builds, publish the same domain, and synchronize both GitHub branches without other product changes.
+
+### Current request: Specific withdrawal error reasons
+
+- [x] Define first-failure priority and exact friendly messages for zero withdrawal limit, post-reward no-package access, excessive amount, invalid/too-low amount, missing wallet type, missing wallet name, and invalid wallet number.
+- [x] Show the first specific withdrawal failure in the existing large black top-center notification and beneath the matching form field in red.
+- [x] Preserve protected server-side validation and return the same specific reason without generic withdrawal-failed errors.
+- [x] Add regression coverage for every requested failure case, validate builds, publish the same domain, and synchronize both GitHub branches.

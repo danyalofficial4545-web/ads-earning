@@ -9,7 +9,13 @@ describe("package-gated wallet and withdrawal flow", () => {
     expect(source).toContain('disabled={!canWithdraw}');
     expect(source).toContain('hasPendingChannelReward');
     expect(source).toContain('t("noPackageBalanceMessage")');
-    expect(source).toContain('function Withdrawal({ t, showRewardWithdrawalPrompt, activePackage, hasPendingChannelReward, rewardWithdrawalCompleted, onDone }: any)');
+    expect(source).toContain('function Withdrawal({ t, profile, showRewardWithdrawalPrompt, activePackage, hasPendingChannelReward, rewardWithdrawalCompleted, onDone }: any)');
+    expect(source).toContain('!activePackage && !hasPendingChannelReward && !rewardWithdrawalCompleted');
+  });
+
+  it("keeps the completed free-reward no-package case in the form so its exact reason can appear inline", () => {
+    expect(source).toContain('freeWithdrawalCompleted: Boolean(rewardWithdrawalCompleted)');
+    expect(source).toContain('toast.error(failure.message)');
   });
 
   it("collects wallet type, holder name, wallet number, and amount in the withdrawal form", () => {

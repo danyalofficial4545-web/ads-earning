@@ -5,6 +5,7 @@ export type FormField =
   | "confirmPassword"
   | "amount"
   | "walletType"
+  | "accountName"
   | "transactionId"
   | "accountDetails"
   | "senderAccountNumber"
@@ -14,8 +15,9 @@ export type FormField =
 export type FormErrors = Partial<Record<FormField, string>>;
 
 export const friendlyMessages = {
-  withdrawalOverMaximum: "Please enter 3000 or less amount",
-  validAmount: "Please enter a valid amount",
+  withdrawalMinimum: "Please enter a valid withdrawal amount, minimum withdrawal is 50 PKR",
+  withdrawalZeroLimit: "Your withdrawal limit is zero, you cannot withdraw. Please purchase a package or invite friends to increase your limit",
+  withdrawalRewardUsed: "You have already taken free withdrawal. Please purchase a package to continue earning and withdrawing. Your balance is zero, please buy a package",
   depositMinimum: "Please deposit minimum 100 PKR",
   depositMaximum: "Maximum deposit is 15000 PKR",
   email: "You entered wrong Gmail/Email, please correct your Gmail",
@@ -25,8 +27,9 @@ export const friendlyMessages = {
   usernameExists: "This username already exists, please choose another",
   singleAccount: "You cannot create multiple accounts on same device, only one account allowed per device",
   transactionId: "You entered wrong deposit number / Transaction ID, please enter correct TID",
-  walletType: "Please select a wallet type",
-  paymentNumber: "Please enter correct JazzCash number linked with account",
+  walletType: "Please select your wallet type first - JazzCash, Easypaisa, SadaPay",
+  walletName: "Please enter account holder name (wallet name)",
+  paymentNumber: "Your wallet number is wrong/incomplete, please enter correct JazzCash/Easypaisa number",
   proofRequired: "Please upload payment proof screenshot",
   requestFailed: "Please correct the highlighted field and try again.",
 } as const;
@@ -65,8 +68,63 @@ export function validateTransactionId(value: string) {
 export function validateWithdrawalAmount(value: string, currency: "PKR" | "USD") {
   const amount = Number(value);
   const amountPkr = currency === "USD" ? Math.round(amount * 280) : amount;
-  if (!Number.isFinite(amount) || amount <= 0) return friendlyMessages.validAmount;
-  if (amountPkr > 3000) return friendlyMessages.withdrawalOverMaximum;
+  if (!Number.isFinite(amount) || amountPkr < 50)
+    return friendlyMessages.withdrawalMinimum;
+  return undefined;
+}
+
+export function withdrawalLimitMessage(limitPkr: number) {
+  const allowed = Math.max(0, Math.min(limitPkr, 3000));
+  return `You entered amount more than your limit. Maximum withdrawal is 3000 PKR and your limit is PKR ${limitPkr}. Please enter PKR ${allowed} or less`;
+}
+
+export type WithdrawalFailure = {
+  field: FormField;
+  message: string;
+};
+
+export function firstWithdrawalFailure(input: {
+  amount: string;
+  currency: "PKR" | "USD";
+  withdrawalLimitPkr: number;
+  activePackage: boolean;
+  pendingChannelReward: boolean;
+  freeWithdrawalCompleted: boolean;
+  walletType: string;
+  accountName: string;
+  accountDetails: string;
+}): WithdrawalFailure | undefined {
+  if (input.freeWithdrawalCompleted && !input.activePackage)
+    return { field: "amount", message: friendlyMessages.withdrawalRewardUsed };
+  if (input.withdrawalLimitPkr <= 0)
+    return { field: "amount", message: friendlyMessages.withdrawalZeroLimit };
+
+  const enteredAmount = Number(input.amount);
+  const amountPkr =
+    input.currency === "USD" ? Math.round(enteredAmount * 280) : enteredAmount;
+  if (
+    Number.isFinite(enteredAmount) &&
+    amountPkr >= 50 &&
+    (amountPkr > 3000 || amountPkr > input.withdrawalLimitPkr)
+  )
+    return {
+      field: "amount",
+      message: withdrawalLimitMessage(input.withdrawalLimitPkr),
+    };
+  if (
+    (!Number.isFinite(enteredAmount) || amountPkr < 50) &&
+    !(input.pendingChannelReward && amountPkr === 10)
+  )
+    return { field: "amount", message: friendlyMessages.withdrawalMinimum };
+  if (!input.walletType)
+    return { field: "walletType", message: friendlyMessages.walletType };
+  if (!input.accountName.trim())
+    return { field: "accountName", message: friendlyMessages.walletName };
+  if (
+    !input.accountDetails.trim() ||
+    (input.currency === "PKR" && !isValidPakistanMobileNumber(input.accountDetails))
+  )
+    return { field: "accountDetails", message: friendlyMessages.paymentNumber };
   return undefined;
 }
 
@@ -97,8 +155,14 @@ export function friendlyServerError(
     return { username: friendlyMessages.usernameExists };
   if (normalized.includes("one account") || normalized.includes("device") || normalized.includes("network"))
     return { username: friendlyMessages.singleAccount };
-  if (normalized.includes("3000") || normalized.includes("withdrawal amount"))
-    return { amount: friendlyMessages.withdrawalOverMaximum };
+  if (normalized.includes("withdrawal limit is zero"))
+    return { amount: friendlyMessages.withdrawalZeroLimit };
+  if (normalized.includes("already taken free withdrawal"))
+    return { amount: friendlyMessages.withdrawalRewardUsed };
+  if (normalized.includes("minimum withdrawal") || normalized.includes("valid withdrawal amount"))
+    return { amount: friendlyMessages.withdrawalMinimum };
+  if (normalized.includes("maximum withdrawal") || normalized.includes("more than your limit"))
+    return { amount: message || friendlyMessages.requestFailed };
   if (normalized.includes("deposit") && normalized.includes("100"))
     return { amount: friendlyMessages.depositMinimum };
   if (normalized.includes("deposit") && normalized.includes("15000"))
@@ -110,7 +174,15 @@ export function friendlyServerError(
     return { transactionId: friendlyMessages.transactionId };
   if (normalized.includes("wallet type"))
     return { walletType: friendlyMessages.walletType };
-  if (normalized.includes("account number") || normalized.includes("account details"))
-    return { [preferredField]: friendlyMessages.paymentNumber };
+  if (normalized.includes("account holder") || normalized.includes("wallet name"))
+    return { accountName: friendlyMessages.walletName };
+  if (
+    normalized.includes("wallet number") ||
+    normalized.includes("jazzcash") ||
+    normalized.includes("easypaisa") ||
+    normalized.includes("account number") ||
+    normalized.includes("account details")
+  )
+    return { accountDetails: friendlyMessages.paymentNumber };
   return { [preferredField]: friendlyMessages.requestFailed };
 }

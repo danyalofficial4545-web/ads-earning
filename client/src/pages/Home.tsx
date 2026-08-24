@@ -16,10 +16,10 @@ import {
   type FormErrors,
   friendlyMessages,
   friendlyServerError,
+  firstWithdrawalFailure,
   isValidPakistanMobileNumber,
   validateDepositAmount,
   validateTransactionId,
-  validateWithdrawalAmount,
 } from "@/lib/formValidation";
 import { FieldError } from "@/components/ui/field";
 import {
@@ -1095,6 +1095,7 @@ function Workspace({
     withdrawal: (
       <Withdrawal
         t={t}
+        profile={profile}
         showRewardWithdrawalPrompt={showRewardWithdrawalPrompt}
         activePackage={overview.activePackage}
         hasPendingChannelReward={hasPendingChannelReward}
@@ -1842,7 +1843,7 @@ function CurrencyTabs({ value, onChange, t }: any) {
   );
 }
 
-function Withdrawal({ t, showRewardWithdrawalPrompt, activePackage, hasPendingChannelReward, rewardWithdrawalCompleted, onDone }: any) {
+function Withdrawal({ t, profile, showRewardWithdrawalPrompt, activePackage, hasPendingChannelReward, rewardWithdrawalCompleted, onDone }: any) {
   const [currency, setCurrency] = useState<"PKR" | "USD">("PKR");
   const [walletType, setWalletType] = useState("");
   const walletTypes = currency === "PKR"
@@ -1864,7 +1865,10 @@ function Withdrawal({ t, showRewardWithdrawalPrompt, activePackage, hasPendingCh
       onDone();
     },
     onError: error => {
-      setErrors(friendlyServerError(error, "amount"));
+      const serverErrors = friendlyServerError(error, "amount");
+      const firstMessage = Object.values(serverErrors)[0] ?? friendlyMessages.requestFailed;
+      setErrors(serverErrors);
+      toast.error(firstMessage);
     },
   });
   const list = trpc.withdrawal.list.useQuery();
@@ -1877,7 +1881,7 @@ function Withdrawal({ t, showRewardWithdrawalPrompt, activePackage, hasPendingCh
         action={<button onClick={() => setShowHistory(!showHistory)} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-amber-300">{showHistory ? t("hideHistory") : t("viewWithdrawalHistory")}</button>}
       />
       <div className="max-w-2xl panel">
-        {!activePackage && !hasPendingChannelReward ? (
+        {!activePackage && !hasPendingChannelReward && !rewardWithdrawalCompleted ? (
           <p className="rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm font-semibold text-amber-50">
             {rewardWithdrawalCompleted ? t("postRewardBalanceMessage") : t("noPackageBalanceMessage")}
           </p>
@@ -1892,16 +1896,20 @@ function Withdrawal({ t, showRewardWithdrawalPrompt, activePackage, hasPendingCh
           <form
             onSubmit={event => {
               event.preventDefault();
-              const nextErrors: FormErrors = {
-                walletType: walletType ? undefined : friendlyMessages.walletType,
-                amount: validateWithdrawalAmount(amount, currency),
-                accountDetails:
-                  currency === "PKR" && !isValidPakistanMobileNumber(accountDetails)
-                    ? friendlyMessages.paymentNumber
-                    : undefined,
-              };
-              if (nextErrors.walletType || nextErrors.amount || nextErrors.accountDetails) {
-                setErrors(nextErrors);
+              const failure = firstWithdrawalFailure({
+                amount,
+                currency,
+                withdrawalLimitPkr: profile.withdrawalLimitPkr,
+                activePackage: Boolean(activePackage),
+                pendingChannelReward: Boolean(hasPendingChannelReward),
+                freeWithdrawalCompleted: Boolean(rewardWithdrawalCompleted),
+                walletType,
+                accountName,
+                accountDetails,
+              });
+              if (failure) {
+                setErrors({ [failure.field]: failure.message });
+                toast.error(failure.message);
                 return;
               }
               setErrors({});
@@ -1926,7 +1934,6 @@ function Withdrawal({ t, showRewardWithdrawalPrompt, activePackage, hasPendingCh
               <label>
                 <span className="field-label">{t("walletType")}</span>
                 <select
-                  required
                   className="field"
                   value={walletType}
                   aria-invalid={Boolean(errors.walletType)}
@@ -1943,16 +1950,19 @@ function Withdrawal({ t, showRewardWithdrawalPrompt, activePackage, hasPendingCh
               <label>
                 <span className="field-label">{t("walletAccountName")}</span>
                 <input
-                  required
                   className="field"
                   value={accountName}
-                  onChange={e => setAccountName(e.target.value)}
+                  aria-invalid={Boolean(errors.accountName)}
+                  onChange={e => {
+                    setAccountName(e.target.value);
+                    setErrors(current => ({ ...current, accountName: undefined }));
+                  }}
                 />
+                <FieldError>{errors.accountName}</FieldError>
               </label>
               <label>
                 <span className="field-label">{t("walletNumber")}</span>
                 <input
-                  required
                   className="field"
                   value={accountDetails}
                   inputMode={currency === "PKR" ? "numeric" : undefined}

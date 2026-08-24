@@ -11,9 +11,22 @@ export function isEligibleForNewUserWhatsappReward(createdAt: Date) {
   return createdAt.getTime() >= WHATSAPP_REWARD_NEW_USER_STARTS_AT.getTime();
 }
 export const WITHDRAWAL_MAX_PKR = 3000;
-export const WITHDRAWAL_MAX_MESSAGE =
-  "Please enter 3000 or less amount";
-export const WITHDRAWAL_INVALID_AMOUNT_MESSAGE = "Please enter a valid amount";
+export const WITHDRAWAL_ZERO_LIMIT_MESSAGE =
+  "Your withdrawal limit is zero, you cannot withdraw. Please purchase a package or invite friends to increase your limit";
+export const WITHDRAWAL_FREE_REWARD_USED_MESSAGE =
+  "You have already taken free withdrawal. Please purchase a package to continue earning and withdrawing. Your balance is zero, please buy a package";
+export const WITHDRAWAL_MINIMUM_MESSAGE =
+  "Please enter a valid withdrawal amount, minimum withdrawal is 50 PKR";
+export const WITHDRAWAL_WALLET_TYPE_MESSAGE =
+  "Please select your wallet type first - JazzCash, Easypaisa, SadaPay";
+export const WITHDRAWAL_ACCOUNT_NAME_MESSAGE =
+  "Please enter account holder name (wallet name)";
+export const WITHDRAWAL_WALLET_NUMBER_MESSAGE =
+  "Your wallet number is wrong/incomplete, please enter correct JazzCash/Easypaisa number";
+export function withdrawalLimitMessage(limitPkr: number) {
+  const allowed = Math.max(0, Math.min(limitPkr, WITHDRAWAL_MAX_PKR));
+  return `You entered amount more than your limit. Maximum withdrawal is 3000 PKR and your limit is PKR ${limitPkr}. Please enter PKR ${allowed} or less`;
+}
 export const DESIGNATED_ADMIN_EMAIL = "muhammaddanyal4545@gmail.com";
 export const DESIGNATED_ADMIN_USERNAME = "danyal955163";
 
@@ -54,15 +67,23 @@ export function validateWithdrawalRequest(input: {
   withdrawalLimitPkr: number;
   amountPkr: number;
   activePackage?: boolean;
+  freeWithdrawalCompleted?: boolean;
+  allowChannelRewardAmount?: boolean;
 }) {
-  if (input.amountPkr <= 0) return WITHDRAWAL_INVALID_AMOUNT_MESSAGE;
-  if (input.amountPkr > WITHDRAWAL_MAX_PKR) return WITHDRAWAL_MAX_MESSAGE;
+  if (input.freeWithdrawalCompleted && input.activePackage === false)
+    return WITHDRAWAL_FREE_REWARD_USED_MESSAGE;
   if (input.withdrawalLimitPkr <= 0)
-    return input.activePackage === false
-      ? WITHDRAWAL_NO_PACKAGE_MESSAGE
-      : WITHDRAWAL_LOCK_MESSAGE;
-  if (input.amountPkr > input.withdrawalLimitPkr)
-    return `Your current withdrawal limit is PKR ${input.withdrawalLimitPkr}. Invite friends to unlock more withdrawal limit.`;
+    return WITHDRAWAL_ZERO_LIMIT_MESSAGE;
+  if (
+    (!Number.isFinite(input.amountPkr) || input.amountPkr < WITHDRAWAL_MIN_PKR) &&
+    !(input.allowChannelRewardAmount && input.amountPkr === WHATSAPP_JOIN_REWARD_PKR)
+  )
+    return WITHDRAWAL_MINIMUM_MESSAGE;
+  if (
+    input.amountPkr > WITHDRAWAL_MAX_PKR ||
+    input.amountPkr > input.withdrawalLimitPkr
+  )
+    return withdrawalLimitMessage(input.withdrawalLimitPkr);
   if (input.amountPkr > input.balancePkr)
     return "Your wallet balance is insufficient for this withdrawal request.";
   return null;
@@ -109,7 +130,7 @@ export function matchesRequestTransaction(
 
 export const DEPOSIT_MIN_PKR = 100;
 export const DEPOSIT_MAX_PKR = 15000;
-export const WITHDRAWAL_MIN_PKR = 0;
+export const WITHDRAWAL_MIN_PKR = 50;
 
 export function normalizePakistanMobileNumber(value: string) {
   const digits = value.replace(/\D/g, "");

@@ -27,7 +27,7 @@ describe("friendly member feedback", () => {
     expect(auth).toContain("validatePassword(signUp.password)");
     expect(auth).not.toContain("toast.error(error.message)");
     expect(home).toContain("validateDepositAmount(amount, currency)");
-    expect(home).toContain("validateWithdrawalAmount(amount, currency)");
+    expect(home).toContain("firstWithdrawalFailure({");
     expect(home).toContain("setProof(await toDataUrl(file))");
     expect(home).not.toContain("readPaymentProofNumbers");
     expect(home).not.toContain("proofContainsAccountNumber");

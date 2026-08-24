@@ -54,7 +54,12 @@ import {
   validateDepositAmountPkr,
   validateWithdrawalRequest,
   WHATSAPP_JOIN_REWARD_PKR,
+  WITHDRAWAL_ACCOUNT_NAME_MESSAGE,
+  WITHDRAWAL_MINIMUM_MESSAGE,
+  WITHDRAWAL_MIN_PKR,
   WITHDRAWAL_NO_PACKAGE_MESSAGE,
+  WITHDRAWAL_WALLET_NUMBER_MESSAGE,
+  WITHDRAWAL_WALLET_TYPE_MESSAGE,
 } from "./rules";
 import {
   getDailyAdQuota,
@@ -1166,32 +1171,14 @@ export const appRouter = router({
       .input(
         z.object({
           currency: z.enum(["PKR", "USD"]),
-          amount: z.number().positive("Please enter a valid amount"),
-          walletType: z.enum([
-            "JazzCash",
-            "Easypaisa",
-            "SadaPay",
-            "NayaPay",
-            "Skrill",
-            "Payoneer",
-            "Binance",
-            "Other",
-          ]),
-          accountName: z.string().trim().min(2).max(128),
-          accountDetails: z
-            .string()
-            .trim()
-            .min(4, "Please enter correct JazzCash number linked with account")
-            .max(512),
+          amount: z.number(),
+          walletType: z.string().trim().max(64),
+          accountName: z.string().trim().max(128),
+          accountDetails: z.string().trim().max(512),
         })
       )
       .mutation(async ({ ctx, input }) => {
         const { user, profile } = await getActor(ctx);
-        if (
-          input.currency === "PKR" &&
-          !isValidPakistanMobileNumber(input.accountDetails)
-        )
-          fail("Please enter correct JazzCash number linked with account");
         const settings = await getSettings();
         const amountPkr = toPkr(
           input.amount,
@@ -1214,8 +1201,22 @@ export const appRouter = router({
           withdrawalLimitPkr: profile.withdrawalLimitPkr,
           amountPkr,
           activePackage: activePackage || hasPendingChannelReward,
+          freeWithdrawalCompleted:
+            profile.whatsappRewardEligible && profile.whatsappRewardWithdrawn,
+          allowChannelRewardAmount: hasPendingChannelReward,
         });
         if (withdrawalError) fail(withdrawalError);
+        if (
+          !["JazzCash", "Easypaisa", "SadaPay", "NayaPay", "Skrill", "Payoneer", "Binance", "Other"].includes(input.walletType)
+        )
+          fail(WITHDRAWAL_WALLET_TYPE_MESSAGE);
+        if (!input.accountName) fail(WITHDRAWAL_ACCOUNT_NAME_MESSAGE);
+        if (!input.accountDetails) fail(WITHDRAWAL_WALLET_NUMBER_MESSAGE);
+        if (
+          input.currency === "PKR" &&
+          !isValidPakistanMobileNumber(input.accountDetails)
+        )
+          fail(WITHDRAWAL_WALLET_NUMBER_MESSAGE);
         const db = await getDb();
         if (!db)
           fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");

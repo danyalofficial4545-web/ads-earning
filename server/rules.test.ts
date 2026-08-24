@@ -16,9 +16,10 @@ import {
   refundRejectedWithdrawal,
   toPkr,
   validateWithdrawalRequest,
-  WITHDRAWAL_LOCK_MESSAGE,
-  WITHDRAWAL_MAX_MESSAGE,
+  WITHDRAWAL_FREE_REWARD_USED_MESSAGE,
+  WITHDRAWAL_MINIMUM_MESSAGE,
   WITHDRAWAL_MAX_PKR,
+  WITHDRAWAL_ZERO_LIMIT_MESSAGE,
   WHATSAPP_JOIN_REWARD_PKR,
 } from "./rules";
 
@@ -53,22 +54,23 @@ describe("Package Earn Pro server rules", () => {
     expect(refundRejectedWithdrawal(700, 500)).toBe(1200);
   });
 
-  it("enforces the exact referral-based withdrawal lock message", () => {
+  it("shows the exact zero-limit withdrawal reason before lower-priority amount checks", () => {
     expect(
       validateWithdrawalRequest({
         balancePkr: 1000,
         withdrawalLimitPkr: 0,
         amountPkr: 100,
       })
-    ).toBe(WITHDRAWAL_LOCK_MESSAGE);
+    ).toBe(WITHDRAWAL_ZERO_LIMIT_MESSAGE);
   });
 
-  it("allows the channel-reward withdrawal amount and rejects only amounts over the fixed maximum", () => {
+  it("allows the channel-reward withdrawal amount and returns exact minimum, maximum-or-limit, and wallet-balance messages", () => {
     expect(
       validateWithdrawalRequest({
         balancePkr: WHATSAPP_JOIN_REWARD_PKR,
         withdrawalLimitPkr: WHATSAPP_JOIN_REWARD_PKR,
         amountPkr: WHATSAPP_JOIN_REWARD_PKR,
+        allowChannelRewardAmount: true,
       })
     ).toBeNull();
     expect(
@@ -77,14 +79,30 @@ describe("Package Earn Pro server rules", () => {
         withdrawalLimitPkr: WITHDRAWAL_MAX_PKR + 1,
         amountPkr: WITHDRAWAL_MAX_PKR + 1,
       })
-    ).toBe(WITHDRAWAL_MAX_MESSAGE);
+    ).toContain("Maximum withdrawal is 3000 PKR");
     expect(
       validateWithdrawalRequest({
         balancePkr: 1000,
         withdrawalLimitPkr: 500,
         amountPkr: 600,
       })
-    ).toContain("current withdrawal limit");
+    ).toContain("your limit is PKR 500");
+    expect(
+      validateWithdrawalRequest({
+        balancePkr: 1000,
+        withdrawalLimitPkr: 500,
+        amountPkr: 20,
+      })
+    ).toBe(WITHDRAWAL_MINIMUM_MESSAGE);
+    expect(
+      validateWithdrawalRequest({
+        balancePkr: 0,
+        withdrawalLimitPkr: 500,
+        amountPkr: 100,
+        activePackage: false,
+        freeWithdrawalCompleted: true,
+      })
+    ).toBe(WITHDRAWAL_FREE_REWARD_USED_MESSAGE);
     expect(
       validateWithdrawalRequest({
         balancePkr: 150,
