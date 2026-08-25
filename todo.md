@@ -287,4 +287,4 @@
 - [x] Hide the 10 PKR reward guidance permanently as soon as a matching 10 PKR withdrawal request is submitted, whether it remains pending, is approved, or appears in historical records.
 - [x] Show the requested green Urdu package-purchase guidance only after the 10 PKR request is complete for members without an active package, and remove it after any package becomes active.
 - [x] Show the requested six-second multilingual scrolling invite ticker only for active-package members with zero withdrawal limit, restarting when the withdrawal page is opened.
-- [ ] Add regression coverage for old/new member reward histories, pending/approved 10 PKR requests, package transitions, ticker conditions, build validation, same-domain publication, and both GitHub branch synchronization.
+- [x] Add regression coverage for old/new member reward histories, pending/approved 10 PKR requests, package transitions, ticker conditions, build validation, same-domain publication, and both GitHub branch synchronization.
