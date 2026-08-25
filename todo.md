@@ -312,3 +312,10 @@
 - [x] Implement Ludo bet queue matching, 10-second bot fallback, protected 15-second turns, disconnect loss, 1.8x winner payout, and no-chat match UI.
 - [x] Build the production-style shared-game UI, full histories, All Bets/My Bets/Top tabs, round countdowns, and responsive mobile layout.
 - [x] Add focused tests for shared timing, result distributions, duplicate/late bet prevention, wallet settlement, Ludo match states, full builds, same-domain publication, and both GitHub branch synchronization.
+
+### Current request: Mobile Aviator and Crash optimization
+
+- [x] Audit mobile Aviator/Crash layout, shared-round polling, counter updates, and touch-control pressure points.
+- [x] Reduce unnecessary mobile rerenders and use smooth transform-only flight/graph motion while preserving the server-controlled shared multiplier and crash state.
+- [x] Improve small-screen game canvas, countdown/progress display, bet panels, cash-out spacing, safe-area spacing, and reduced-motion handling.
+- [x] Add focused source/regression coverage, validate mobile route behavior and builds, publish the same domain, and synchronize both GitHub branches.

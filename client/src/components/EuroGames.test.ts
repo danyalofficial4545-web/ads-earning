@@ -30,4 +30,13 @@ describe("compact Euro game suite", () => {
     expect(source).toContain('All Bets');
     expect(source).toContain('This game is server-verified');
   });
+
+  it("keeps the Aviator and Crash game shell mobile-safe and touch-friendly", () => {
+    expect(source).toContain('euro-game-shell');
+    const css = readFileSync(new URL("../index.css", import.meta.url), "utf8");
+    expect(css).toContain('env(safe-area-inset-bottom)');
+    expect(css).toContain('touch-action: manipulation');
+    expect(css).toContain('transition: left 380ms linear, top 380ms linear');
+    expect(css).toContain('prefers-reduced-motion: reduce');
+  });
 });

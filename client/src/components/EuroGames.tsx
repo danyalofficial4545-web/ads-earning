@@ -28,7 +28,7 @@ function Chips({ value, setValue, values = amounts, disabled }: { value: string;
 }
 
 function GameShell({ title, children }: { title: string; children: React.ReactNode }) {
-  return <div className="min-h-full overflow-y-auto bg-[#061711] p-4 text-white md:p-7"><div className="mx-auto max-w-3xl"><div className="mb-4 flex items-center gap-3"><div className="grid size-10 place-items-center rounded-2xl bg-amber-300 text-slate-950"><Trophy className="size-5"/></div><div><p className="text-[10px] font-black uppercase tracking-[.25em] text-amber-300">Euro Game</p><h2 className="text-2xl font-black">{title}</h2></div></div>{children}</div></div>;
+  return <div className="euro-game-shell min-h-full overflow-y-auto bg-[#061711] p-4 text-white md:p-7"><div className="mx-auto max-w-3xl"><div className="mb-4 flex items-center gap-3"><div className="grid size-10 place-items-center rounded-2xl bg-amber-300 text-slate-950"><Trophy className="size-5"/></div><div><p className="text-[10px] font-black uppercase tracking-[.25em] text-amber-300">Euro Game</p><h2 className="text-2xl font-black">{title}</h2></div></div>{children}</div></div>;
 }
 
 function Exchange({ mode, data, close, refresh, t }: any) {
