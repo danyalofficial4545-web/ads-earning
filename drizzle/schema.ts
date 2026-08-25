@@ -122,6 +122,25 @@ export const adSessions = mysqlTable("adSessions", {
   index("ad_sessions_user_day_idx").on(table.userId, table.dayKey),
 ]);
 
+export const adminAdImpressions = mysqlTable("adminAdImpressions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  dayKey: varchar("dayKey", { length: 10 }).notNull(),
+  placement: varchar("placement", { length: 32 }).notNull(),
+  sequence: int("sequence").notNull().default(0),
+  startedAt: timestamp("startedAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [
+  index("admin_ad_impressions_day_idx").on(table.dayKey, table.completedAt),
+  uniqueIndex("admin_ad_impressions_user_slot_unique").on(
+    table.userId,
+    table.dayKey,
+    table.placement,
+    table.sequence
+  ),
+]);
+
 export const transactions = mysqlTable("transactions", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
@@ -208,6 +227,7 @@ export const appSettings = mysqlTable("appSettings", {
   minimumWithdrawalPkr: int("minimumWithdrawalPkr").notNull().default(0),
   maximumWithdrawalPkr: int("maximumWithdrawalPkr").notNull().default(3000),
   adTimerSeconds: int("adTimerSeconds").notNull().default(10),
+  automaticAdsEnabled: boolean("automaticAdsEnabled").notNull().default(true),
   referralCommissionPercent: int("referralCommissionPercent").notNull().default(50),
   websiteName: varchar("websiteName", { length: 80 }).notNull().default("Ads Earning"),
   themeName: mysqlEnum("themeName", ["green", "blue", "dark", "white", "black", "red", "yellow"]).notNull().default("green"),

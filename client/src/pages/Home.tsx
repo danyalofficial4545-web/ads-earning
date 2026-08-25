@@ -5,6 +5,7 @@ import { AdminPanel } from "@/components/AdminPanel";
 import { GoogleOnboarding, PublicAuth } from "@/components/PublicAuth";
 import { WorkspaceAccessGate } from "@/components/WorkspaceAccessGate";
 import { AdsTasks } from "@/components/AdsTasks";
+import { AdminAdGate, type AutomaticAdRequest } from "@/components/AdminAdGate";
 import { BrandLogo } from "@/components/BrandLogo";
 import { trpc } from "@/lib/trpc";
 import { resolveWorkspaceGate } from "@/lib/authOnboarding";
@@ -403,7 +404,10 @@ function Landing({
     await utils.account.bootstrap.invalidate();
   };
   const register = trpc.auth.register.useMutation({
-    onSuccess: () => complete(t("accountCreated")),
+    onSuccess: () => {
+      sessionStorage.setItem("pep-signup-automatic-ad", "1");
+      void complete(t("accountCreated"));
+    },
     onError: error => {
       toast.error(
         error.data?.code === "CONFLICT"
@@ -1026,12 +1030,71 @@ function Workspace({
   wallet,
   invalidateCore,
 }: any) {
+  const [automaticAdRequest, setAutomaticAdRequest] = useState<AutomaticAdRequest | null>(null);
+  const [depositPackageId, setDepositPackageId] = useState("");
+  const [showChannelPrompt, setShowChannelPrompt] = useState(false);
+  const [signupGatePending, setSignupGatePending] = useState(
+    () => sessionStorage.getItem("pep-signup-automatic-ad") === "1"
+  );
+  const [signupGateStarted, setSignupGateStarted] = useState(false);
+  const [rewardWithdrawalSubmittedLocally, setRewardWithdrawalSubmittedLocally] = useState(false);
+  const requestAutomaticAd = (
+    placement: AutomaticAdRequest["placement"],
+    onComplete: () => void,
+    sequence = 0
+  ) => {
+    setAutomaticAdRequest({
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      placement,
+      sequence,
+      onComplete,
+    });
+  };
+  useEffect(() => {
+    if (!overview || !signupGatePending || signupGateStarted) return;
+    setSignupGateStarted(true);
+    sessionStorage.removeItem("pep-signup-automatic-ad");
+    requestAutomaticAd("signup", () => {
+      if (profile.whatsappRewardEligible && !profile.whatsappJoined)
+        setShowChannelPrompt(true);
+      setSignupGatePending(false);
+      invalidateCore();
+    });
+  }, [overview, signupGatePending, signupGateStarted]);
+  useEffect(() => {
+    if (
+      overview &&
+      !signupGatePending &&
+      profile.whatsappRewardEligible &&
+      !profile.whatsappJoined
+    )
+      setShowChannelPrompt(true);
+  }, [overview, signupGatePending, profile.whatsappRewardEligible, profile.whatsappJoined]);
+  const joinWhatsApp = trpc.platform.joinWhatsApp.useMutation({
+    onSuccess: data => {
+      if (data.bonusPkr) {
+        toast.success(t("whatsappRewardClaimed"));
+        requestAutomaticAd("whatsapp_reward", () => {
+          setPage("withdrawal");
+          invalidateCore();
+        });
+      } else {
+        invalidateCore();
+      }
+      setShowChannelPrompt(false);
+    },
+    onError: () => toast.error(friendlyMessages.requestFailed),
+  });
+  const handleJoinWhatsApp = () => {
+    window.open(
+      "https://whatsapp.com/channel/0029VbDB4LpDZ4LhbhGZsJ10",
+      "_blank",
+      "noopener,noreferrer"
+    );
+    joinWhatsApp.mutate();
+  };
   if (overviewLoading || !overview)
     return <LoadingScreen text={t("loading")} />;
-  const [showChannelPrompt, setShowChannelPrompt] = useState(
-    () => profile.whatsappRewardEligible && !profile.whatsappJoined
-  );
-  const [rewardWithdrawalSubmittedLocally, setRewardWithdrawalSubmittedLocally] = useState(false);
   const memberProfile = overview.profile;
   const rewardWithdrawalRequested = Boolean(
     overview.rewardWithdrawalRequested || rewardWithdrawalSubmittedLocally
@@ -1044,26 +1107,14 @@ function Workspace({
   const hasPendingChannelReward =
     memberProfile.whatsappRewardEligible &&
     memberProfile.whatsappBonusClaimed &&
-    !rewardWithdrawalRequested;
-  const joinWhatsApp = trpc.platform.joinWhatsApp.useMutation({
-    onSuccess: data => {
-      if (data.bonusPkr) {
-        toast.success(t("whatsappRewardClaimed"));
-        setPage("withdrawal");
-      }
-      setShowChannelPrompt(false);
-      invalidateCore();
-    },
-    onError: () => toast.error(friendlyMessages.requestFailed),
-  });
-  const handleJoinWhatsApp = () => {
-    window.open(
-      "https://whatsapp.com/channel/0029VbDB4LpDZ4LhbhGZsJ10",
-      "_blank",
-      "noopener,noreferrer"
-    );
-    joinWhatsApp.mutate();
-  };
+      !rewardWithdrawalRequested;
+  const openWithdrawal = () =>
+    requestAutomaticAd("withdrawal_entry", () => setPage("withdrawal"));
+  const openPackagePayment = (packageId: number) =>
+    requestAutomaticAd("package_entry", () => {
+      setDepositPackageId(String(packageId));
+      setPage("deposit");
+    });
   const content: Record<Page, ReactNode> = {
     dashboard: (
       <Dashboard
@@ -1071,6 +1122,7 @@ function Workspace({
         overview={overview}
         announcements={announcements}
         setPage={setPage}
+        onRequestWithdrawal={openWithdrawal}
       />
     ),
     packages: (
@@ -1080,6 +1132,7 @@ function Workspace({
         balance={profile.balancePkr}
         active={overview.activePackage}
         onDone={invalidateCore}
+        onPurchase={openPackagePayment}
       />
     ),
     profile: (
@@ -1091,9 +1144,10 @@ function Workspace({
         profile={profile}
         activePackage={overview.activePackage}
         totalEarnedPkr={overview.totalEarnedPkr}
+        onRequestWithdrawal={openWithdrawal}
       />
     ),
-    deposit: <Deposit t={t} settings={settings} packages={packages} onDone={invalidateCore} />,
+    deposit: <Deposit t={t} settings={settings} packages={packages} onDone={invalidateCore} initialRequestedPackageId={depositPackageId} />,
     withdrawal: (
       <Withdrawal
         t={t}
@@ -1108,7 +1162,7 @@ function Workspace({
         onDone={invalidateCore}
       />
     ),
-    earn: <AdsTasks t={t} onDone={invalidateCore} />,
+    earn: <AdsTasks t={t} onDone={invalidateCore} onRequestAdminAd={input => requestAutomaticAd(input.placement, input.onComplete, input.sequence)} />,
     history: <TransactionHistory t={t} />,
     invite: <Referral t={t} />,
     support: <Support t={t} />,
@@ -1116,6 +1170,11 @@ function Workspace({
   };
   return (
     <>
+      <AdminAdGate
+        request={automaticAdRequest}
+        t={t}
+        onFinished={() => setAutomaticAdRequest(null)}
+      />
       {showChannelPrompt && (
         <WhatsAppJoinPrompt
           t={t}
@@ -1162,7 +1221,7 @@ function PageHeading({
   );
 }
 
-function Dashboard({ t, overview, announcements, setPage }: any) {
+function Dashboard({ t, overview, announcements, setPage, onRequestWithdrawal }: any) {
   const active = overview.activePackage;
   const canWithdraw = Boolean(active) ||
     (overview.profile.whatsappRewardEligible &&
@@ -1286,7 +1345,7 @@ function Dashboard({ t, overview, announcements, setPage }: any) {
             <QuickAction
               icon={ArrowUpRight}
               label={t("requestWithdrawal")}
-              onClick={() => setPage("withdrawal")}
+              onClick={onRequestWithdrawal}
               disabled={!canWithdraw}
             />
             {!canWithdraw && <p className="px-1 text-xs font-semibold text-amber-200">{t("noPackageBalanceMessage")}</p>}
@@ -1367,14 +1426,7 @@ function QuickAction({ icon: Icon, label, onClick, disabled = false }: any) {
   );
 }
 
-function Packages({ t, plans, balance, active, onDone }: any) {
-  const buy = trpc.package.buy.useMutation({
-    onSuccess: () => {
-      toast.success(t("saved"));
-      onDone();
-    },
-    onError: () => toast.error(friendlyMessages.requestFailed),
-  });
+function Packages({ t, plans, balance, active, onPurchase }: any) {
   return (
     <>
       <PageHeading
@@ -1409,8 +1461,8 @@ function Packages({ t, plans, balance, active, onDone }: any) {
                 </p>
               </div>
               <button
-                disabled={buy.isPending || isActive}
-                onClick={() => buy.mutate({ packageId: plan.id })}
+                disabled={isActive}
+                onClick={() => onPurchase(plan.id)}
                 className={`mt-6 h-11 w-full rounded-xl text-sm font-bold transition active:scale-[.97] disabled:opacity-60 ${isActive ? "bg-emerald-400/15 text-emerald-200" : "bg-amber-300 text-slate-950"}`}
               >
                 {isActive ? t("currentPackage") : t("buyPackage")}
@@ -1436,6 +1488,7 @@ function ProfileWallet({
   profile,
   activePackage,
   totalEarnedPkr,
+  onRequestWithdrawal,
 }: any) {
   if (!wallet) return <LoadingScreen text={t("loading")} />;
   const [showPassword, setShowPassword] = useState(false);
@@ -1460,7 +1513,7 @@ function ProfileWallet({
             </button>
             <button
               disabled={!canWithdraw}
-              onClick={() => setPage("withdrawal")}
+              onClick={onRequestWithdrawal}
               className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
             >
               {t("withdrawal")}
@@ -1627,14 +1680,14 @@ function GroupedFinancialHistory({ rows, t, kind }: { rows: any[]; t: (key: Tran
   );
 }
 
-function Deposit({ t, settings, packages, onDone }: any) {
+function Deposit({ t, settings, packages, onDone, initialRequestedPackageId = "" }: any) {
   const [currency, setCurrency] = useState<"PKR" | "USD">("PKR");
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("");
   const [senderAccountNumber, setSenderAccountNumber] = useState("");
   const [senderAccountName, setSenderAccountName] = useState("");
   const [transactionId, setTransactionId] = useState("");
-  const [requestedPackageId, setRequestedPackageId] = useState("");
+  const [requestedPackageId, setRequestedPackageId] = useState(initialRequestedPackageId);
   const [proof, setProof] = useState("");
   const [errors, setErrors] = useState<FormErrors>({});
   const [showHistory, setShowHistory] = useState(false);
@@ -2029,131 +2082,6 @@ function Withdrawal({ t, profile, showRewardWithdrawalPrompt, activePackage, has
         )}
       </div>
       {showHistory && <div className="panel mt-5"><p className="eyebrow">{t("viewWithdrawalHistory")}</p>{list.data?.length ? <GroupedFinancialHistory rows={list.data} t={t} kind="withdrawal" /> : <Empty text={t("noTransactions")} />}</div>}
-    </>
-  );
-}
-
-function Earn({ t, overview, onDone }: any) {
-  const [session, setSession] = useState<any>(null);
-  const [seconds, setSeconds] = useState(0);
-  const start = trpc.earning.startAd.useMutation({
-    onSuccess: data => {
-      setSession(data);
-      setSeconds(data.timerSeconds);
-    },
-    onError: () => toast.error(friendlyMessages.requestFailed),
-  });
-  const claim = trpc.earning.claimAd.useMutation({
-    onSuccess: () => {
-      toast.success(t("saved"));
-      setSession(null);
-      onDone();
-    },
-    onError: () => toast.error(friendlyMessages.requestFailed),
-  });
-  useEffect(() => {
-    if (!session) return;
-    const tick = () =>
-      setSeconds(
-        Math.max(
-          0,
-          Math.ceil(
-            (new Date(session.availableAt).getTime() - Date.now()) / 1000
-          )
-        )
-      );
-    tick();
-    const timerInterval = window.setInterval(tick, 300);
-    return () => {
-      window.clearInterval(timerInterval);
-    };
-  }, [session]);
-  return (
-    <>
-      <PageHeading
-        eyebrow={t("earn")}
-        title={t("earnTitle")}
-        description={t("earnSubtitle")}
-      />
-      <div className="grid gap-5 lg:grid-cols-[.8fr_1.2fr]">
-        <div className="panel">
-          <p className="eyebrow">{t("activePackage")}</p>
-          {overview.activePackage ? (
-            <>
-              <p className="mt-2 text-2xl font-bold">
-                {overview.activePackage.icon} {overview.activePackage.name}
-              </p>
-              <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/15 p-4">
-                <p className="text-xs text-slate-400">{t("adsToday")}</p>
-                <p className="mt-1 text-3xl font-bold">
-                  {overview.todayAds.watched}{" "}
-                  <span className="text-slate-500">
-                    / {overview.todayAds.total}
-                  </span>
-                </p>
-              </div>
-            </>
-          ) : (
-            <p className="mt-4 rounded-xl border border-amber-300/15 bg-amber-300/10 p-4 text-sm leading-6 text-amber-100">
-              {t("noActive")}
-            </p>
-          )}
-        </div>
-        <div className="panel text-center">
-          <div className="mx-auto grid size-16 place-items-center rounded-full bg-amber-300/10 text-amber-300">
-            <Play className="size-7" />
-          </div>
-          {session ? (
-            <>
-              <p className="eyebrow mt-5">{t("timer")}</p>
-              <h2 className="mt-1 text-5xl font-bold text-amber-300">
-                00:{String(seconds).padStart(2, "0")}
-              </h2>
-              <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/15 p-4 text-left">
-                <p className="font-bold">{session.ad.title}</p>
-                <p className="mt-2 text-sm leading-6 text-slate-300">
-                  {session.ad.content}
-                </p>
-                {session.ad.targetUrl && (
-                  <a
-                    target="_blank"
-                    rel="noreferrer"
-                    href={session.ad.targetUrl}
-                    className="mt-3 inline-block text-sm font-bold text-amber-300 underline"
-                  >
-                    {t("openSponsoredLink")}
-                  </a>
-                )}
-              </div>
-              <button
-                disabled={seconds > 0 || claim.isPending}
-                onClick={() => claim.mutate({ sessionId: session.sessionId })}
-                className="mt-5 h-11 w-full rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {t("claimReward")}
-              </button>
-            </>
-          ) : (
-            <>
-              <h2 className="mt-5 text-2xl font-bold">{t("watchAd")}</h2>
-              <p className="mt-2 text-sm text-slate-400">
-                {t("adRewardMessage")}
-              </p>
-              <button
-                disabled={!overview.activePackage || start.isPending}
-                onClick={() => start.mutate()}
-                className="mt-6 h-11 w-full rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-40"
-              >
-                {start.isPending ? (
-                  <Loader2 className="mx-auto size-4 animate-spin" />
-                ) : (
-                  t("watchAd")
-                )}
-              </button>
-            </>
-          )}
-        </div>
-      </div>
     </>
   );
 }

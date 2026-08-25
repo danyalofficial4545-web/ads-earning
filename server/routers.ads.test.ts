@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { TrpcContext } from "./_core/context";
-import { ads, adSessions } from "../drizzle/schema";
+import { adSessions } from "../drizzle/schema";
 
 const mocks = vi.hoisted(() => ({
   ensureProfile: vi.fn(),
@@ -49,16 +49,14 @@ const callerContext = () =>
     res: { cookie: vi.fn(), clearCookie: vi.fn() },
   }) as unknown as TrpcContext;
 
-function createAdsDatabase(records: Array<{ id: number }>) {
+function createAdsDatabase() {
   const inserts: Array<{ table: unknown; values: unknown }> = [];
   const db = {
     select: vi.fn(() => ({
       from: (table: unknown) =>
-        table === ads
-          ? { where: () => ({ orderBy: async () => records }) }
-          : table === adSessions
-            ? { where: async () => [] }
-            : { where: async () => [] },
+        table === adSessions
+          ? { where: async () => [] }
+          : { where: async () => [] },
     })),
     insert: vi.fn((table: unknown) => ({
       values: async (values: unknown) => {
@@ -70,7 +68,7 @@ function createAdsDatabase(records: Array<{ id: number }>) {
   return { db, inserts };
 }
 
-describe("custom ad start access", () => {
+describe("rewarded slot start access", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.ensureProfile.mockResolvedValue(profile);
@@ -82,36 +80,28 @@ describe("custom ad start access", () => {
     });
   });
 
-  it("starts a selected ad that is within the two-ad Silver quota", async () => {
-    const { db, inserts } = createAdsDatabase([
-      { id: 1 },
-      { id: 2 },
-      { id: 3 },
-    ]);
+  it("starts the next sequential rewarded slot within the two-ad Silver quota", async () => {
+    const { db, inserts } = createAdsDatabase();
     mocks.getDb.mockResolvedValue(db);
 
-    await appRouter.createCaller(callerContext()).earning.startAd({ adId: 2 });
+    await appRouter.createCaller(callerContext()).earning.startAd({ slot: 1 });
 
     expect(inserts).toHaveLength(1);
     expect(inserts[0]?.table).toBe(adSessions);
     expect(inserts[0]?.values).toMatchObject({
       userId: 91,
       userPackageId: 55,
-      adId: 2,
+      adId: 1,
       dayKey: "2026-08-15",
     });
   });
 
-  it("rejects a selected ad that is beyond the package daily quota", async () => {
-    const { db, inserts } = createAdsDatabase([
-      { id: 1 },
-      { id: 2 },
-      { id: 3 },
-    ]);
+  it("rejects a rewarded slot beyond the package daily quota", async () => {
+    const { db, inserts } = createAdsDatabase();
     mocks.getDb.mockResolvedValue(db);
 
     await expect(
-      appRouter.createCaller(callerContext()).earning.startAd({ adId: 3 })
+      appRouter.createCaller(callerContext()).earning.startAd({ slot: 3 })
     ).rejects.toThrow("locked");
     expect(inserts).toHaveLength(0);
   });

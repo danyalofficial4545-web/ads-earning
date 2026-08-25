@@ -1,7 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
-  ads,
   appSettings,
   InsertUser,
   packages,
@@ -28,6 +27,7 @@ export const ADMIN_USERNAME = DESIGNATED_ADMIN_USERNAME;
 const defaultPackages = [
   { tier: "bronze", name: "Bronze", icon: "🥉", pricePkr: 100, dailyAds: 1 },
   { tier: "silver", name: "Silver", icon: "🥈", pricePkr: 200, dailyAds: 2 },
+  { tier: "starter", name: "Starter", icon: "🔷", pricePkr: 300, dailyAds: 3 },
   { tier: "gold", name: "Gold", icon: "🥇", pricePkr: 500, dailyAds: 5 },
   {
     tier: "platinum",
@@ -192,23 +192,6 @@ export async function ensurePlatformData() {
   if (!existingAccounts[0])
     await db.insert(paymentAccounts).values(defaultAccounts);
 
-  for (const item of defaultPackages) {
-    const existing = await db
-      .select({ id: ads.id })
-      .from(ads)
-      .where(and(eq(ads.packageTier, item.tier), eq(ads.isActive, true)))
-      .limit(1);
-    if (!existing[0]) {
-      await db.insert(ads).values({
-        packageTier: item.tier,
-        title: `${item.name} daily opportunity`,
-        contentType: "text",
-        content:
-          "Read this sponsored opportunity until the reward timer completes.",
-        isActive: true,
-      });
-    }
-  }
 }
 
 export async function ensureProfile(user: User): Promise<Profile> {

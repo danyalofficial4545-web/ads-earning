@@ -32,7 +32,7 @@ const tabItems: Array<{ id: Tab; label: string; icon: typeof ClipboardCheck }> =
   [
     { id: "depositHistory", label: "depositHistory", icon: CreditCard },
     { id: "withdrawalHistory", label: "withdrawalHistory", icon: ClipboardCheck },
-    { id: "ads", label: "adsManagement", icon: PlaySquare },
+    { id: "ads", label: "adSettings", icon: PlaySquare },
     { id: "payments", label: "paymentAccounts", icon: CreditCard },
     { id: "broadcasts", label: "broadcast", icon: Megaphone },
     { id: "users", label: "users", icon: Users },
@@ -395,220 +395,49 @@ function Approvals({ t, onChange, mode }: any) {
 }
 
 function Ads({ t }: any) {
-  const list = trpc.admin.ads.useQuery();
-  const [editing, setEditing] = useState<any>(null);
-  const blank = {
-    packageTier: "bronze",
-    title: "",
-    contentType: "image" as "text" | "image" | "video" | "link" | "app",
-    content: "",
-    targetUrl: "",
-    mediaData: "",
-    isActive: true,
-  };
-  const [form, setForm] = useState(blank);
-  const save = trpc.admin.saveAd.useMutation({
+  const settings = trpc.admin.adSettings.useQuery();
+  const save = trpc.admin.saveAdSettings.useMutation({
     onSuccess: () => {
       toast.success(t("saved"));
-      list.refetch();
-      setEditing(null);
-      setForm(blank);
+      settings.refetch();
     },
-    onError: e => toast.error(e.message),
+    onError: () => toast.error(t("operationFailed")),
   });
-  const remove = trpc.admin.deleteAd.useMutation({
-    onSuccess: () => list.refetch(),
-    onError: e => toast.error(e.message),
-  });
-  const isMedia = form.contentType === "image" || form.contentType === "video";
-  const requiresLink =
-    form.contentType === "link" || form.contentType === "app";
   return (
     <>
       <Heading
-        title={t("advertisementManagement")}
-        description={t("advertisementManagementText")}
+        title={t("adSettings")}
+        description={t("adSettingsText")}
       />
-      <div className="grid gap-5 xl:grid-cols-[.85fr_1.15fr]">
-        <form
-          className="panel space-y-3"
-          onSubmit={e => {
-            e.preventDefault();
-            save.mutate({
-              ...(editing ? { id: editing.id } : {}),
-              packageTier: form.packageTier,
-              title: form.title,
-              contentType: form.contentType,
-              content: form.content || undefined,
-              mediaData: form.mediaData || undefined,
-              targetUrl: form.targetUrl || undefined,
-              isActive: form.isActive,
-            });
-          }}
-        >
-          <p className="font-bold">
-            {editing ? t("editAdvertisement") : t("createAdvertisement")}
+      <div className="grid gap-5 lg:grid-cols-2">
+        <div className="panel">
+          <p className="eyebrow">{t("adminAdsShownToday")}</p>
+          <p className="mt-2 text-4xl font-bold text-amber-300">
+            {settings.data?.shownToday ?? 0}
           </p>
-          <Field label={t("packageTier")}>
-            <select
-              className="field"
-              value={form.packageTier}
-              onChange={e => setForm({ ...form, packageTier: e.target.value })}
-            >
-              {["bronze", "silver", "gold", "platinum", "diamond", "vip"].map(
-                x => (
-                  <option key={x}>{x}</option>
-                )
-              )}
-            </select>
-          </Field>
-          <Field label={t("title")}>
-            <input
-              required
-              className="field"
-              value={form.title}
-              onChange={e => setForm({ ...form, title: e.target.value })}
-            />
-          </Field>
-          <Field label={t("contentType")}>
-            <select
-              className="field"
-              value={form.contentType}
-              onChange={e =>
-                setForm({
-                  ...form,
-                  contentType: e.target.value as typeof form.contentType,
-                  mediaData: "",
-                })
-              }
-            >
-              {editing?.contentType === "text" && (
-                <option value="text" disabled>
-                  {t("text")} (legacy)
-                </option>
-              )}
-              {["image", "video", "link", "app"].map(x => (
-                <option key={x} value={x}>
-                  {t(x as any)}
-                </option>
-              ))}
-            </select>
-          </Field>
-          {isMedia ? (
-            <Field
-              label={
-                form.contentType === "image"
-                  ? t("uploadImage")
-                  : t("uploadVideo")
-              }
-            >
-              <input
-                required={!editing && !form.content}
-                className="field h-auto py-2"
-                type="file"
-                accept={form.contentType === "image" ? "image/*" : "video/*"}
-                onChange={async e => {
-                  const file = e.target.files?.[0];
-                  if (file)
-                    setForm({ ...form, mediaData: await toDataUrl(file) });
-                }}
-              />
-            </Field>
-          ) : (
-            <Field label={t("contentOrMedia")}>
-              <textarea
-                required={!requiresLink}
-                className="field min-h-24 py-3"
-                value={form.content}
-                onChange={e => setForm({ ...form, content: e.target.value })}
-              />
-            </Field>
-          )}
-          <Field
-            label={requiresLink ? t("adDestination") : t("destinationUrl")}
-          >
-            <input
-              required={requiresLink}
-              type="url"
-              className="field"
-              value={form.targetUrl}
-              onChange={e => setForm({ ...form, targetUrl: e.target.value })}
-              placeholder={requiresLink ? "https://" : undefined}
-            />
-          </Field>
-          <label className="flex gap-2 text-sm">
+          <p className="mt-4 text-xs text-slate-400">{t("estimatedAdEarning")}</p>
+          <p className="mt-1 text-xl font-bold">
+            ${settings.data?.estimatedEarningUsd.toFixed(3) ?? "0.000"}
+          </p>
+        </div>
+        <div className="panel">
+          <label className="flex items-center justify-between gap-4 text-sm font-bold">
+            <span>{t("automaticAdsEnabled")}</span>
             <input
               type="checkbox"
-              checked={form.isActive}
-              onChange={e => setForm({ ...form, isActive: e.target.checked })}
+              checked={settings.data?.automaticAdsEnabled ?? true}
+              disabled={!settings.data || save.isPending}
+              onChange={event => save.mutate({ automaticAdsEnabled: event.target.checked })}
             />
-            {t("active")}
           </label>
-          <div className="flex gap-2">
-            <button
-              disabled={save.isPending}
-              className="h-9 rounded-lg bg-amber-300 px-3 text-xs font-bold text-slate-950"
-            >
-              {editing ? t("updateAd") : t("createAd")}
-            </button>
-            {editing && (
-              <Button
-                onClick={() => {
-                  setEditing(null);
-                  setForm(blank);
-                }}
-              >
-                {t("cancel")}
-              </Button>
-            )}
-          </div>
-        </form>
-        <div className="panel">
-          <p className="font-bold">{t("currentAdvertisements")}</p>
-          <div className="mt-4 space-y-3">
-            {list.data?.map(row => (
-              <div
-                key={row.id}
-                className="rounded-2xl border border-white/10 bg-slate-950/15 p-4"
-              >
-                <div className="flex justify-between gap-3">
-                  <div>
-                    <p className="font-bold">{row.title}</p>
-                    <p className="mt-1 text-xs text-slate-400">
-                      {row.packageTier} · {t(row.contentType as any)} ·{" "}
-                      {row.isActive ? t("active") : t("inactive")}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditing(row);
-                        setForm({
-                          packageTier: row.packageTier,
-                          title: row.title,
-                          contentType: row.contentType,
-                          content: row.content,
-                          targetUrl: row.targetUrl ?? "",
-                          mediaData: "",
-                          isActive: row.isActive,
-                        });
-                      }}
-                      className="grid size-8 place-items-center rounded-lg bg-white/5"
-                    >
-                      <Pencil className="size-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => remove.mutate({ id: row.id })}
-                      className="grid size-8 place-items-center rounded-lg bg-red-400/15 text-red-200"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
+          <p className="mt-4 text-xs leading-5 text-slate-400">{t("adSettingsText")}</p>
+        </div>
+        <div className="panel lg:col-span-2">
+          <p className="font-bold">{t("adsterraCodes")}</p>
+          <p className="mt-2 text-xs leading-5 text-slate-400">{t("adsterraCodeNote")}</p>
+          <div className="mt-4 space-y-2 text-xs text-slate-300">
+            <code className="block break-all rounded-xl bg-slate-950/35 p-3">pl31018972.profitableratecpmnetwork.com/c3/93/94/c39394501da20cecb09000e829b5b01d.js</code>
+            <code className="block break-all rounded-xl bg-slate-950/35 p-3">pl31018973.profitableratecpmnetwork.com/b0/f7/85/b0f7854db95a963d43c8aa42ca3332f3.js</code>
           </div>
         </div>
       </div>

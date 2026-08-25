@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   adSessions,
-  ads,
+  adminAdImpressions,
   appSettings,
   authChallenges,
   broadcasts,
@@ -63,12 +63,61 @@ import {
 } from "./rules";
 import {
   getDailyAdQuota,
-  getDailyAdStates,
   getNextPakistanMidnight,
 } from "../shared/adRules";
 
 function fail(message: string, code: TRPCError["code"] = "BAD_REQUEST"): never {
   throw new TRPCError({ code, message });
+}
+
+const automaticAdPlacementSchema = z.enum([
+  "signup",
+  "whatsapp_reward",
+  "package_entry",
+  "withdrawal_entry",
+  "rewarded_break",
+]);
+
+type AutomaticAdPlacement = z.infer<typeof automaticAdPlacementSchema>;
+
+function rewardedBreakSequence(packagePricePkr: number, claimedCount: number) {
+  const sequences: Record<number, number[]> = {
+    100: [1],
+    200: [2],
+    300: [2, 3],
+    500: [2, 5],
+    1000: [5, 10],
+    2000: [10, 20],
+    5000: [10, 20, 30, 40, 50],
+  };
+  return sequences[packagePricePkr]?.includes(claimedCount)
+    ? claimedCount
+    : null;
+}
+
+async function hasCompletedAutomaticAd(input: {
+  userId: number;
+  dayKey: string;
+  placement: AutomaticAdPlacement;
+  sequence: number;
+}) {
+  const db = await getDb();
+  if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+  const row = (
+    await db
+      .select({ completedAt: adminAdImpressions.completedAt })
+      .from(adminAdImpressions)
+      .where(
+        and(
+          eq(adminAdImpressions.userId, input.userId),
+          eq(adminAdImpressions.dayKey, input.dayKey),
+          eq(adminAdImpressions.placement, input.placement),
+          eq(adminAdImpressions.sequence, input.sequence)
+        )
+      )
+      .limit(1)
+  )[0];
+  return Boolean(row?.completedAt);
 }
 
 function publicUser(user: typeof users.$inferSelect) {
@@ -239,11 +288,6 @@ async function buildOverview(userId: number) {
         )
       )
     : 0;
-  const activeAdRows = await db
-    .select({ id: ads.id })
-    .from(ads)
-    .where(eq(ads.isActive, true))
-    .orderBy(ads.id);
   const dailyQuota = activePackage
     ? getDailyAdQuota(activePackage.plan.pricePkr)
     : 0;
@@ -264,7 +308,7 @@ async function buildOverview(userId: number) {
       : null,
     todayAds: {
       watched: Number(watchedRows[0]?.count ?? 0),
-      total: Math.min(dailyQuota, activeAdRows.length),
+      total: dailyQuota,
       resetAt: getNextPakistanMidnight(),
     },
     totalEarnedPkr: Number(totalEarned[0]?.total ?? 0),
@@ -844,123 +888,89 @@ export const appRouter = router({
     ads: protectedProcedure.query(async ({ ctx }) => {
       const { user } = await getActor(ctx);
       const db = await getDb();
-      if (!db)
-        fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-      const [activePackage, activeAds] = await Promise.all([
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const [activePackage, settings] = await Promise.all([
         getActivePackageForUser(user.id),
-        db.select().from(ads).where(eq(ads.isActive, true)).orderBy(ads.id),
+        getSettings(),
       ]);
       const dayKey = getDayKey();
       const sessions = await db
         .select()
         .from(adSessions)
-        .where(
-          and(eq(adSessions.userId, user.id), eq(adSessions.dayKey, dayKey))
-        );
-      const watchedAdIds = new Set(
-        sessions
-          .filter(session => session.claimedAt)
-          .map(session => session.adId)
-      );
-      const quota = activePackage
-        ? getDailyAdQuota(activePackage.plan.pricePkr)
-        : 0;
-      const stateById = new Map(
-        getDailyAdStates(
-          activeAds.map(ad => ad.id),
-          quota,
-          watchedAdIds
-        ).map(item => [item.id, item.state])
+        .where(and(eq(adSessions.userId, user.id), eq(adSessions.dayKey, dayKey)));
+      const quota = activePackage ? getDailyAdQuota(activePackage.plan.pricePkr) : 0;
+      const claimedCount = sessions.filter(session => session.claimedAt).length;
+      const breakSequence = activePackage
+        ? rewardedBreakSequence(activePackage.plan.pricePkr, claimedCount)
+        : null;
+      const continuationRequired = Boolean(
+        settings.automaticAdsEnabled &&
+          breakSequence &&
+          !(await hasCompletedAutomaticAd({
+            userId: user.id,
+            dayKey,
+            placement: "rewarded_break",
+            sequence: breakSequence,
+          }))
       );
       return {
-        ads: activeAds.map(ad => ({
-          ...ad,
-          state: stateById.get(ad.id) ?? "locked",
-        })),
-        watched: watchedAdIds.size,
-        total: Math.min(quota, activeAds.length),
+        ads: Array.from({ length: quota }, (_, index) => {
+          const slot = index + 1;
+          return {
+            id: slot,
+            title: `Daily rewarded ad ${slot}`,
+            contentType: "rewarded" as const,
+            state: slot <= claimedCount ? "watched" as const : slot === claimedCount + 1 && !continuationRequired ? "unlocked" as const : "locked" as const,
+          };
+        }),
+        watched: claimedCount,
+        total: quota,
         resetAt: getNextPakistanMidnight(),
+        continuation: continuationRequired && breakSequence
+          ? { placement: "rewarded_break" as const, sequence: breakSequence }
+          : null,
         activePackage: activePackage
-          ? {
-              name: activePackage.plan.name,
-              pricePkr: activePackage.plan.pricePkr,
-              quota,
-            }
+          ? { name: activePackage.plan.name, pricePkr: activePackage.plan.pricePkr, quota }
           : null,
       };
     }),
     startAd: protectedProcedure
-      .input(z.object({ adId: z.number().int().positive() }).optional())
+      .input(z.object({ slot: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
         const { user } = await getActor(ctx);
         const db = await getDb();
-        if (!db)
-          fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-        if (!input) fail("Select an unlocked ad to begin.");
+        if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
         const active = await getActivePackageForUser(user.id);
-        if (!active)
-          fail("Please purchase an active package to start earning.");
+        if (!active) fail("Please purchase an active package to start earning.");
         const dayKey = getDayKey();
-        const activeAds = await db
-          .select()
-          .from(ads)
-          .where(eq(ads.isActive, true))
-          .orderBy(ads.id);
-        const sessions = await db
-          .select()
-          .from(adSessions)
-          .where(
-            and(eq(adSessions.userId, user.id), eq(adSessions.dayKey, dayKey))
-          );
-        const watchedAdIds = new Set(
-          sessions
-            .filter(session => session.claimedAt)
-            .map(session => session.adId)
-        );
+        const [settings, sessions] = await Promise.all([
+          getSettings(),
+          db.select().from(adSessions).where(and(eq(adSessions.userId, user.id), eq(adSessions.dayKey, dayKey))),
+        ]);
         const quota = getDailyAdQuota(active.plan.pricePkr);
-        const stateById = new Map(
-          getDailyAdStates(
-            activeAds.map(ad => ad.id),
-            quota,
-            watchedAdIds
-          ).map(item => [item.id, item.state])
-        );
-        const available = activeAds.find(ad => ad.id === input.adId);
-        if (!available || stateById.get(available.id) !== "unlocked")
-          fail(
-            "This ad is locked or has already been watched today.",
-            "FORBIDDEN"
-          );
-        if (
-          sessions.some(
-            session =>
-              session.adId === available.id &&
-              !session.claimedAt &&
-              !session.invalidatedAt
-          )
-        )
-          fail(
-            "This ad is already open. Complete it or wait for it to expire.",
-            "CONFLICT"
-          );
+        const claimedCount = sessions.filter(session => session.claimedAt).length;
+        if (input.slot !== claimedCount + 1 || input.slot > quota)
+          fail("This rewarded ad is locked or has already been watched today.", "FORBIDDEN");
+        const breakSequence = rewardedBreakSequence(active.plan.pricePkr, claimedCount);
+        if (settings.automaticAdsEnabled && breakSequence && !(await hasCompletedAutomaticAd({ userId: user.id, dayKey, placement: "rewarded_break", sequence: breakSequence })))
+          fail("Complete the short sponsored continuation before the next reward.", "FORBIDDEN");
+        if (sessions.some(session => !session.claimedAt && !session.invalidatedAt))
+          fail("This rewarded ad is already open. Complete it before starting another.", "CONFLICT");
         const startedAt = new Date();
         const result = await db.insert(adSessions).values({
           userId: user.id,
           userPackageId: active.ownership.id,
-          adId: available.id,
+          adId: input.slot,
           dayKey,
           startedAt,
           lastHeartbeatAt: startedAt,
           rewardPkr: AD_REWARD_PKR,
         });
-        const settings = await getSettings();
         return {
           sessionId: Number(result[0].insertId),
-          ad: available,
+          ad: { id: input.slot, title: `Daily rewarded ad ${input.slot}` },
           startedAt,
-          availableAt: new Date(
-            startedAt.getTime() + settings.adTimerSeconds * 1000
-          ),
+          availableAt: new Date(startedAt.getTime() + settings.adTimerSeconds * 1000),
           timerSeconds: settings.adTimerSeconds,
         };
       }),
@@ -969,26 +979,10 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { user } = await getActor(ctx);
         const db = await getDb();
-        if (!db)
-          fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-        const session = (
-          await db
-            .select()
-            .from(adSessions)
-            .where(
-              and(
-                eq(adSessions.id, input.sessionId),
-                eq(adSessions.userId, user.id)
-              )
-            )
-            .limit(1)
-        )[0];
-        if (!session || session.claimedAt || session.invalidatedAt)
-          fail(AD_TIMER_MESSAGE, "FORBIDDEN");
-        await db
-          .update(adSessions)
-          .set({ lastHeartbeatAt: new Date() })
-          .where(eq(adSessions.id, session.id));
+        if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const session = (await db.select().from(adSessions).where(and(eq(adSessions.id, input.sessionId), eq(adSessions.userId, user.id))).limit(1))[0];
+        if (!session || session.claimedAt || session.invalidatedAt) fail(AD_TIMER_MESSAGE, "FORBIDDEN");
+        await db.update(adSessions).set({ lastHeartbeatAt: new Date() }).where(eq(adSessions.id, session.id));
         return { success: true };
       }),
     claimAd: protectedProcedure
@@ -996,56 +990,52 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { user } = await getActor(ctx);
         const db = await getDb();
-        if (!db)
-          fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-        const session = (
-          await db
-            .select()
-            .from(adSessions)
-            .where(
-              and(
-                eq(adSessions.id, input.sessionId),
-                eq(adSessions.userId, user.id)
-              )
-            )
-            .limit(1)
-        )[0];
+        if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const session = (await db.select().from(adSessions).where(and(eq(adSessions.id, input.sessionId), eq(adSessions.userId, user.id))).limit(1))[0];
         if (!session) fail("Earning session was not found.", "NOT_FOUND");
         if (session.claimedAt) fail("This reward has already been claimed.");
         const settings = await getSettings();
-        const claimStatus = getAdClaimStatus({
-          startedAt: session.startedAt,
-          lastHeartbeatAt: session.lastHeartbeatAt,
-          invalidatedAt: session.invalidatedAt,
-          now: new Date(),
-          timerSeconds: settings.adTimerSeconds,
-        });
-        if (claimStatus === "early") fail(AD_TIMER_MESSAGE);
-        const profile = (
-          await db
-            .select()
-            .from(profiles)
-            .where(eq(profiles.userId, user.id))
-            .limit(1)
-        )[0];
+        if (getAdClaimStatus({ startedAt: session.startedAt, lastHeartbeatAt: session.lastHeartbeatAt, invalidatedAt: session.invalidatedAt, now: new Date(), timerSeconds: settings.adTimerSeconds }) === "early") fail(AD_TIMER_MESSAGE);
+        const profile = (await db.select().from(profiles).where(eq(profiles.userId, user.id)).limit(1))[0];
         if (!profile) fail("Profile was not found.", "NOT_FOUND");
-        await db
-          .update(adSessions)
-          .set({ claimedAt: new Date() })
-          .where(eq(adSessions.id, session.id));
-        await db
-          .update(profiles)
-          .set({ balancePkr: profile.balancePkr + session.rewardPkr })
-          .where(eq(profiles.userId, user.id));
-        await db.insert(transactions).values({
-          userId: user.id,
-          type: "ad_reward",
-          direction: "credit",
-          amountPkr: session.rewardPkr,
-          status: "completed",
-          note: "Daily ad reward claimed",
-        });
-        return { success: true, rewardPkr: session.rewardPkr };
+        await db.update(adSessions).set({ claimedAt: new Date() }).where(eq(adSessions.id, session.id));
+        await db.update(profiles).set({ balancePkr: profile.balancePkr + session.rewardPkr }).where(eq(profiles.userId, user.id));
+        await db.insert(transactions).values({ userId: user.id, type: "ad_reward", direction: "credit", amountPkr: session.rewardPkr, status: "completed", note: "Daily ad reward claimed" });
+        const claimedSessions = await db.select({ id: adSessions.id }).from(adSessions).where(and(eq(adSessions.userId, user.id), eq(adSessions.dayKey, session.dayKey), sql`${adSessions.claimedAt} IS NOT NULL`));
+        const active = await getActivePackageForUser(user.id);
+        const breakSequence = active ? rewardedBreakSequence(active.plan.pricePkr, claimedSessions.length) : null;
+        return {
+          success: true,
+          rewardPkr: session.rewardPkr,
+          continuation: settings.automaticAdsEnabled && breakSequence ? { placement: "rewarded_break" as const, sequence: breakSequence } : null,
+        };
+      }),
+    startAdminAd: protectedProcedure
+      .input(z.object({ placement: automaticAdPlacementSchema, sequence: z.number().int().min(0).max(50).default(0) }))
+      .mutation(async ({ ctx, input }) => {
+        const { user } = await getActor(ctx);
+        const db = await getDb();
+        if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const settings = await getSettings();
+        if (!settings.automaticAdsEnabled) return { show: false as const };
+        const dayKey = getDayKey();
+        let impression = (await db.select().from(adminAdImpressions).where(and(eq(adminAdImpressions.userId, user.id), eq(adminAdImpressions.dayKey, dayKey), eq(adminAdImpressions.placement, input.placement), eq(adminAdImpressions.sequence, input.sequence))).limit(1))[0];
+        if (!impression) {
+          const result = await db.insert(adminAdImpressions).values({ userId: user.id, dayKey, placement: input.placement, sequence: input.sequence });
+          impression = (await db.select().from(adminAdImpressions).where(eq(adminAdImpressions.id, Number(result[0].insertId))).limit(1))[0];
+        }
+        return impression?.completedAt ? { show: false as const } : { show: true as const, impressionId: impression?.id };
+      }),
+    completeAdminAd: protectedProcedure
+      .input(z.object({ impressionId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const { user } = await getActor(ctx);
+        const db = await getDb();
+        if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const impression = (await db.select().from(adminAdImpressions).where(and(eq(adminAdImpressions.id, input.impressionId), eq(adminAdImpressions.userId, user.id))).limit(1))[0];
+        if (!impression) fail("Sponsored continuation was not found.", "NOT_FOUND");
+        if (!impression.completedAt) await db.update(adminAdImpressions).set({ completedAt: new Date() }).where(eq(adminAdImpressions.id, impression.id));
+        return { success: true };
       }),
   }),
   deposit: router({
@@ -1758,78 +1748,41 @@ export const appRouter = router({
           .where(eq(profiles.userId, input.userId));
         return { success: true };
       }),
-    ads: protectedProcedure.query(async ({ ctx }) => {
+    adSettings: protectedProcedure.query(async ({ ctx }) => {
       await getAdmin(ctx);
       const db = await getDb();
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-      return db.select().from(ads).orderBy(desc(ads.updatedAt));
+      const [settings, counts] = await Promise.all([
+        getSettings(),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(adminAdImpressions)
+          .where(
+            and(
+              eq(adminAdImpressions.dayKey, getDayKey()),
+              sql`${adminAdImpressions.completedAt} IS NOT NULL`
+            )
+          ),
+      ]);
+      const shownToday = Number(counts[0]?.count ?? 0);
+      return {
+        automaticAdsEnabled: settings.automaticAdsEnabled,
+        shownToday,
+        estimatedEarningUsd: Number((shownToday * 0.007).toFixed(3)),
+      };
     }),
-    saveAd: protectedProcedure
-      .input(
-        z.object({
-          id: z.number().int().positive().optional(),
-          packageTier: z.string().min(3).max(24),
-          title: z.string().trim().min(3).max(128),
-          contentType: z.enum(["text", "image", "video", "link", "app"]),
-          content: z.string().trim().max(5000).optional(),
-          mediaData: z.string().max(8_000_000).optional(),
-          targetUrl: z.string().url().optional(),
-          isActive: z.boolean(),
-        })
-      )
+    saveAdSettings: protectedProcedure
+      .input(z.object({ automaticAdsEnabled: z.boolean() }))
       .mutation(async ({ ctx, input }) => {
         await getAdmin(ctx);
         const db = await getDb();
         if (!db)
           fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-        if (!input.id && input.contentType === "text")
-          fail("New advertisements must use Image, Video, Link, or App Ad.");
-        const content = input.content ?? "";
-        let mediaData: string | null | undefined =
-          input.contentType === "image" || input.contentType === "video"
-            ? undefined
-            : null;
-        if (input.mediaData) {
-          if (input.contentType !== "image" && input.contentType !== "video")
-            fail("Only image or video ad types accept gallery uploads.");
-          mediaData = saveAdMedia(input.mediaData, input.contentType);
-        }
-        if (
-          (input.contentType === "image" || input.contentType === "video") &&
-          !mediaData &&
-          !input.id
-        )
-          fail("Please upload media for this ad type.");
-        if (
-          (input.contentType === "link" || input.contentType === "app") &&
-          !input.targetUrl
-        )
-          fail("Please paste a destination link for this ad type.");
-        const values = {
-          packageTier: input.packageTier,
-          title: input.title,
-          contentType: input.contentType,
-          content: content || input.targetUrl || "Custom advertisement",
-          mediaData,
-          targetUrl: input.targetUrl ?? null,
-          isActive: input.isActive,
-        };
-        if (input.id) {
-          await db.update(ads).set(values).where(eq(ads.id, input.id));
-        } else {
-          await db.insert(ads).values(values);
-        }
-        return { success: true };
-      }),
-    deleteAd: protectedProcedure
-      .input(z.object({ id: z.number().int().positive() }))
-      .mutation(async ({ ctx, input }) => {
-        await getAdmin(ctx);
-        const db = await getDb();
-        if (!db)
-          fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-        await db.delete(ads).where(eq(ads.id, input.id));
+        await db
+          .update(appSettings)
+          .set(input)
+          .where(eq(appSettings.id, 1));
         return { success: true };
       }),
     paymentAccounts: protectedProcedure.query(async ({ ctx }) => {

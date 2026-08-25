@@ -31,7 +31,16 @@ export function getPakistanResetSeconds(date = new Date()) {
 }
 
 export function getDailyAdQuota(packagePricePkr: number) {
-  return Math.max(0, Math.floor(packagePricePkr / 100));
+  const quotas: Record<number, number> = {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    1000: 10,
+    2000: 20,
+    5000: 50,
+  };
+  return quotas[packagePricePkr] ?? 0;
 }
 
 export function getDailyAdStates(
