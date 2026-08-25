@@ -46,12 +46,15 @@ const tabItems: Array<{ id: Tab; label: string; icon: typeof ClipboardCheck }> =
 const adminRoutes: Partial<Record<Tab, string>> = {
   users: "/admin/users",
   depositHistory: "/admin/deposits",
-  withdrawalHistory: "/admin/withdrawals",
+  withdrawalHistory: "/admin/withdraws",
+  ads: "/admin/ads",
 };
 const routeTabs: Record<string, Tab> = {
   "/admin/users": "users",
   "/admin/deposits": "depositHistory",
+  "/admin/withdraws": "withdrawalHistory",
   "/admin/withdrawals": "withdrawalHistory",
+  "/admin/ads": "ads",
 };
 const money = (amount: number) => `PKR ${amount.toLocaleString()}`;
 const dateTime = (value: Date | string) =>
@@ -134,12 +137,11 @@ export function AdminPanel({ t }: { t: (key: any) => string }) {
           </div>
         ))}
       </div>
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      {!routeTab && <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { id: "users" as Tab, label: "users", icon: Users },
           { id: "depositHistory" as Tab, label: "depositHistory", icon: CreditCard },
           { id: "withdrawalHistory" as Tab, label: "withdrawalHistory", icon: ClipboardCheck },
-          { id: "packages" as Tab, label: "packages", icon: ClipboardCheck },
           { id: "ads" as Tab, label: "adSettings", icon: PlaySquare },
         ].map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => selectTab(id)} className="panel flex items-center gap-3 p-4 text-left transition hover:-translate-y-0.5 hover:border-red-400/40">
@@ -147,23 +149,11 @@ export function AdminPanel({ t }: { t: (key: any) => string }) {
             <span className="font-bold">{t(label)}</span>
           </button>
         ))}
-      </div>
-      <div className="mt-5 grid gap-5 xl:grid-cols-[210px_1fr]">
-        <aside className="panel h-fit p-2">
-          <nav>
-            {tabItems.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => selectTab(id)}
-                className={`nav-item mb-1 w-full text-left ${activeTab === id ? "nav-item-active" : ""}`}
-              >
-                <Icon className="size-4" />
-                {t(label)}
-              </button>
-            ))}
-          </nav>
-        </aside>
-        <section className="min-w-0">
+      </div>}
+      {routeTab && <section className="mt-5 min-w-0">
+        <button type="button" onClick={() => navigate("/admin")} className="mb-4 inline-flex h-10 items-center rounded-lg border border-red-300/30 bg-white px-4 text-sm font-bold text-red-700 transition hover:bg-red-50">
+          ← {t("admin")}
+        </button>
           {activeTab === "depositHistory" && (
             <Approvals t={t} mode="deposits" onChange={() => dashboard.refetch()} />
           )}
@@ -177,8 +167,7 @@ export function AdminPanel({ t }: { t: (key: any) => string }) {
           {activeTab === "users" && <UserManagement t={t} />}
           {activeTab === "settings" && <GlobalSettings t={t} />}
           {activeTab === "tickets" && <Tickets t={t} />}
-        </section>
-      </div>
+      </section>}
     </>
   );
 }

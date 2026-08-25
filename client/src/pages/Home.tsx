@@ -1201,7 +1201,7 @@ function Workspace({
         onDone={invalidateCore}
       />
     ),
-    earn: <AdsTasks t={t} onDone={invalidateCore} onRequestAdminAd={input => requestAutomaticAd(input.placement, input.onComplete, input.sequence)} />,
+    earn: <AdsTasks t={t} onDone={invalidateCore} onGoPackages={() => setPage("packages")} onRequestAdminAd={input => requestAutomaticAd(input.placement, input.onComplete, input.sequence)} />,
     history: <TransactionHistory t={t} />,
     invite: <Referral t={t} />,
     support: <Support t={t} />,
