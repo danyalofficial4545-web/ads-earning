@@ -6,6 +6,7 @@ import { GoogleOnboarding, PublicAuth } from "@/components/PublicAuth";
 import { WorkspaceAccessGate } from "@/components/WorkspaceAccessGate";
 import { AdsTasks } from "@/components/AdsTasks";
 import { BrandLogo } from "@/components/BrandLogo";
+import { EuroGames } from "@/components/EuroGames";
 import { trpc } from "@/lib/trpc";
 import { resolveWorkspaceGate } from "@/lib/authOnboarding";
 import { resolvePublicBranding } from "@/lib/publicBranding";
@@ -35,6 +36,7 @@ import {
   Bell,
   Boxes,
   CircleHelp,
+  CircleDollarSign,
   ClipboardList,
   Copy,
   CreditCard,
@@ -63,6 +65,7 @@ import {
   X,
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
 
 type Page =
   | "dashboard"
@@ -73,6 +76,7 @@ type Page =
   | "earn"
   | "history"
   | "invite"
+  | "euro"
   | "support"
   | "admin";
 
@@ -85,6 +89,7 @@ const nav: Array<{
   { id: "packages", icon: Boxes, label: "packages" },
   { id: "profile", icon: WalletCards, label: "profile" },
   { id: "invite", icon: Users, label: "invite" },
+  { id: "euro", icon: CircleDollarSign, label: "euro" },
   { id: "earn", icon: Play, label: "earn" },
   { id: "history", icon: History, label: "history" },
   { id: "support", icon: CircleHelp, label: "support" },
@@ -137,10 +142,13 @@ function toDataUrl(file: File) {
 
 export default function Home() {
   const { isAuthenticated, loading, logout, user, refresh } = useAuth();
+  const [location, navigate] = useLocation();
   const [language, setLanguage] = useState<Language>(
     () => (localStorage.getItem("pep-language") as Language) || "en"
   );
-  const [page, setPage] = useState<Page>("dashboard");
+  const [page, setPage] = useState<Page>(() =>
+    location === "/euro" ? "euro" : "dashboard"
+  );
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const t = (key: TranslationKey) => translate(language, key);
   const utils = trpc.useUtils();
@@ -166,6 +174,11 @@ export default function Home() {
     document.documentElement.lang = language === "ur" ? "ur" : "en";
     document.documentElement.dir = language === "ur" ? "rtl" : "ltr";
   }, [language]);
+
+  useEffect(() => {
+    if (location === "/euro") setPage("euro");
+    else if (page === "euro") setPage("dashboard");
+  }, [location, page]);
 
   if (loading || (isAuthenticated && session.isLoading))
     return <LoadingScreen text={t("loading")} />;
@@ -203,6 +216,7 @@ export default function Home() {
   const needsProfile = workspaceGate === "profile-setup";
   const selectPage = (next: Page) => {
     setPage(next);
+    navigate(next === "euro" ? "/euro" : "/");
     setMobileNavOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -1108,6 +1122,7 @@ function Workspace({
     earn: <AdsTasks t={t} onDone={invalidateCore} />,
     history: <TransactionHistory t={t} />,
     invite: <Referral t={t} />,
+    euro: <EuroGames t={t} onWithdraw={() => setPage("withdrawal")} />,
     support: <Support t={t} />,
     admin: <AdminPanel t={t} />,
   };
@@ -1461,6 +1476,12 @@ function ProfileWallet({
               className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
             >
               {t("withdrawal")}
+            </button>
+            <button
+              onClick={() => setPage("euro")}
+              className="rounded-xl border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-sm font-bold text-amber-200"
+            >
+              {t("exchangeToGame")}
             </button>
           </div>
         }

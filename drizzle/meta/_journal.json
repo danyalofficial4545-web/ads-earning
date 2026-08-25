@@ -120,6 +120,34 @@
       "when": 1787500843046,
       "tag": "0016_wet_korg",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "5",
+      "when": 1787618795005,
+      "tag": "0017_rich_sinister_six",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1787620237141,
+      "tag": "0018_sweet_mystique",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1787623636953,
+      "tag": "0019_slippery_doctor_strange",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "5",
+      "when": 1787624375825,
+      "tag": "0020_great_guardian",
+      "breakpoints": true
     }
   ]
 }
