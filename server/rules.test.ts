@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  AD_REWARD_PKR,
   AD_TIMER_MESSAGE,
   applyWithdrawalRequest,
   canUseMemberWorkspace,
@@ -21,6 +20,7 @@ import {
   WITHDRAWAL_MAX_PKR,
   WITHDRAWAL_ZERO_LIMIT_MESSAGE,
   WHATSAPP_JOIN_REWARD_PKR,
+  REWARDED_AD_TIMER_SECONDS,
 } from "./rules";
 
 describe("Package Earn Pro server rules", () => {
@@ -115,13 +115,13 @@ describe("Package Earn Pro server rules", () => {
   it("allows a reward only after the whole server-side timer duration has elapsed", () => {
     const startedAt = new Date("2026-08-14T12:00:00.000Z");
     expect(
-      canClaimAd(startedAt, new Date("2026-08-14T12:00:09.999Z"), 10)
+      canClaimAd(startedAt, new Date("2026-08-14T12:00:04.999Z"), REWARDED_AD_TIMER_SECONDS)
     ).toBe(false);
     expect(
-      canClaimAd(startedAt, new Date("2026-08-14T12:00:10.000Z"), 10)
+      canClaimAd(startedAt, new Date("2026-08-14T12:00:05.000Z"), REWARDED_AD_TIMER_SECONDS)
     ).toBe(true);
-    expect(AD_TIMER_MESSAGE).toContain("10-second timer");
-    expect(AD_REWARD_PKR).toBe(20);
+    expect(AD_TIMER_MESSAGE).toContain("5-second timer");
+    expect(REWARDED_AD_TIMER_SECONDS).toBe(5);
   });
 
   it("permits a completed custom ad even when the external tab was closed before the timer completed", () => {

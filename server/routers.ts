@@ -41,7 +41,6 @@ import {
   verifyPassword,
 } from "./localAuth";
 import {
-  AD_REWARD_PKR,
   AD_TIMER_MESSAGE,
   applyWithdrawalRequest,
   canUseMemberWorkspace,
@@ -60,8 +59,10 @@ import {
   WITHDRAWAL_NO_PACKAGE_MESSAGE,
   WITHDRAWAL_WALLET_NUMBER_MESSAGE,
   WITHDRAWAL_WALLET_TYPE_MESSAGE,
+  REWARDED_AD_TIMER_SECONDS,
 } from "./rules";
 import {
+  getDailyAdRewardPkr,
   getDailyAdQuota,
   getNextPakistanMidnight,
 } from "../shared/adRules";
@@ -81,18 +82,9 @@ const automaticAdPlacementSchema = z.enum([
 type AutomaticAdPlacement = z.infer<typeof automaticAdPlacementSchema>;
 
 function rewardedBreakSequence(packagePricePkr: number, claimedCount: number) {
-  const sequences: Record<number, number[]> = {
-    100: [1],
-    200: [2],
-    300: [2, 3],
-    500: [2, 5],
-    1000: [5, 10],
-    2000: [10, 20],
-    5000: [10, 20, 30, 40, 50],
-  };
-  return sequences[packagePricePkr]?.includes(claimedCount)
-    ? claimedCount
-    : null;
+  void packagePricePkr;
+  void claimedCount;
+  return null;
 }
 
 async function hasCompletedAutomaticAd(input: {
@@ -918,8 +910,10 @@ export const appRouter = router({
           const slot = index + 1;
           return {
             id: slot,
-            title: `Daily rewarded ad ${slot}`,
+            title: `Ad ${slot}`,
             contentType: "rewarded" as const,
+            rewardPkr: getDailyAdRewardPkr(activePackage?.plan.pricePkr ?? 0),
+            timerSeconds: REWARDED_AD_TIMER_SECONDS,
             state: slot <= claimedCount ? "watched" as const : slot === claimedCount + 1 && !continuationRequired ? "unlocked" as const : "locked" as const,
           };
         }),
@@ -930,7 +924,14 @@ export const appRouter = router({
           ? { placement: "rewarded_break" as const, sequence: breakSequence }
           : null,
         activePackage: activePackage
-          ? { name: activePackage.plan.name, pricePkr: activePackage.plan.pricePkr, quota }
+          ? {
+              name: activePackage.plan.name,
+              pricePkr: activePackage.plan.pricePkr,
+              quota,
+              rewardPkr: getDailyAdRewardPkr(activePackage.plan.pricePkr),
+              totalDailyPkr:
+                quota * getDailyAdRewardPkr(activePackage.plan.pricePkr),
+            }
           : null,
       };
     }),
@@ -964,14 +965,14 @@ export const appRouter = router({
           dayKey,
           startedAt,
           lastHeartbeatAt: startedAt,
-          rewardPkr: AD_REWARD_PKR,
+          rewardPkr: getDailyAdRewardPkr(active.plan.pricePkr),
         });
         return {
           sessionId: Number(result[0].insertId),
-          ad: { id: input.slot, title: `Daily rewarded ad ${input.slot}` },
+          ad: { id: input.slot, title: `Ad ${input.slot}` },
           startedAt,
-          availableAt: new Date(startedAt.getTime() + settings.adTimerSeconds * 1000),
-          timerSeconds: settings.adTimerSeconds,
+          availableAt: new Date(startedAt.getTime() + REWARDED_AD_TIMER_SECONDS * 1000),
+          timerSeconds: REWARDED_AD_TIMER_SECONDS,
         };
       }),
     heartbeat: protectedProcedure
@@ -994,8 +995,7 @@ export const appRouter = router({
         const session = (await db.select().from(adSessions).where(and(eq(adSessions.id, input.sessionId), eq(adSessions.userId, user.id))).limit(1))[0];
         if (!session) fail("Earning session was not found.", "NOT_FOUND");
         if (session.claimedAt) fail("This reward has already been claimed.");
-        const settings = await getSettings();
-        if (getAdClaimStatus({ startedAt: session.startedAt, lastHeartbeatAt: session.lastHeartbeatAt, invalidatedAt: session.invalidatedAt, now: new Date(), timerSeconds: settings.adTimerSeconds }) === "early") fail(AD_TIMER_MESSAGE);
+        if (getAdClaimStatus({ startedAt: session.startedAt, lastHeartbeatAt: session.lastHeartbeatAt, invalidatedAt: session.invalidatedAt, now: new Date(), timerSeconds: REWARDED_AD_TIMER_SECONDS }) === "early") fail(AD_TIMER_MESSAGE);
         const profile = (await db.select().from(profiles).where(eq(profiles.userId, user.id)).limit(1))[0];
         if (!profile) fail("Profile was not found.", "NOT_FOUND");
         await db.update(adSessions).set({ claimedAt: new Date() }).where(eq(adSessions.id, session.id));
@@ -1007,7 +1007,7 @@ export const appRouter = router({
         return {
           success: true,
           rewardPkr: session.rewardPkr,
-          continuation: settings.automaticAdsEnabled && breakSequence ? { placement: "rewarded_break" as const, sequence: breakSequence } : null,
+          continuation: null,
         };
       }),
     startAdminAd: protectedProcedure
@@ -1917,6 +1917,7 @@ export const appRouter = router({
           .update(appSettings)
           .set({
             ...input,
+            adTimerSeconds: REWARDED_AD_TIMER_SECONDS,
             minimumWithdrawalPkr: 0,
             maximumWithdrawalPkr: 3000,
           })

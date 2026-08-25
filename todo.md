@@ -306,3 +306,12 @@
 - [x] Implement server-authorized five-second continuation overlays after signup, WhatsApp reward completion, package/deposit entry, withdrawal entry, and the requested completed-reward cadence.
 - [x] Persist automatic-ad enable state and daily Pakistan-time display counts, then add an administrator Ad Settings page with the requested 0.007-per-display estimate and read-only Adsterra code references.
 - [x] Add/update regression tests, run database migration and all build checks, publish to the same domain, synchronize both GitHub main branches, and verify deployment.
+
+### Current request: Eight-package earning structure and five-second ads
+
+- [x] Audit existing package rows, active package ownership, ad sessions, daily reward state, and the current timer setting before changing member-visible package definitions.
+- [x] Replace the managed package catalog with exactly 100/200/300/400/500/1000/2000/5000 PKR tiers and persist each tier’s required daily-ad count and PKR reward per completed ad.
+- [x] Change protected rewarded-ad sessions and visible countdowns to five seconds while preserving server-side elapsed-time validation and the existing purchase/withdrawal Adsterra continuation gate.
+- [x] Limit member Ads/Tasks to five reusable slot contents, show only the active package’s allowed slot count and per-ad reward, and add the requested no-package centered guidance.
+- [x] Update package cards with requested bold Ad/reward line and total daily earning; retain only safe user-facing earning information.
+- [ ] Add regression coverage for every new package tier, active legacy-package compatibility, five-second sessions, reward credits, empty state, and display copy; validate builds, publish same domain, synchronize both GitHub main branches, and verify Vercel deployment.

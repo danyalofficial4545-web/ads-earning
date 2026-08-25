@@ -80,11 +80,11 @@ describe("rewarded slot start access", () => {
     });
   });
 
-  it("starts the next sequential rewarded slot within the two-ad Silver quota", async () => {
+  it("starts the next sequential rewarded slot with its package-specific reward and fixed five-second timer", async () => {
     const { db, inserts } = createAdsDatabase();
     mocks.getDb.mockResolvedValue(db);
 
-    await appRouter.createCaller(callerContext()).earning.startAd({ slot: 1 });
+    const result = await appRouter.createCaller(callerContext()).earning.startAd({ slot: 1 });
 
     expect(inserts).toHaveLength(1);
     expect(inserts[0]?.table).toBe(adSessions);
@@ -93,7 +93,10 @@ describe("rewarded slot start access", () => {
       userPackageId: 55,
       adId: 1,
       dayKey: "2026-08-15",
+      rewardPkr: 30,
     });
+    expect(result.ad).toEqual({ id: 1, title: "Ad 1" });
+    expect(result.timerSeconds).toBe(5);
   });
 
   it("rejects a rewarded slot beyond the package daily quota", async () => {

@@ -34,13 +34,28 @@ export function getDailyAdQuota(packagePricePkr: number) {
   const quotas: Record<number, number> = {
     100: 1,
     200: 2,
-    300: 3,
-    500: 5,
-    1000: 10,
-    2000: 20,
-    5000: 50,
+    300: 2,
+    400: 2,
+    500: 3,
+    1000: 4,
+    2000: 5,
+    5000: 5,
   };
   return quotas[packagePricePkr] ?? 0;
+}
+
+export function getDailyAdRewardPkr(packagePricePkr: number) {
+  const rewards: Record<number, number> = {
+    100: 30,
+    200: 30,
+    300: 40,
+    400: 60,
+    500: 70,
+    1000: 80,
+    2000: 100,
+    5000: 200,
+  };
+  return rewards[packagePricePkr] ?? 0;
 }
 
 export function getDailyAdStates(

@@ -127,6 +127,13 @@
       "when": 1787638294516,
       "tag": "0017_eager_ben_urich",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1787640642523,
+      "tag": "0018_smart_meltdown",
+      "breakpoints": true
     }
   ]
 }

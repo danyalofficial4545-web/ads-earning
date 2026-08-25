@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getDailyAdRewardPkr,
   getDailyAdQuota,
   getDailyAdStates,
   getNextPakistanMidnight,
@@ -8,10 +9,10 @@ import {
 } from "../shared/adRules";
 
 describe("Pakistan daily ad rules", () => {
-  it("maps the seven package prices to the required daily rewarded-ad quotas", () => {
-    expect([100, 200, 300, 500, 1000, 2000, 5000].map(getDailyAdQuota)).toEqual([
-      1, 2, 3, 5, 10, 20, 50,
-    ]);
+  it("maps the eight package prices to the required daily rewarded-ad quotas and rewards", () => {
+    const prices = [100, 200, 300, 400, 500, 1000, 2000, 5000];
+    expect(prices.map(getDailyAdQuota)).toEqual([1, 2, 2, 2, 3, 4, 5, 5]);
+    expect(prices.map(getDailyAdRewardPkr)).toEqual([30, 30, 40, 60, 70, 80, 100, 200]);
   });
 
   it("uses Pakistan midnight rather than UTC midnight for the daily reset", () => {

@@ -25,25 +25,14 @@ export const ADMIN_EMAIL = DESIGNATED_ADMIN_EMAIL;
 export const ADMIN_USERNAME = DESIGNATED_ADMIN_USERNAME;
 
 const defaultPackages = [
-  { tier: "bronze", name: "Bronze", icon: "🥉", pricePkr: 100, dailyAds: 1 },
-  { tier: "silver", name: "Silver", icon: "🥈", pricePkr: 200, dailyAds: 2 },
-  { tier: "starter", name: "Starter", icon: "🔷", pricePkr: 300, dailyAds: 3 },
-  { tier: "gold", name: "Gold", icon: "🥇", pricePkr: 500, dailyAds: 5 },
-  {
-    tier: "platinum",
-    name: "Platinum",
-    icon: "💎",
-    pricePkr: 1000,
-    dailyAds: 10,
-  },
-  {
-    tier: "diamond",
-    name: "Diamond",
-    icon: "💠",
-    pricePkr: 2000,
-    dailyAds: 20,
-  },
-  { tier: "vip", name: "VIP", icon: "👑", pricePkr: 5000, dailyAds: 50 },
+  { tier: "pkr_100", name: "100 PKR Package", icon: "🥉", pricePkr: 100, dailyAds: 1, adRewardPkr: 30 },
+  { tier: "pkr_200", name: "200 PKR Package", icon: "🥈", pricePkr: 200, dailyAds: 2, adRewardPkr: 30 },
+  { tier: "pkr_300", name: "300 PKR Package", icon: "🔷", pricePkr: 300, dailyAds: 2, adRewardPkr: 40 },
+  { tier: "pkr_400", name: "400 PKR Package", icon: "🔶", pricePkr: 400, dailyAds: 2, adRewardPkr: 60 },
+  { tier: "pkr_500", name: "500 PKR Package", icon: "🥇", pricePkr: 500, dailyAds: 3, adRewardPkr: 70 },
+  { tier: "pkr_1000", name: "1000 PKR Package", icon: "💎", pricePkr: 1000, dailyAds: 4, adRewardPkr: 80 },
+  { tier: "pkr_2000", name: "2000 PKR Package", icon: "💠", pricePkr: 2000, dailyAds: 5, adRewardPkr: 100 },
+  { tier: "pkr_5000", name: "5000 PKR Package", icon: "👑", pricePkr: 5000, dailyAds: 5, adRewardPkr: 200 },
 ] as const;
 
 const defaultAccounts = [
@@ -171,18 +160,37 @@ export async function ensurePlatformData() {
     .from(appSettings)
     .where(eq(appSettings.id, 1))
     .limit(1);
-  if (!settings[0]) await db.insert(appSettings).values({ id: 1 });
+  if (!settings[0]) await db.insert(appSettings).values({ id: 1, adTimerSeconds: 5 });
+  await db
+    .update(appSettings)
+    .set({ adTimerSeconds: 5 })
+    .where(eq(appSettings.id, 1));
 
+  const existingPackages = await db.select().from(packages);
+  const retainedPackageIds = new Set<number>();
   for (const item of defaultPackages) {
-    const existing = await db
-      .select({ id: packages.id })
-      .from(packages)
-      .where(eq(packages.tier, item.tier))
-      .limit(1);
-    if (!existing[0])
+    const existing =
+      existingPackages.find(row => row.tier === item.tier) ??
+      existingPackages.find(row => row.pricePkr === item.pricePkr);
+    if (existing) {
+      retainedPackageIds.add(existing.id);
       await db
+        .update(packages)
+        .set({ ...item, durationDays: 30, isActive: true })
+        .where(eq(packages.id, existing.id));
+    } else {
+      const result = await db
         .insert(packages)
         .values({ ...item, durationDays: 30, isActive: true });
+      retainedPackageIds.add(Number(result[0].insertId));
+    }
+  }
+  for (const existing of existingPackages) {
+    if (!retainedPackageIds.has(existing.id))
+      await db
+        .update(packages)
+        .set({ isActive: false })
+        .where(eq(packages.id, existing.id));
   }
 
   const existingAccounts = await db

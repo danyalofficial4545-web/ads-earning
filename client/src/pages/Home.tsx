@@ -1450,6 +1450,12 @@ function Packages({ t, plans, balance, active, onPurchase }: any) {
               <p className="mt-5 text-3xl font-bold text-amber-300">
                 {money(plan.pricePkr)}
               </p>
+              <p className="mt-3 text-lg font-extrabold text-emerald-200">
+                {plan.dailyAds} {plan.dailyAds === 1 ? t("ad") : t("ads")} - {plan.adRewardPkr} PKR / {t("ad")}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-amber-100">
+                {t("totalDailyEarning")}: {money(plan.dailyAds * plan.adRewardPkr)}
+              </p>
               <div className="mt-5 space-y-2 text-sm text-slate-300">
                 <p className="flex items-center gap-2">
                   <Play className="size-4 text-emerald-300" />
