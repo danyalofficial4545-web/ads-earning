@@ -37,7 +37,6 @@ export const profiles = mysqlTable("profiles", {
   referralCode: varchar("referralCode", { length: 32 }).notNull(),
   referredByUserId: int("referredByUserId"),
   balancePkr: int("balancePkr").notNull().default(0),
-  gameBalancePkr: int("gameBalancePkr").notNull().default(0),
   withdrawalLimitPkr: int("withdrawalLimitPkr").notNull().default(0),
   preferredCurrency: mysqlEnum("preferredCurrency", ["PKR", "USD"]).notNull().default("PKR"),
   isBlocked: boolean("isBlocked").notNull().default(false),
@@ -49,8 +48,6 @@ export const profiles = mysqlTable("profiles", {
   whatsappRewardWithdrawn: boolean("whatsappRewardWithdrawn")
     .notNull()
     .default(false),
-  euroBonusEligible: boolean("euroBonusEligible").notNull().default(false),
-  euroBonusClaimed: boolean("euroBonusClaimed").notNull().default(false),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => [
@@ -138,184 +135,6 @@ export const transactions = mysqlTable("transactions", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => [index("transactions_user_created_idx").on(table.userId, table.createdAt)]);
 
-export const gameWalletTransactions = mysqlTable("gameWalletTransactions", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  type: mysqlEnum("type", [
-    "bonus",
-    "main_to_game",
-    "game_to_main",
-    "aviator_bet",
-    "aviator_payout",
-    "game_bet",
-    "game_payout",
-    "task_reward",
-    "shared_bet",
-    "shared_payout",
-    "ludo_bet",
-    "ludo_payout",
-    "admin_adjustment",
-  ]).notNull(),
-  direction: mysqlEnum("direction", ["credit", "debit"]).notNull(),
-  amountPkr: int("amountPkr").notNull(),
-  note: varchar("note", { length: 256 }).notNull(),
-  referenceType: varchar("referenceType", { length: 64 }),
-  referenceId: varchar("referenceId", { length: 64 }),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-}, (table) => [
-  index("game_wallet_transactions_user_created_idx").on(table.userId, table.createdAt),
-]);
-
-export const aviatorRounds = mysqlTable("aviatorRounds", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  userId: int("userId").notNull(),
-  crashMultiplierX100: int("crashMultiplierX100").notNull(),
-  startsAt: timestamp("startsAt").notNull(),
-  crashesAt: timestamp("crashesAt").notNull(),
-  status: mysqlEnum("status", ["active", "crashed"]).notNull().default("active"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-}, (table) => [
-  index("aviator_rounds_user_status_idx").on(table.userId, table.status),
-]);
-
-export const aviatorBets = mysqlTable("aviatorBets", {
-  id: int("id").autoincrement().primaryKey(),
-  roundId: varchar("roundId", { length: 64 }).notNull(),
-  userId: int("userId").notNull(),
-  stakePkr: int("stakePkr").notNull(),
-  cashoutMultiplierX100: int("cashoutMultiplierX100"),
-  payoutPkr: int("payoutPkr").notNull().default(0),
-  status: mysqlEnum("status", ["active", "cashed_out", "lost"])
-    .notNull()
-    .default("active"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  settledAt: timestamp("settledAt"),
-}, (table) => [
-  index("aviator_bets_user_created_idx").on(table.userId, table.createdAt),
-  index("aviator_bets_round_idx").on(table.roundId),
-]);
-
-export const gameRounds = mysqlTable("gameRounds", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  userId: int("userId").notNull(),
-  gameKey: mysqlEnum("gameKey", [
-    "slots",
-    "mining",
-    "ludo",
-    "wheel",
-    "plinko",
-    "color",
-    "lucky",
-  ]).notNull(),
-  stakePkr: int("stakePkr").notNull(),
-  selection: varchar("selection", { length: 64 }),
-  privateState: mediumtext("privateState"),
-  publicState: mediumtext("publicState"),
-  multiplierX100: int("multiplierX100").notNull().default(0),
-  payoutPkr: int("payoutPkr").notNull().default(0),
-  status: mysqlEnum("status", ["active", "cashed_out", "settled", "lost"])
-    .notNull()
-    .default("active"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  settledAt: timestamp("settledAt"),
-}, (table) => [
-  index("game_rounds_user_game_created_idx").on(table.userId, table.gameKey, table.createdAt),
-  index("game_rounds_user_status_idx").on(table.userId, table.status),
-]);
-
-export const gameTaskClaims = mysqlTable("gameTaskClaims", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  taskKey: varchar("taskKey", { length: 64 }).notNull(),
-  dayKey: varchar("dayKey", { length: 16 }).notNull(),
-  rewardPkr: int("rewardPkr").notNull(),
-  claimedAt: timestamp("claimedAt").defaultNow().notNull(),
-}, (table) => [
-  uniqueIndex("game_task_claims_user_key_day_unique").on(table.userId, table.taskKey, table.dayKey),
-  index("game_task_claims_user_claimed_idx").on(table.userId, table.claimedAt),
-]);
-
-export const sharedGameBets = mysqlTable("sharedGameBets", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  userId: int("userId").notNull(),
-  gameKey: mysqlEnum("gameKey", ["aviator", "crash", "color", "lucky"])
-    .notNull(),
-  roundKey: varchar("roundKey", { length: 80 }).notNull(),
-  stakePkr: int("stakePkr").notNull(),
-  selection: varchar("selection", { length: 32 }),
-  cashOutMultiplierX100: int("cashOutMultiplierX100"),
-  payoutPkr: int("payoutPkr").notNull().default(0),
-  status: mysqlEnum("status", ["active", "cashed_out", "won", "lost", "refunded"])
-    .notNull()
-    .default("active"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  settledAt: timestamp("settledAt"),
-}, (table) => [
-  uniqueIndex("shared_game_bets_user_round_slot_unique").on(table.userId, table.roundKey, table.selection),
-  index("shared_game_bets_round_created_idx").on(table.roundKey, table.createdAt),
-  index("shared_game_bets_user_created_idx").on(table.userId, table.createdAt),
-]);
-
-export const ludoQueues = mysqlTable("ludoQueues", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  userId: int("userId").notNull(),
-  stakePkr: int("stakePkr").notNull(),
-  status: mysqlEnum("status", ["queued", "matched", "cancelled", "expired", "forfeit"])
-    .notNull()
-    .default("queued"),
-  matchId: varchar("matchId", { length: 64 }),
-  queuedAt: timestamp("queuedAt").defaultNow().notNull(),
-  matchedAt: timestamp("matchedAt"),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-}, (table) => [
-  index("ludo_queues_stake_status_queued_idx").on(table.stakePkr, table.status, table.queuedAt),
-  index("ludo_queues_user_status_idx").on(table.userId, table.status),
-]);
-
-export const ludoMatches = mysqlTable("ludoMatches", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  stakePkr: int("stakePkr").notNull(),
-  playerOneId: int("playerOneId").notNull(),
-  playerTwoId: int("playerTwoId"),
-  opponentType: mysqlEnum("opponentType", ["player", "bot"]).notNull(),
-  status: mysqlEnum("status", ["active", "finished", "forfeit"])
-    .notNull()
-    .default("active"),
-  currentTurnPlayerId: int("currentTurnPlayerId"),
-  turnExpiresAt: timestamp("turnExpiresAt"),
-  boardState: mediumtext("boardState").notNull(),
-  winnerUserId: int("winnerUserId"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  finishedAt: timestamp("finishedAt"),
-}, (table) => [
-  index("ludo_matches_player_one_created_idx").on(table.playerOneId, table.createdAt),
-  index("ludo_matches_player_two_created_idx").on(table.playerTwoId, table.createdAt),
-  index("ludo_matches_status_updated_idx").on(table.status, table.updatedAt),
-]);
-
-export const gameDailyStats = mysqlTable("gameDailyStats", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  dayKey: varchar("dayKey", { length: 10 }).notNull(),
-  profitPkr: int("profitPkr").notNull().default(0),
-  lossPkr: int("lossPkr").notNull().default(0),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-}, (table) => [
-  uniqueIndex("game_daily_stats_user_day_unique").on(table.userId, table.dayKey),
-]);
-
-export const gameTasks = mysqlTable("gameTasks", {
-  id: int("id").autoincrement().primaryKey(),
-  title: varchar("title", { length: 140 }).notNull(),
-  targetUrl: varchar("targetUrl", { length: 1024 }).notNull(),
-  imageData: mediumtext("imageData"),
-  rewardPkr: int("rewardPkr").notNull().default(20),
-  isActive: boolean("isActive").notNull().default(true),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
 export const deposits = mysqlTable("deposits", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
@@ -393,13 +212,6 @@ export const appSettings = mysqlTable("appSettings", {
   websiteName: varchar("websiteName", { length: 80 }).notNull().default("Ads Earning"),
   themeName: mysqlEnum("themeName", ["green", "blue", "dark", "white", "black", "red", "yellow"]).notNull().default("green"),
   buttonColor: varchar("buttonColor", { length: 24 }).notNull().default("amber"),
-  euroBonusPkr: int("euroBonusPkr").notNull().default(100),
-  euroAviatorEnabled: boolean("euroAviatorEnabled").notNull().default(true),
-  euroMinimumBetPkr: int("euroMinimumBetPkr").notNull().default(16),
-  euroMaximumBetPkr: int("euroMaximumBetPkr").notNull().default(20000),
-  euroCrashBandWeights: varchar("euroCrashBandWeights", { length: 64 })
-    .notNull()
-    .default("70,10,10,10"),
   logoUrl: varchar("logoUrl", { length: 1024 }),
   logoData: mediumtext("logoData"),
   logoKey: varchar("logoKey", { length: 512 }),
