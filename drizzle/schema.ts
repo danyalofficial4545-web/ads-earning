@@ -150,6 +150,10 @@ export const gameWalletTransactions = mysqlTable("gameWalletTransactions", {
     "game_bet",
     "game_payout",
     "task_reward",
+    "shared_bet",
+    "shared_payout",
+    "ludo_bet",
+    "ludo_payout",
     "admin_adjustment",
   ]).notNull(),
   direction: mysqlEnum("direction", ["credit", "debit"]).notNull(),
@@ -229,6 +233,65 @@ export const gameTaskClaims = mysqlTable("gameTaskClaims", {
 }, (table) => [
   uniqueIndex("game_task_claims_user_key_day_unique").on(table.userId, table.taskKey, table.dayKey),
   index("game_task_claims_user_claimed_idx").on(table.userId, table.claimedAt),
+]);
+
+export const sharedGameBets = mysqlTable("sharedGameBets", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  gameKey: mysqlEnum("gameKey", ["aviator", "crash", "color", "lucky"])
+    .notNull(),
+  roundKey: varchar("roundKey", { length: 80 }).notNull(),
+  stakePkr: int("stakePkr").notNull(),
+  selection: varchar("selection", { length: 32 }),
+  cashOutMultiplierX100: int("cashOutMultiplierX100"),
+  payoutPkr: int("payoutPkr").notNull().default(0),
+  status: mysqlEnum("status", ["active", "cashed_out", "won", "lost", "refunded"])
+    .notNull()
+    .default("active"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  settledAt: timestamp("settledAt"),
+}, (table) => [
+  uniqueIndex("shared_game_bets_user_round_slot_unique").on(table.userId, table.roundKey, table.selection),
+  index("shared_game_bets_round_created_idx").on(table.roundKey, table.createdAt),
+  index("shared_game_bets_user_created_idx").on(table.userId, table.createdAt),
+]);
+
+export const ludoQueues = mysqlTable("ludoQueues", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  stakePkr: int("stakePkr").notNull(),
+  status: mysqlEnum("status", ["queued", "matched", "cancelled", "expired", "forfeit"])
+    .notNull()
+    .default("queued"),
+  matchId: varchar("matchId", { length: 64 }),
+  queuedAt: timestamp("queuedAt").defaultNow().notNull(),
+  matchedAt: timestamp("matchedAt"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("ludo_queues_stake_status_queued_idx").on(table.stakePkr, table.status, table.queuedAt),
+  index("ludo_queues_user_status_idx").on(table.userId, table.status),
+]);
+
+export const ludoMatches = mysqlTable("ludoMatches", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  stakePkr: int("stakePkr").notNull(),
+  playerOneId: int("playerOneId").notNull(),
+  playerTwoId: int("playerTwoId"),
+  opponentType: mysqlEnum("opponentType", ["player", "bot"]).notNull(),
+  status: mysqlEnum("status", ["active", "finished", "forfeit"])
+    .notNull()
+    .default("active"),
+  currentTurnPlayerId: int("currentTurnPlayerId"),
+  turnExpiresAt: timestamp("turnExpiresAt"),
+  boardState: mediumtext("boardState").notNull(),
+  winnerUserId: int("winnerUserId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  finishedAt: timestamp("finishedAt"),
+}, (table) => [
+  index("ludo_matches_player_one_created_idx").on(table.playerOneId, table.createdAt),
+  index("ludo_matches_player_two_created_idx").on(table.playerTwoId, table.createdAt),
+  index("ludo_matches_status_updated_idx").on(table.status, table.updatedAt),
 ]);
 
 export const gameDailyStats = mysqlTable("gameDailyStats", {
@@ -336,7 +399,7 @@ export const appSettings = mysqlTable("appSettings", {
   euroMaximumBetPkr: int("euroMaximumBetPkr").notNull().default(20000),
   euroCrashBandWeights: varchar("euroCrashBandWeights", { length: 64 })
     .notNull()
-    .default("50,30,10,5,5"),
+    .default("70,10,10,10"),
   logoUrl: varchar("logoUrl", { length: 1024 }),
   logoData: mediumtext("logoData"),
   logoKey: varchar("logoKey", { length: 512 }),

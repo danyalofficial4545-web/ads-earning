@@ -300,3 +300,15 @@
 - [x] Correct Aviator to show its crash point for three seconds, reset to a fresh round, support exact 1.10x–100x weighted bands, and retain safe single/dual bet settlement.
 - [x] Implement server-authoritative betting and settlement mechanics for Slots, Mining, Ludo Dice, Wheel, Plinko, Color Prediction, and Lucky Number, including minimum/maximum bet validation and Game Wallet records.
 - [x] Add focused tests for wallet safety, game results/distributions, task duplicate protection, game transition states, mobile layout, full builds, same-domain publication, and both GitHub branch synchronization.
+
+### Current request: Shared 24/7 Aviator and online Euro games
+
+- [x] Confirm the selected low-cost shared-game approach: derive common round identifiers/outcomes from timestamps and store real bets and Ludo queue state in the database without enabling continuous hosting.
+- [x] Add durable shared round, global round history, live-bet, Color Prediction, Lucky Number, and Ludo matchmaking/match state structures without changing Main Wallet accounting.
+- [x] Generate and register enhanced Aviator, Fortune Gems Slots, Ludo board, and shared-game visual assets.
+- [x] Implement server-authoritative common Aviator and Crash rounds with a five-second bet window, synchronized multiplier/history/live bets, exact configured crash distribution, and safe cash-out settlement.
+- [x] Implement shared Color Prediction and Lucky Number round timers, bet queues, histories, 48/48/4 color settlement, tie refunds, and number-match settlement.
+- [x] Implement a Fortune Gems 3x3 Slots interface and the requested server-side spin outcomes, reels, RTP distribution, Game Wallet records, and visible win state.
+- [x] Implement Ludo bet queue matching, 10-second bot fallback, protected 15-second turns, disconnect loss, 1.8x winner payout, and no-chat match UI.
+- [x] Build the production-style shared-game UI, full histories, All Bets/My Bets/Top tabs, round countdowns, and responsive mobile layout.
+- [x] Add focused tests for shared timing, result distributions, duplicate/late bet prevention, wallet settlement, Ludo match states, full builds, same-domain publication, and both GitHub branch synchronization.

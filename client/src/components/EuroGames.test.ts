@@ -7,9 +7,9 @@ describe("compact Euro game suite", () => {
   it("keeps compact wallet, Tasks, Exchange, and Withdraw controls in the Euro header", () => {
     expect(source).toContain('h-7 w-[70px]');
     expect(source).toContain('h-7 w-[80px]');
-    expect(source).toContain('Game: {euro.gameBalancePkr} PKR');
+    expect(source).toContain('Game: {euro.gameBalancePkr}');
     expect(source).toContain('onClick={onWithdraw}');
-    expect(source).toContain('Please complete tasks and get reward into Game Wallet');
+    expect(source).toContain('Verified rewards go to Game Wallet');
   });
 
   it("uses image-based two-column game cards and opens every listed game in a full-screen screen", () => {
@@ -19,12 +19,15 @@ describe("compact Euro game suite", () => {
       expect(source).toContain(`"${game}"`);
     }
     expect(source).toContain('fixed inset-0 z-[80]');
-    expect(source).toContain('GenericGame');
+    expect(source).toContain('FortuneSlots');
+    expect(source).toContain('Online Ludo');
   });
 
-  it("holds Aviator crash status for three seconds before refreshing a ready round", () => {
-    expect(source).toContain('Crashed at ${mult.toFixed(2)}x');
-    expect(source).toContain('window.setTimeout(() => { setCrashNotice(null); void refresh(); }, 3000)');
-    expect(source).toContain('Math.min(100');
+  it("uses timestamp-shared state, a common countdown, crash history, and live bet tabs", () => {
+    expect(source).toContain('trpc.euro.sharedState.useQuery');
+    expect(source).toContain('FLEW AWAY!');
+    expect(source).toContain('FLEW AWAY!');
+    expect(source).toContain('All Bets');
+    expect(source).toContain('This game is server-verified');
   });
 });

@@ -1,4 +1,4 @@
-import { randomInt } from "node:crypto";
+import { createHmac, randomInt } from "node:crypto";
 
 export const EURO_DEFAULT_BONUS_PKR = 100;
 export const EURO_MINIMUM_BET_PKR = 16;
@@ -114,15 +114,20 @@ export function chooseGenericGameOutcome(input: {
   const randomPercent = input.randomPercent ?? randomInt(100);
   const randomInteger = input.randomInteger ?? randomInt;
   if (input.gameKey === "slots") {
-    const multiplierX100 = weightedMultiplier(randomPercent, [
-      [50, 0],
-      [80, 500],
-      [95, 1_000],
-      [99, 2_000],
-      [100, 5_000],
-    ]);
-    const icons = multiplierX100 ? ["7", "7", "7"] : ["7", "★", "♦"].sort(() => randomInteger(2) - 0.5);
-    return { multiplierX100, publicState: { reels: icons } };
+    let multiplierX100 = 0;
+    let reels = ["💎", "K", "J", "🔷", "♦️", "💚", "🔴", "K", "J"];
+    if (randomPercent < 30) multiplierX100 = 0;
+    else if (randomPercent < 90) {
+      multiplierX100 = 150 + randomInteger(151);
+      reels = ["💎", "K", "🔷", "💎", "💎", "💎", "♦️", "J", "💚"];
+    } else if (randomPercent < 97) {
+      multiplierX100 = 500 + randomInteger(501);
+      reels = ["🔷", "K", "💚", "🔷", "🔷", "🔷", "♦️", "J", "💎"];
+    } else {
+      multiplierX100 = 1_500 + randomInteger(3_501);
+      reels = Array(9).fill("💎");
+    }
+    return { multiplierX100, publicState: { reels } };
   }
   if (input.gameKey === "wheel") {
     const multiplierX100 = weightedMultiplier(randomPercent, [
@@ -208,4 +213,166 @@ export function cappedAviatorPayout(input: {
   const availableProfit = Math.max(0, input.dailyProfitLimitPkr - input.priorProfitPkr);
   const payout = input.stakePkr + Math.min(requestedProfit, availableProfit);
   return { payoutPkr: payout, profitPkr: Math.max(0, payout - input.stakePkr) };
+}
+
+export const SHARED_CRASH_ROUND_MS = 15_000;
+export const SHARED_CRASH_BETTING_MS = 5_000;
+export const SHARED_COLOR_ROUND_MS = 15_000;
+export const SHARED_COLOR_BETTING_MS = 10_000;
+export const SHARED_LUCKY_ROUND_MS = 20_000;
+export const SHARED_LUCKY_BETTING_MS = 15_000;
+const SHARED_CRASH_GROWTH_MS = 1_800;
+
+export type SharedGameKey = "aviator" | "crash" | "color" | "lucky";
+
+function seededBytes(input: string) {
+  return createHmac("sha256", process.env.JWT_SECRET ?? "euro-shared-round-secret")
+    .update(input)
+    .digest();
+}
+
+function seedPercent(input: string, offset = 0) {
+  return seededBytes(input)[offset % 32]! % 100;
+}
+
+function seedRange(input: string, min: number, max: number, offset = 1) {
+  const bytes = seededBytes(input);
+  const value = ((bytes[offset % 32]! << 8) | bytes[(offset + 1) % 32]!) >>> 0;
+  return min + (value % (max - min + 1));
+}
+
+export function sharedRoundKey(gameKey: SharedGameKey, now = new Date()) {
+  const period =
+    gameKey === "color"
+      ? SHARED_COLOR_ROUND_MS
+      : gameKey === "lucky"
+        ? SHARED_LUCKY_ROUND_MS
+        : SHARED_CRASH_ROUND_MS;
+  return `${gameKey}:${Math.floor(now.getTime() / period)}`;
+}
+
+export function sharedRoundTiming(gameKey: SharedGameKey, now = new Date()) {
+  const period =
+    gameKey === "color"
+      ? SHARED_COLOR_ROUND_MS
+      : gameKey === "lucky"
+        ? SHARED_LUCKY_ROUND_MS
+        : SHARED_CRASH_ROUND_MS;
+  const bettingMs =
+    gameKey === "color"
+      ? SHARED_COLOR_BETTING_MS
+      : gameKey === "lucky"
+        ? SHARED_LUCKY_BETTING_MS
+        : SHARED_CRASH_BETTING_MS;
+  const startsAtMs = Math.floor(now.getTime() / period) * period;
+  const elapsedMs = now.getTime() - startsAtMs;
+  return {
+    roundKey: `${gameKey}:${Math.floor(now.getTime() / period)}`,
+    startsAt: new Date(startsAtMs),
+    endsAt: new Date(startsAtMs + period),
+    elapsedMs,
+    bettingMs,
+    periodMs: period,
+  };
+}
+
+export function parseSharedCrashWeights(raw?: string | null) {
+  const parsed = (raw ?? "")
+    .split(",")
+    .map(value => Number(value.trim()))
+    .filter(Number.isFinite);
+  if (
+    parsed.length === 4 &&
+    parsed.every(weight => Number.isInteger(weight) && weight >= 0) &&
+    parsed.reduce((total, weight) => total + weight, 0) === 100
+  )
+    return parsed;
+  return [70, 10, 10, 10] as const;
+}
+
+export function sharedCrashMultiplierX100(roundKey: string, rawWeights?: string | null) {
+  const [low, broad, medium] = parseSharedCrashWeights(rawWeights);
+  const roll = seedPercent(`crash:band:${roundKey}`);
+  if (roll < low) return seedRange(`crash:low:${roundKey}`, 101, 150);
+  if (roll < low + broad) return seedRange(`crash:broad:${roundKey}`, 100, 500);
+  if (roll < low + broad + medium) return seedRange(`crash:medium:${roundKey}`, 501, 1_500);
+  const candidate = seedRange(`crash:high:${roundKey}`, 5_000, 20_000);
+  const [, indexText] = roundKey.split(":");
+  const previousIndex = Math.max(0, Number(indexText ?? 0) - 1);
+  const previousKey = `${roundKey.split(":")[0]}:${previousIndex}`;
+  const previous = seedRange(`crash:high:${previousKey}`, 5_000, 20_000);
+  return candidate === previous ? Math.min(20_000, candidate + 1) : candidate;
+}
+
+export function sharedCrashState(gameKey: "aviator" | "crash", now = new Date(), rawWeights?: string | null) {
+  const timing = sharedRoundTiming(gameKey, now);
+  const crashMultiplierX100 = sharedCrashMultiplierX100(timing.roundKey, rawWeights);
+  const flightElapsedMs = Math.max(0, timing.elapsedMs - timing.bettingMs);
+  const multiplierX100 = Math.max(100, Math.floor(Math.exp(flightElapsedMs / SHARED_CRASH_GROWTH_MS) * 100));
+  const crashElapsedMs = Math.ceil(Math.log(Math.max(1, crashMultiplierX100 / 100)) * SHARED_CRASH_GROWTH_MS);
+  const crashed = timing.elapsedMs >= timing.bettingMs + crashElapsedMs;
+  return {
+    ...timing,
+    phase: timing.elapsedMs < timing.bettingMs ? "betting" : crashed ? "crashed" : "flying",
+    crashMultiplierX100,
+    multiplierX100: Math.min(crashMultiplierX100, multiplierX100),
+    crashAt: new Date(timing.startsAt.getTime() + timing.bettingMs + crashElapsedMs),
+  } as const;
+}
+
+export function sharedColorState(now = new Date()) {
+  const timing = sharedRoundTiming("color", now);
+  const value = seedPercent(`color:${timing.roundKey}`);
+  const result = value < 48 ? "red" : value < 96 ? "green" : "tie";
+  return { ...timing, phase: timing.elapsedMs < timing.bettingMs ? "betting" : "result", result } as const;
+}
+
+export function sharedLuckyState(now = new Date()) {
+  const timing = sharedRoundTiming("lucky", now);
+  const result = seedRange(`lucky:${timing.roundKey}`, 0, 9);
+  return { ...timing, phase: timing.elapsedMs < timing.bettingMs ? "betting" : "result", result } as const;
+}
+
+export type LudoBoardState = {
+  rolls: number[];
+  playerOneTokens: number[];
+  playerTwoTokens: number[];
+  turn: "one" | "two";
+  turnNumber: number;
+};
+
+export function createLudoBoardState(): LudoBoardState {
+  return { rolls: [], playerOneTokens: [-1, -1, -1, -1], playerTwoTokens: [-1, -1, -1, -1], turn: "one", turnNumber: 0 };
+}
+
+export function ludoRollFor(matchId: string, turnNumber: number) {
+  return seedRange(`ludo:${matchId}:${turnNumber}`, 1, 6);
+}
+
+export function moveLudoToken(input: {
+  board: LudoBoardState;
+  side: "one" | "two";
+  tokenIndex: number;
+  roll: number;
+}) {
+  const own = input.side === "one" ? [...input.board.playerOneTokens] : [...input.board.playerTwoTokens];
+  const opponent = input.side === "one" ? [...input.board.playerTwoTokens] : [...input.board.playerOneTokens];
+  const current = own[input.tokenIndex] ?? -1;
+  if (current < 0 && input.roll !== 6) return { board: input.board, moved: false, winner: false };
+  const next = current < 0 ? 0 : Math.min(57, current + input.roll);
+  own[input.tokenIndex] = next;
+  if (next >= 0 && next < 52) {
+    opponent.forEach((position, index) => {
+      if (position === next && ![0, 8, 13, 21, 26, 34, 39, 47].includes(next)) opponent[index] = -1;
+    });
+  }
+  const winner = own.every(position => position >= 57);
+  const board: LudoBoardState = {
+    ...input.board,
+    ...(input.side === "one" ? { playerOneTokens: own, playerTwoTokens: opponent } : { playerOneTokens: opponent, playerTwoTokens: own }),
+    turn: input.roll === 6 ? input.side : input.side === "one" ? "two" : "one",
+    turnNumber: input.board.turnNumber + 1,
+    rolls: [...input.board.rolls.slice(-9), input.roll],
+  };
+  return { board, moved: true, winner };
 }

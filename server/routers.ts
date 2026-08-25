@@ -16,10 +16,13 @@ import {
   gameTaskClaims,
   gameTasks,
   gameWalletTransactions,
+  ludoMatches,
+  ludoQueues,
   packages,
   paymentAccounts,
   profiles,
   supportTickets,
+  sharedGameBets,
   transactions,
   userPackages,
   users,
@@ -84,6 +87,16 @@ import {
   miningMultiplierX100,
   multiplierAt,
   parseCrashBandWeights,
+  parseSharedCrashWeights,
+  createLudoBoardState,
+  ludoRollFor,
+  moveLudoToken,
+  sharedColorState,
+  sharedCrashState,
+  sharedLuckyState,
+  sharedRoundKey,
+  type LudoBoardState,
+  type SharedGameKey,
   validateGenericGameSelection,
   validateEuroBetAmount,
 } from "./euroRules";
@@ -490,6 +503,68 @@ async function settleGenericEuroRound(input: {
     createdAt: now,
     settledAt: now,
   });
+}
+
+function sharedRoundSnapshot(gameKey: SharedGameKey, settings: typeof appSettings.$inferSelect, now = new Date()) {
+  if (gameKey === "aviator" || gameKey === "crash")
+    return sharedCrashState(gameKey, now, settings.euroCrashBandWeights);
+  if (gameKey === "color") return sharedColorState(now);
+  return sharedLuckyState(now);
+}
+
+async function settleSharedGameBets(db: any, gameKey: SharedGameKey, settings: typeof appSettings.$inferSelect, now = new Date()) {
+  const state = sharedRoundSnapshot(gameKey, settings, now);
+  if ((gameKey === "aviator" || gameKey === "crash") && state.phase !== "crashed") return state;
+  if ((gameKey === "color" || gameKey === "lucky") && state.phase !== "result") return state;
+  const active = await db.select().from(sharedGameBets).where(and(eq(sharedGameBets.gameKey, gameKey), eq(sharedGameBets.roundKey, state.roundKey), eq(sharedGameBets.status, "active")));
+  for (const bet of active) {
+    const profile = (await db.select().from(profiles).where(eq(profiles.userId, bet.userId)).limit(1))[0];
+    if (!profile) continue;
+    const activePackage = await getActivePackageForUser(bet.userId);
+    const daily = await getGameDailyStat(db, bet.userId, getDayKey());
+    let multiplierX100 = 0;
+    let status: "won" | "lost" | "refunded" = "lost";
+    if (gameKey === "color") {
+      const color = sharedColorState(now);
+      if (color.result === "tie") { multiplierX100 = 100; status = "refunded"; }
+      else if (bet.selection === color.result) { multiplierX100 = 190; status = "won"; }
+    } else if (gameKey === "lucky") {
+      const lucky = sharedLuckyState(now);
+      if (Number(bet.selection) === lucky.result) { multiplierX100 = 900; status = "won"; }
+    }
+    const capped = cappedAviatorPayout({ stakePkr: bet.stakePkr, multiplierX100, priorProfitPkr: daily?.profitPkr ?? 0, dailyProfitLimitPkr: maxDailyGameProfit(activePackage?.plan.pricePkr) });
+    const payoutPkr = multiplierX100 ? capped.payoutPkr : 0;
+    await db.update(sharedGameBets).set({ status, payoutPkr, settledAt: now }).where(and(eq(sharedGameBets.id, bet.id), eq(sharedGameBets.status, "active")));
+    if (payoutPkr) {
+      await db.update(profiles).set({ gameBalancePkr: profile.gameBalancePkr + payoutPkr }).where(eq(profiles.userId, bet.userId));
+      await Promise.all([
+        updateGameDailyStat(db, { userId: bet.userId, profitPkr: capped.profitPkr }),
+        db.insert(gameWalletTransactions).values({ userId: bet.userId, type: "shared_payout", direction: "credit", amountPkr: payoutPkr, note: `${gameKey} shared round payout`, referenceType: "shared_bet", referenceId: bet.id }),
+      ]);
+    } else await updateGameDailyStat(db, { userId: bet.userId, lossPkr: bet.stakePkr });
+  }
+  return state;
+}
+
+function sharedBotBets(roundKey: string) {
+  const aliases = ["q***4", "z***0", "x***1", "m***7", "r***9"];
+  return aliases.map((username, index) => ({ id: `bot-${roundKey}-${index}`, username, stakePkr: [20, 100, 500, 1000, 20000][index]!, status: "active", payoutPkr: 0, cashOutMultiplierX100: null, isBot: true }));
+}
+
+function ludoPublicState(match: typeof ludoMatches.$inferSelect, userId: number) {
+  const board = parseEuroState(match.boardState) as unknown as LudoBoardState;
+  return {
+    id: match.id,
+    stakePkr: match.stakePkr,
+    opponentType: match.opponentType,
+    opponentName: match.opponentType === "bot" ? "Euro Bot" : "Opponent",
+    status: match.status,
+    playerSide: match.playerOneId === userId ? "one" : "two",
+    currentTurnPlayerId: match.currentTurnPlayerId,
+    turnExpiresAt: match.turnExpiresAt,
+    board,
+    winnerUserId: match.winnerUserId,
+  };
 }
 
 export const appRouter = router({
@@ -1250,6 +1325,209 @@ export const appRouter = router({
           }),
         ]);
         return { success: true };
+      }),
+    sharedState: protectedProcedure
+      .input(z.object({ gameKey: z.enum(["aviator", "crash", "color", "lucky"]) }))
+      .query(async ({ ctx, input }) => {
+        const { user } = await getActor(ctx);
+        const db = await getDb();
+        if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const settings = await getSettings();
+        const now = new Date();
+        const state = await settleSharedGameBets(db, input.gameKey, settings, now);
+        const periodMs = state.periodMs;
+        const history = Array.from({ length: 50 }, (_, index) => {
+          const at = new Date(now.getTime() - index * periodMs);
+          if (input.gameKey === "aviator" || input.gameKey === "crash") {
+            const item = sharedCrashState(input.gameKey, at, settings.euroCrashBandWeights);
+            return { roundKey: item.roundKey, crashMultiplierX100: item.crashMultiplierX100 };
+          }
+          if (input.gameKey === "color") {
+            const item = sharedColorState(at);
+            return { roundKey: item.roundKey, result: item.result };
+          }
+          const item = sharedLuckyState(at);
+          return { roundKey: item.roundKey, result: item.result };
+        });
+        const realBets = await db
+          .select({
+            id: sharedGameBets.id,
+            username: profiles.username,
+            userId: sharedGameBets.userId,
+            stakePkr: sharedGameBets.stakePkr,
+            selection: sharedGameBets.selection,
+            status: sharedGameBets.status,
+            payoutPkr: sharedGameBets.payoutPkr,
+            cashOutMultiplierX100: sharedGameBets.cashOutMultiplierX100,
+          })
+          .from(sharedGameBets)
+          .innerJoin(profiles, eq(profiles.userId, sharedGameBets.userId))
+          .where(and(eq(sharedGameBets.gameKey, input.gameKey), eq(sharedGameBets.roundKey, state.roundKey)))
+          .orderBy(desc(sharedGameBets.createdAt))
+          .limit(20);
+        const publicBets = realBets.map(bet => ({
+          ...bet,
+          username: bet.userId === user.id ? bet.username : `${bet.username.slice(0, 1)}***${bet.username.slice(-1)}`,
+          isBot: false,
+        }));
+        return {
+          state,
+          history,
+          allBets: [...publicBets, ...sharedBotBets(state.roundKey)].slice(0, 20),
+          myBets: realBets.filter(bet => bet.userId === user.id),
+          serverNow: now,
+        };
+      }),
+    placeSharedBet: protectedProcedure
+      .input(z.object({
+        gameKey: z.enum(["aviator", "crash", "color", "lucky"]),
+        stakePkr: z.number().int().positive(),
+        selection: z.string().trim().max(32).optional(),
+        slot: z.enum(["one", "two"]).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { user, profile } = await getActor(ctx);
+        const db = await getDb();
+        if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const settings = await getSettings();
+        const betError = validateEuroBetAmount(input.stakePkr, settings.euroMinimumBetPkr, settings.euroMaximumBetPkr, input.gameKey === "aviator" ? "Aviator" : input.gameKey === "crash" ? "Crash" : input.gameKey === "color" ? "Color Prediction" : "Lucky Number");
+        if (betError) fail(betError);
+        const state = sharedRoundSnapshot(input.gameKey, settings);
+        if (state.phase !== "betting") fail("This shared round is already closed. Please wait for the next round.");
+        if (profile.gameBalancePkr < input.stakePkr) fail("Your Game Wallet balance is insufficient for this bet.");
+        if (input.gameKey === "color" && input.selection !== "red" && input.selection !== "green") fail("Please choose Red or Green.");
+        if (input.gameKey === "lucky" && !/^\d$/.test(input.selection ?? "")) fail("Please choose a lucky number from 0 to 9.");
+        const storedSelection = input.gameKey === "aviator" || input.gameKey === "crash" ? `slot:${input.slot ?? "one"}` : input.selection!;
+        const existing = (await db.select({ id: sharedGameBets.id }).from(sharedGameBets).where(and(eq(sharedGameBets.userId, user.id), eq(sharedGameBets.roundKey, state.roundKey), eq(sharedGameBets.selection, storedSelection))).limit(1))[0];
+        if (existing) fail("You have already placed this bet for the current round.");
+        const id = randomUUID();
+        await Promise.all([
+          db.update(profiles).set({ gameBalancePkr: profile.gameBalancePkr - input.stakePkr }).where(eq(profiles.userId, user.id)),
+          db.insert(sharedGameBets).values({ id, userId: user.id, gameKey: input.gameKey, roundKey: state.roundKey, stakePkr: input.stakePkr, selection: storedSelection }),
+          db.insert(gameWalletTransactions).values({ userId: user.id, type: "shared_bet", direction: "debit", amountPkr: input.stakePkr, note: `${input.gameKey} shared round bet`, referenceType: "shared_bet", referenceId: id }),
+        ]);
+        return { success: true, id, roundKey: state.roundKey };
+      }),
+    cashOutSharedBet: protectedProcedure
+      .input(z.object({ id: z.string().uuid() }))
+      .mutation(async ({ ctx, input }) => {
+        const { user, profile } = await getActor(ctx);
+        const db = await getDb();
+        if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const bet = (await db.select().from(sharedGameBets).where(and(eq(sharedGameBets.id, input.id), eq(sharedGameBets.userId, user.id))).limit(1))[0];
+        if (!bet || bet.status !== "active" || (bet.gameKey !== "aviator" && bet.gameKey !== "crash")) fail("This shared crash-game bet is no longer available.");
+        const settings = await getSettings();
+        const state = sharedCrashState(bet.gameKey, new Date(), settings.euroCrashBandWeights);
+        if (state.roundKey !== bet.roundKey || state.phase !== "flying") fail("This round has already crashed or is not flying yet.");
+        const activePackage = await getActivePackageForUser(user.id);
+        const daily = await getGameDailyStat(db, user.id, getDayKey());
+        const payout = cappedAviatorPayout({ stakePkr: bet.stakePkr, multiplierX100: state.multiplierX100, priorProfitPkr: daily?.profitPkr ?? 0, dailyProfitLimitPkr: maxDailyGameProfit(activePackage?.plan.pricePkr) });
+        await Promise.all([
+          db.update(sharedGameBets).set({ status: "cashed_out", payoutPkr: payout.payoutPkr, cashOutMultiplierX100: state.multiplierX100, settledAt: new Date() }).where(and(eq(sharedGameBets.id, bet.id), eq(sharedGameBets.status, "active"))),
+          db.update(profiles).set({ gameBalancePkr: profile.gameBalancePkr + payout.payoutPkr }).where(eq(profiles.userId, user.id)),
+          updateGameDailyStat(db, { userId: user.id, profitPkr: payout.profitPkr }),
+          db.insert(gameWalletTransactions).values({ userId: user.id, type: "shared_payout", direction: "credit", amountPkr: payout.payoutPkr, note: `${bet.gameKey} cash-out at ${(state.multiplierX100 / 100).toFixed(2)}x`, referenceType: "shared_bet", referenceId: bet.id }),
+        ]);
+        return { success: true, payoutPkr: payout.payoutPkr, multiplierX100: state.multiplierX100 };
+      }),
+    joinLudo: protectedProcedure
+      .input(z.object({ stakePkr: z.union([z.literal(10), z.literal(20), z.literal(100), z.literal(200), z.literal(1000)]) }))
+      .mutation(async ({ ctx, input }) => {
+        const { user, profile } = await getActor(ctx);
+        const db = await getDb();
+        if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        if (profile.gameBalancePkr < input.stakePkr) fail("Your Game Wallet balance is insufficient for this Ludo bet.");
+        const activeQueue = (await db.select().from(ludoQueues).where(and(eq(ludoQueues.userId, user.id), eq(ludoQueues.status, "queued"))).limit(1))[0];
+        if (activeQueue) return { status: "queued" as const, queueId: activeQueue.id };
+        const activeMatch = (await db.select().from(ludoMatches).where(eq(ludoMatches.status, "active"))).find(match => match.playerOneId === user.id || match.playerTwoId === user.id);
+        if (activeMatch) return { status: "matched" as const, match: ludoPublicState(activeMatch, user.id) };
+        const candidates = await db.select().from(ludoQueues).where(and(eq(ludoQueues.stakePkr, input.stakePkr), eq(ludoQueues.status, "queued"))).orderBy(ludoQueues.queuedAt).limit(10);
+        const opponentQueue = candidates.find(queue => queue.userId !== user.id);
+        const now = new Date();
+        if (opponentQueue) {
+          const matchId = randomUUID();
+          const board = createLudoBoardState();
+          await Promise.all([
+            db.insert(ludoMatches).values({ id: matchId, stakePkr: input.stakePkr, playerOneId: opponentQueue.userId, playerTwoId: user.id, opponentType: "player", currentTurnPlayerId: opponentQueue.userId, turnExpiresAt: new Date(now.getTime() + 15_000), boardState: JSON.stringify(board) }),
+            db.update(ludoQueues).set({ status: "matched", matchId, matchedAt: now }).where(eq(ludoQueues.id, opponentQueue.id)),
+            db.insert(ludoQueues).values({ id: randomUUID(), userId: user.id, stakePkr: input.stakePkr, status: "matched", matchId, matchedAt: now }),
+            db.update(profiles).set({ gameBalancePkr: profile.gameBalancePkr - input.stakePkr }).where(eq(profiles.userId, user.id)),
+            db.insert(gameWalletTransactions).values({ userId: user.id, type: "ludo_bet", direction: "debit", amountPkr: input.stakePkr, note: "Ludo match bet placed", referenceType: "ludo_match", referenceId: matchId }),
+          ]);
+          return { status: "matched" as const, match: { ...ludoPublicState({ id: matchId, stakePkr: input.stakePkr, playerOneId: opponentQueue.userId, playerTwoId: user.id, opponentType: "player", status: "active", currentTurnPlayerId: opponentQueue.userId, turnExpiresAt: new Date(now.getTime() + 15_000), boardState: JSON.stringify(board), winnerUserId: null, createdAt: now, updatedAt: now, finishedAt: null }, user.id) } };
+        }
+        const queueId = randomUUID();
+        await Promise.all([
+          db.insert(ludoQueues).values({ id: queueId, userId: user.id, stakePkr: input.stakePkr }),
+          db.update(profiles).set({ gameBalancePkr: profile.gameBalancePkr - input.stakePkr }).where(eq(profiles.userId, user.id)),
+          db.insert(gameWalletTransactions).values({ userId: user.id, type: "ludo_bet", direction: "debit", amountPkr: input.stakePkr, note: "Ludo opponent search bet reserved", referenceType: "ludo_queue", referenceId: queueId }),
+        ]);
+        return { status: "queued" as const, queueId };
+      }),
+    ludoState: protectedProcedure.query(async ({ ctx }) => {
+      const { user } = await getActor(ctx);
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      let queue: typeof ludoQueues.$inferSelect | null = (await db.select().from(ludoQueues).where(and(eq(ludoQueues.userId, user.id), eq(ludoQueues.status, "queued"))).orderBy(desc(ludoQueues.queuedAt)).limit(1))[0] ?? null;
+      if (queue && Date.now() - queue.queuedAt.getTime() >= 10_000) {
+        const matchId = randomUUID();
+        const now = new Date();
+        const board = createLudoBoardState();
+        await Promise.all([
+          db.insert(ludoMatches).values({ id: matchId, stakePkr: queue.stakePkr, playerOneId: user.id, playerTwoId: null, opponentType: "bot", currentTurnPlayerId: user.id, turnExpiresAt: new Date(now.getTime() + 15_000), boardState: JSON.stringify(board) }),
+          db.update(ludoQueues).set({ status: "matched", matchId, matchedAt: now }).where(eq(ludoQueues.id, queue.id)),
+        ]);
+        queue = null;
+      }
+      const matches = await db.select().from(ludoMatches).where(eq(ludoMatches.status, "active"));
+      let match = matches.find(item => item.playerOneId === user.id || item.playerTwoId === user.id) ?? null;
+      if (match?.opponentType === "bot" && match.currentTurnPlayerId === null) {
+        const board = parseEuroState(match.boardState) as unknown as LudoBoardState;
+        const roll = ludoRollFor(match.id, board.turnNumber);
+        const tokenIndex = board.playerTwoTokens.findIndex(position => position >= 0) >= 0
+          ? board.playerTwoTokens.findIndex(position => position >= 0)
+          : 0;
+        const move = moveLudoToken({ board, side: "two", tokenIndex, roll });
+        const now = new Date();
+        await db
+          .update(ludoMatches)
+          .set({
+            boardState: JSON.stringify(move.board),
+            currentTurnPlayerId: move.winner ? null : move.board.turn === "one" ? user.id : null,
+            turnExpiresAt: move.winner ? null : new Date(now.getTime() + 15_000),
+            status: move.winner ? "finished" : "active",
+            finishedAt: move.winner ? now : null,
+          })
+          .where(eq(ludoMatches.id, match.id));
+        match = (await db.select().from(ludoMatches).where(eq(ludoMatches.id, match.id)).limit(1))[0] ?? null;
+      }
+      return { queue, match: match ? ludoPublicState(match, user.id) : null, serverNow: new Date() };
+    }),
+    playLudoTurn: protectedProcedure
+      .input(z.object({ matchId: z.string().uuid(), tokenIndex: z.number().int().min(0).max(3) }))
+      .mutation(async ({ ctx, input }) => {
+        const { user } = await getActor(ctx);
+        const db = await getDb();
+        if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const match = (await db.select().from(ludoMatches).where(eq(ludoMatches.id, input.matchId)).limit(1))[0];
+        if (!match || match.status !== "active") fail("This Ludo match is no longer active.");
+        if (match.currentTurnPlayerId !== user.id) fail("Please wait for your Ludo turn.");
+        const side = match.playerOneId === user.id ? "one" : "two";
+        const board = parseEuroState(match.boardState) as unknown as LudoBoardState;
+        const roll = ludoRollFor(match.id, board.turnNumber);
+        const move = moveLudoToken({ board, side, tokenIndex: input.tokenIndex, roll });
+        const nextPlayer = move.board.turn === "one" ? match.playerOneId : match.playerTwoId;
+        const now = new Date();
+        let winnerUserId: number | null = move.winner ? user.id : null;
+        let payoutPkr = 0;
+        if (winnerUserId) {
+          payoutPkr = Math.floor(match.stakePkr * 1.8);
+          const winnerProfile = (await db.select().from(profiles).where(eq(profiles.userId, winnerUserId)).limit(1))[0];
+          if (winnerProfile) await db.update(profiles).set({ gameBalancePkr: winnerProfile.gameBalancePkr + payoutPkr }).where(eq(profiles.userId, winnerUserId));
+          await db.insert(gameWalletTransactions).values({ userId: winnerUserId, type: "ludo_payout", direction: "credit", amountPkr: payoutPkr, note: "Ludo match winner payout", referenceType: "ludo_match", referenceId: match.id });
+        }
+        await db.update(ludoMatches).set({ boardState: JSON.stringify(move.board), currentTurnPlayerId: winnerUserId ? null : nextPlayer, turnExpiresAt: winnerUserId ? null : new Date(now.getTime() + 15_000), status: winnerUserId ? "finished" : "active", winnerUserId, finishedAt: winnerUserId ? now : null }).where(eq(ludoMatches.id, match.id));
+        return { success: true, roll, moved: move.moved, winner: Boolean(winnerUserId), payoutPkr };
       }),
     aviatorState: protectedProcedure.query(async ({ ctx }) => {
       const { user } = await getActor(ctx);
@@ -2736,11 +3014,9 @@ export const appRouter = router({
         await getAdmin(ctx);
         if (input.euroMinimumBetPkr > input.euroMaximumBetPkr)
           fail("Euro minimum bet cannot be greater than the maximum bet.");
-        try {
-          parseCrashBandWeights(input.euroCrashBandWeights);
-        } catch (error) {
-          fail(error instanceof Error ? error.message : "Invalid crash-band weights.");
-        }
+        const sharedCrashWeights = parseSharedCrashWeights(input.euroCrashBandWeights);
+        if (sharedCrashWeights.join(",") !== input.euroCrashBandWeights.replace(/\s/g, ""))
+          fail("Shared Aviator/Crash weights must contain four whole percentages totaling 100, for example 70,10,10,10.");
         const db = await getDb();
         if (!db)
           fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");

@@ -30,3 +30,13 @@
 | Mines | Bomb and 5x5 game tile grid. | Square card | `/manus-storage/euro-mines-card_0cb56a39.png` |
 | Color Prediction | Red and green glowing orbs. | Square card | `/manus-storage/euro-color-card_dde37390.png` |
 | Lucky Number | Gold token and number tiles. | Square card | `/manus-storage/euro-lucky-card_d6632511.png` |
+
+## Shared-round and featured-game refresh
+
+**Art direction:** Crisp, premium dark mobile game UI with charcoal and navy panels, bright red shared crash graphs, jewel-tone purple/blue/pink history chips, emerald balance controls, ornate gold gem frames, and clean top-down Ludo geometry. The gameplay UI is built with accessible DOM elements; these images serve as background and card art only.
+
+| Name | Description | Size | Image |
+|---|---|---:|---|
+| Shared Aviator screen | Shared crash-game visual QA reference. | 16:9 reference | `/manus-storage/euro-shared-aviator-reference_940717f7.png` |
+| Fortune Gems Slots | Gem temple card for the Slots entry. | Square card | `/manus-storage/euro-fortune-gems-slots_7c61ef0d.png` |
+| Online Ludo | Board and dice card for the Ludo entry. | Square card | `/manus-storage/euro-ludo-board-card_3e7fa010.png` |

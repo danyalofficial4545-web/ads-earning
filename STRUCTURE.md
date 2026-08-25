@@ -17,3 +17,7 @@ The `euro` tRPC router exposes a bootstrap query, a first-visit bonus mutation, 
 The server uses cryptographically secure random selection for a weighted, non-overlapping crash band and stores the final crash multiplier before the round begins. Stored timestamps, not browser state, determine current multiplier and cash-out validity.
 
 For non-Aviator games, the server records the generated outcome before returning a settled result. Mining stores bomb positions and revealed cells in private round state and reveals one tile per protected mutation. Client components never generate a multiplier, result, hidden bomb location, or Game Wallet credit.
+
+## Timestamp-seeded shared rounds
+
+`server/euroRules.ts` owns deterministic timestamp-seed helpers, shared round phase calculations, and testable common crash/color/lucky outcomes. The schema will add durable shared-bet, Ludo queue, Ludo match, and match-turn records; all funds remain in the existing Game Wallet ledger. `server/routers.ts` reconstructs a global round from UTC bucket identifiers, limits betting to the open phase, exposes shared history/live-bet rows, and resolves database-backed queue/bot Ludo transitions. No server timer or process memory is used.

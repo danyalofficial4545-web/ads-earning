@@ -57,3 +57,10 @@ Euro Tasks use `gameTaskClaims` to prevent duplicate credits. The WhatsApp task 
 - A new eligible account receives the configured bonus exactly once on its first Euro visit; legacy accounts do not receive a new-user bonus.
 - Aviator bets and cash-outs are server-authoritative, use only game-wallet funds, conform to the five non-overlapping crash bands, and obey daily profit/bet limits.
 - Existing withdrawal, package, referral, and WhatsApp tests remain green.
+
+## Timestamp-seeded shared-round design
+
+- **No continuous hosting:** Aviator, Crash, Color Prediction, and Lucky Number use common UTC timestamp buckets and a server-only deterministic seed. Any client requesting the same round id receives the same phase, outcome, multiplier, and history without an in-memory worker.
+- **Round windows:** Crash games have a five-second bet window followed by deterministic flight. Color uses ten-second bet windows, and Lucky Number uses fifteen-second bet windows. Protected mutations reject any late stake or cash-out.
+- **Durable accounting:** Actual member bets, cash-outs, settlements, and Ludo queue/match transitions are written to the database. Browser code never creates an outcome or Game Wallet credit.
+- **Cold-start tolerance:** Each request reconstructs the active round and prior history from timestamps and durable rows. Ludo uses a database queue and a protected bot fallback after ten seconds.
