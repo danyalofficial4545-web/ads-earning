@@ -7,6 +7,23 @@ export const EURO_DEFAULT_CRASH_WEIGHTS = "50,30,10,5,5";
 export const AVIATOR_PREFLIGHT_MS = 3_000;
 export const AVIATOR_GROWTH_MS = 7_500;
 
+export const EURO_GENERIC_GAME_KEYS = [
+  "slots",
+  "mining",
+  "ludo",
+  "wheel",
+  "plinko",
+  "color",
+  "lucky",
+] as const;
+
+export type EuroGenericGameKey = (typeof EURO_GENERIC_GAME_KEYS)[number];
+export type GenericGameOutcome = {
+  multiplierX100: number;
+  publicState: Record<string, unknown>;
+  privateState?: Record<string, unknown>;
+};
+
 export type CrashBand = {
   minX100: number;
   maxX100: number;
@@ -71,12 +88,108 @@ export function crashTimeFor(startsAt: Date, crashMultiplierX100: number) {
 export function validateEuroBetAmount(
   amountPkr: number,
   minimumPkr = EURO_MINIMUM_BET_PKR,
-  maximumPkr = EURO_MAXIMUM_BET_PKR
+  maximumPkr = EURO_MAXIMUM_BET_PKR,
+  gameLabel = "Aviator"
 ) {
   if (!Number.isInteger(amountPkr) || amountPkr < minimumPkr)
-    return `Minimum Aviator bet is ${minimumPkr} PKR.`;
+    return `Minimum ${gameLabel} bet is ${minimumPkr} PKR.`;
   if (amountPkr > maximumPkr)
-    return `Maximum Aviator bet is ${maximumPkr.toLocaleString()} PKR.`;
+    return `Maximum ${gameLabel} bet is ${maximumPkr.toLocaleString()} PKR.`;
+  return null;
+}
+
+function weightedMultiplier(
+  chance: number,
+  bands: Array<[upperExclusive: number, multiplierX100: number]>
+) {
+  return bands.find(([upper]) => chance < upper)?.[1] ?? 0;
+}
+
+export function chooseGenericGameOutcome(input: {
+  gameKey: Exclude<EuroGenericGameKey, "mining">;
+  selection?: string | null;
+  randomPercent?: number;
+  randomInteger?: (maxExclusive: number) => number;
+}): GenericGameOutcome {
+  const randomPercent = input.randomPercent ?? randomInt(100);
+  const randomInteger = input.randomInteger ?? randomInt;
+  if (input.gameKey === "slots") {
+    const multiplierX100 = weightedMultiplier(randomPercent, [
+      [50, 0],
+      [80, 500],
+      [95, 1_000],
+      [99, 2_000],
+      [100, 5_000],
+    ]);
+    const icons = multiplierX100 ? ["7", "7", "7"] : ["7", "★", "♦"].sort(() => randomInteger(2) - 0.5);
+    return { multiplierX100, publicState: { reels: icons } };
+  }
+  if (input.gameKey === "wheel") {
+    const multiplierX100 = weightedMultiplier(randomPercent, [
+      [15, 0],
+      [55, 150],
+      [85, 200],
+      [95, 500],
+      [99, 1_000],
+      [100, 5_000],
+    ]);
+    return { multiplierX100, publicState: { multiplierX100 } };
+  }
+  if (input.gameKey === "plinko") {
+    const multiplierX100 = chooseCrashMultiplierX100(
+      EURO_DEFAULT_CRASH_WEIGHTS,
+      randomPercent,
+      randomInteger
+    );
+    return { multiplierX100, publicState: { multiplierX100 } };
+  }
+  if (input.gameKey === "ludo") {
+    const selected = Number(input.selection);
+    const rolled = randomInteger(6) + 1;
+    return {
+      multiplierX100: selected === rolled ? 500 : 0,
+      publicState: { rolled, selected },
+    };
+  }
+  if (input.gameKey === "color") {
+    const selected = input.selection === "green" ? "green" : "red";
+    const won = randomPercent < 48;
+    const result = won ? selected : selected === "red" ? "green" : "red";
+    return {
+      multiplierX100: won ? 190 : 0,
+      publicState: { selected, result },
+    };
+  }
+  const selected = Number(input.selection);
+  const result = randomInteger(10);
+  return {
+    multiplierX100: selected === result ? 900 : 0,
+    publicState: { selected, result },
+  };
+}
+
+export function createMiningState(
+  randomInteger: (maxExclusive: number) => number = randomInt
+) {
+  const bombs = new Set<number>();
+  while (bombs.size < 5) bombs.add(randomInteger(25));
+  return { bombs: Array.from(bombs).sort((a, b) => a - b), revealed: [] as number[] };
+}
+
+export function miningMultiplierX100(revealedSafeTiles: number) {
+  return 100 + Math.max(0, revealedSafeTiles) * 30;
+}
+
+export function validateGenericGameSelection(
+  gameKey: EuroGenericGameKey,
+  selection?: string | null
+) {
+  if (gameKey === "ludo" && !/^[1-6]$/.test(selection ?? ""))
+    return "Please choose a number from 1 to 6.";
+  if (gameKey === "color" && selection !== "red" && selection !== "green")
+    return "Please choose Red or Green.";
+  if (gameKey === "lucky" && !/^\d$/.test(selection ?? ""))
+    return "Please choose a lucky number from 0 to 9.";
   return null;
 }
 

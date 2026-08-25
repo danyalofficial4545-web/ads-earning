@@ -147,6 +147,9 @@ export const gameWalletTransactions = mysqlTable("gameWalletTransactions", {
     "game_to_main",
     "aviator_bet",
     "aviator_payout",
+    "game_bet",
+    "game_payout",
+    "task_reward",
     "admin_adjustment",
   ]).notNull(),
   direction: mysqlEnum("direction", ["credit", "debit"]).notNull(),
@@ -186,6 +189,46 @@ export const aviatorBets = mysqlTable("aviatorBets", {
 }, (table) => [
   index("aviator_bets_user_created_idx").on(table.userId, table.createdAt),
   index("aviator_bets_round_idx").on(table.roundId),
+]);
+
+export const gameRounds = mysqlTable("gameRounds", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  gameKey: mysqlEnum("gameKey", [
+    "slots",
+    "mining",
+    "ludo",
+    "wheel",
+    "plinko",
+    "color",
+    "lucky",
+  ]).notNull(),
+  stakePkr: int("stakePkr").notNull(),
+  selection: varchar("selection", { length: 64 }),
+  privateState: mediumtext("privateState"),
+  publicState: mediumtext("publicState"),
+  multiplierX100: int("multiplierX100").notNull().default(0),
+  payoutPkr: int("payoutPkr").notNull().default(0),
+  status: mysqlEnum("status", ["active", "cashed_out", "settled", "lost"])
+    .notNull()
+    .default("active"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  settledAt: timestamp("settledAt"),
+}, (table) => [
+  index("game_rounds_user_game_created_idx").on(table.userId, table.gameKey, table.createdAt),
+  index("game_rounds_user_status_idx").on(table.userId, table.status),
+]);
+
+export const gameTaskClaims = mysqlTable("gameTaskClaims", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  taskKey: varchar("taskKey", { length: 64 }).notNull(),
+  dayKey: varchar("dayKey", { length: 16 }).notNull(),
+  rewardPkr: int("rewardPkr").notNull(),
+  claimedAt: timestamp("claimedAt").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("game_task_claims_user_key_day_unique").on(table.userId, table.taskKey, table.dayKey),
+  index("game_task_claims_user_claimed_idx").on(table.userId, table.claimedAt),
 ]);
 
 export const gameDailyStats = mysqlTable("gameDailyStats", {

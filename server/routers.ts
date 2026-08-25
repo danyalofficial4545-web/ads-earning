@@ -12,6 +12,8 @@ import {
   broadcasts,
   deposits,
   gameDailyStats,
+  gameRounds,
+  gameTaskClaims,
   gameTasks,
   gameWalletTransactions,
   packages,
@@ -73,11 +75,16 @@ import {
 } from "../shared/adRules";
 import {
   cappedAviatorPayout,
+  chooseGenericGameOutcome,
   chooseCrashMultiplierX100,
+  createMiningState,
   crashTimeFor,
+  EURO_GENERIC_GAME_KEYS,
   maxDailyGameProfit,
+  miningMultiplierX100,
   multiplierAt,
   parseCrashBandWeights,
+  validateGenericGameSelection,
   validateEuroBetAmount,
 } from "./euroRules";
 
@@ -362,6 +369,127 @@ function publicAviatorRound(round: typeof aviatorRounds.$inferSelect | null) {
     crashMultiplierX100:
       round.status === "crashed" ? round.crashMultiplierX100 : undefined,
   };
+}
+
+const EURO_GAME_LABELS: Record<(typeof EURO_GENERIC_GAME_KEYS)[number], string> = {
+  slots: "Slots",
+  mining: "Mining",
+  ludo: "Ludo Dice",
+  wheel: "Wheel",
+  plinko: "Plinko",
+  color: "Color Prediction",
+  lucky: "Lucky Number",
+};
+
+function parseEuroState(raw: string | null) {
+  if (!raw) return {} as Record<string, any>;
+  try {
+    return JSON.parse(raw) as Record<string, any>;
+  } catch {
+    return {} as Record<string, any>;
+  }
+}
+
+function publicGenericGameRound(round: typeof gameRounds.$inferSelect | null) {
+  if (!round) return null;
+  return {
+    id: round.id,
+    gameKey: round.gameKey,
+    stakePkr: round.stakePkr,
+    selection: round.selection,
+    publicState: parseEuroState(round.publicState),
+    multiplierX100: round.multiplierX100,
+    payoutPkr: round.payoutPkr,
+    status: round.status,
+    createdAt: round.createdAt,
+    settledAt: round.settledAt,
+  };
+}
+
+async function settleGenericEuroRound(input: {
+  db: any;
+  userId: number;
+  profile: typeof profiles.$inferSelect;
+  gameKey: Exclude<(typeof EURO_GENERIC_GAME_KEYS)[number], "mining">;
+  stakePkr: number;
+  selection?: string | null;
+}) {
+  const outcome = chooseGenericGameOutcome({
+    gameKey: input.gameKey,
+    selection: input.selection,
+  });
+  const [activePackage, daily] = await Promise.all([
+    getActivePackageForUser(input.userId),
+    getGameDailyStat(input.db, input.userId, getDayKey()),
+  ]);
+  const capped = cappedAviatorPayout({
+    stakePkr: input.stakePkr,
+    multiplierX100: outcome.multiplierX100,
+    priorProfitPkr: daily?.profitPkr ?? 0,
+    dailyProfitLimitPkr: maxDailyGameProfit(activePackage?.plan.pricePkr),
+  });
+  const payoutPkr = outcome.multiplierX100 > 0 ? capped.payoutPkr : 0;
+  const status = payoutPkr > 0 ? "settled" : "lost" as const;
+  const id = randomUUID();
+  const now = new Date();
+  await input.db
+    .update(profiles)
+    .set({ gameBalancePkr: input.profile.gameBalancePkr - input.stakePkr + payoutPkr })
+    .where(eq(profiles.userId, input.userId));
+  await input.db.insert(gameRounds).values({
+    id,
+    userId: input.userId,
+    gameKey: input.gameKey,
+    stakePkr: input.stakePkr,
+    selection: input.selection ?? null,
+    publicState: JSON.stringify(outcome.publicState),
+    multiplierX100: outcome.multiplierX100,
+    payoutPkr,
+    status,
+    createdAt: now,
+    settledAt: now,
+  });
+  await Promise.all([
+    updateGameDailyStat(input.db, {
+      userId: input.userId,
+      profitPkr: capped.profitPkr,
+      lossPkr: payoutPkr ? 0 : input.stakePkr,
+    }),
+    input.db.insert(gameWalletTransactions).values({
+      userId: input.userId,
+      type: "game_bet",
+      direction: "debit",
+      amountPkr: input.stakePkr,
+      note: `${EURO_GAME_LABELS[input.gameKey]} bet placed`,
+      referenceType: "game_round",
+      referenceId: id,
+    }),
+    ...(payoutPkr
+      ? [input.db.insert(gameWalletTransactions).values({
+          userId: input.userId,
+          type: "game_payout",
+          direction: "credit",
+          amountPkr: payoutPkr,
+          note: `${EURO_GAME_LABELS[input.gameKey]} result ${(outcome.multiplierX100 / 100).toFixed(2)}x`,
+          referenceType: "game_round",
+          referenceId: id,
+        })]
+      : []),
+  ]);
+  return publicGenericGameRound({
+    id,
+    userId: input.userId,
+    gameKey: input.gameKey,
+    stakePkr: input.stakePkr,
+    selection: input.selection ?? null,
+    privateState: null,
+    publicState: JSON.stringify(outcome.publicState),
+    multiplierX100: outcome.multiplierX100,
+    payoutPkr,
+    status,
+    createdAt: now,
+    settledAt: now,
+  });
 }
 
 export const appRouter = router({
@@ -945,7 +1073,7 @@ export const appRouter = router({
       ]);
       const currentRound = await settleExpiredAviatorRound(db, user.id);
       const dayKey = getDayKey();
-      const [daily, recent, activeTasks, activeBets] = await Promise.all([
+      const [daily, recent, activeTasks, activeBets, taskClaims] = await Promise.all([
         getGameDailyStat(db, user.id, dayKey),
         db
           .select()
@@ -969,7 +1097,33 @@ export const appRouter = router({
                 )
               )
           : Promise.resolve([]),
+        db
+          .select()
+          .from(gameTaskClaims)
+          .where(eq(gameTaskClaims.userId, user.id))
+          .orderBy(desc(gameTaskClaims.claimedAt)),
       ]);
+      const claimedTaskKeys = new Set(
+        taskClaims.map(claim => `${claim.taskKey}:${claim.dayKey}`)
+      );
+      const systemTasks = [
+        {
+          key: "whatsapp",
+          title: "Join WhatsApp Channel",
+          targetUrl: "https://whatsapp.com/channel/0029VbDB4LpDZ4LhbhGZsJ10",
+          rewardPkr: 20,
+          claimed: claimedTaskKeys.has("whatsapp:lifetime"),
+          ready: profile.whatsappJoined,
+        },
+        {
+          key: "watch_ad",
+          title: "Watch Ad",
+          targetUrl: "#ads",
+          rewardPkr: 20,
+          claimed: claimedTaskKeys.has(`watch_ad:${dayKey}`),
+          ready: false,
+        },
+      ];
       return {
         gameBalancePkr: profile.gameBalancePkr,
         mainBalancePkr: profile.balancePkr,
@@ -988,6 +1142,7 @@ export const appRouter = router({
         activeBets,
         recent,
         tasks: activeTasks,
+        systemTasks,
       };
     }),
     claimFirstVisitBonus: protectedProcedure.mutation(async ({ ctx }) => {
@@ -1265,6 +1420,169 @@ export const appRouter = router({
           multiplierX100,
           capped: result.payoutPkr < Math.floor((bet.stakePkr * multiplierX100) / 100),
         };
+      }),
+    gameState: protectedProcedure
+      .input(z.object({ gameKey: z.enum(EURO_GENERIC_GAME_KEYS) }))
+      .query(async ({ ctx, input }) => {
+        const { user } = await getActor(ctx);
+        const db = await getDb();
+        if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const activeRound = (
+          await db
+            .select()
+            .from(gameRounds)
+            .where(and(eq(gameRounds.userId, user.id), eq(gameRounds.gameKey, input.gameKey), eq(gameRounds.status, "active")))
+            .orderBy(desc(gameRounds.createdAt))
+            .limit(1)
+        )[0] ?? null;
+        const recent = await db
+          .select()
+          .from(gameRounds)
+          .where(and(eq(gameRounds.userId, user.id), eq(gameRounds.gameKey, input.gameKey)))
+          .orderBy(desc(gameRounds.createdAt))
+          .limit(6);
+        return { activeRound: publicGenericGameRound(activeRound), recent: recent.map(publicGenericGameRound) };
+      }),
+    playGame: protectedProcedure
+      .input(z.object({
+        gameKey: z.enum(EURO_GENERIC_GAME_KEYS),
+        stakePkr: z.number().int().positive(),
+        selection: z.string().trim().max(64).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { user, profile } = await getActor(ctx);
+        const db = await getDb();
+        if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const settings = await getSettings();
+        const label = EURO_GAME_LABELS[input.gameKey];
+        const betError = validateEuroBetAmount(input.stakePkr, settings.euroMinimumBetPkr, settings.euroMaximumBetPkr, label);
+        if (betError) fail(betError);
+        const selectionError = validateGenericGameSelection(input.gameKey, input.selection);
+        if (selectionError) fail(selectionError);
+        if (profile.gameBalancePkr < input.stakePkr)
+          fail(`Your Game Wallet balance is insufficient for this ${label} bet.`);
+        if (input.gameKey !== "mining") {
+          const round = await settleGenericEuroRound({
+            db,
+            userId: user.id,
+            profile,
+            gameKey: input.gameKey,
+            stakePkr: input.stakePkr,
+            selection: input.selection,
+          });
+          return { round };
+        }
+        const existing = (
+          await db
+            .select({ id: gameRounds.id })
+            .from(gameRounds)
+            .where(and(eq(gameRounds.userId, user.id), eq(gameRounds.gameKey, "mining"), eq(gameRounds.status, "active")))
+            .limit(1)
+        )[0];
+        if (existing) fail("Finish the current Mining round before starting another.");
+        const id = randomUUID();
+        const now = new Date();
+        const state = createMiningState();
+        await db.update(profiles).set({ gameBalancePkr: profile.gameBalancePkr - input.stakePkr }).where(eq(profiles.userId, user.id));
+        await Promise.all([
+          db.insert(gameRounds).values({
+            id,
+            userId: user.id,
+            gameKey: "mining",
+            stakePkr: input.stakePkr,
+            privateState: JSON.stringify(state),
+            publicState: JSON.stringify({ revealed: [] }),
+            multiplierX100: 100,
+            createdAt: now,
+          }),
+          db.insert(gameWalletTransactions).values({
+            userId: user.id,
+            type: "game_bet",
+            direction: "debit",
+            amountPkr: input.stakePkr,
+            note: "Mining bet placed",
+            referenceType: "game_round",
+            referenceId: id,
+          }),
+        ]);
+        return { round: publicGenericGameRound({ id, userId: user.id, gameKey: "mining", stakePkr: input.stakePkr, selection: null, privateState: JSON.stringify(state), publicState: JSON.stringify({ revealed: [] }), multiplierX100: 100, payoutPkr: 0, status: "active", createdAt: now, settledAt: null }) };
+      }),
+    revealMining: protectedProcedure
+      .input(z.object({ roundId: z.string().uuid(), tileIndex: z.number().int().min(0).max(24) }))
+      .mutation(async ({ ctx, input }) => {
+        const { user } = await getActor(ctx);
+        const db = await getDb();
+        if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const round = (
+          await db.select().from(gameRounds).where(and(eq(gameRounds.id, input.roundId), eq(gameRounds.userId, user.id), eq(gameRounds.gameKey, "mining"))).limit(1)
+        )[0];
+        if (!round || round.status !== "active") fail("This Mining round is no longer active.");
+        const privateState = parseEuroState(round.privateState);
+        const publicState = parseEuroState(round.publicState);
+        const revealed = Array.isArray(privateState.revealed) ? privateState.revealed.map(Number) : [];
+        const bombs = Array.isArray(privateState.bombs) ? privateState.bombs.map(Number) : [];
+        if (revealed.includes(input.tileIndex)) fail("This Mining tile was already revealed.");
+        const nextRevealed = [...revealed, input.tileIndex];
+        const hitBomb = bombs.includes(input.tileIndex);
+        const now = new Date();
+        const nextPublic = { ...publicState, revealed: nextRevealed, bombTile: hitBomb ? input.tileIndex : null };
+        if (hitBomb) {
+          await Promise.all([
+            db.update(gameRounds).set({ privateState: JSON.stringify({ ...privateState, revealed: nextRevealed }), publicState: JSON.stringify(nextPublic), multiplierX100: 0, status: "lost", settledAt: now }).where(eq(gameRounds.id, round.id)),
+            updateGameDailyStat(db, { userId: user.id, lossPkr: round.stakePkr }),
+          ]);
+          return { hitBomb: true, round: publicGenericGameRound({ ...round, privateState: JSON.stringify({ ...privateState, revealed: nextRevealed }), publicState: JSON.stringify(nextPublic), multiplierX100: 0, status: "lost", settledAt: now }) };
+        }
+        const multiplierX100 = miningMultiplierX100(nextRevealed.length);
+        await db.update(gameRounds).set({ privateState: JSON.stringify({ ...privateState, revealed: nextRevealed }), publicState: JSON.stringify(nextPublic), multiplierX100 }).where(eq(gameRounds.id, round.id));
+        return { hitBomb: false, round: publicGenericGameRound({ ...round, privateState: JSON.stringify({ ...privateState, revealed: nextRevealed }), publicState: JSON.stringify(nextPublic), multiplierX100 }) };
+      }),
+    cashOutMining: protectedProcedure
+      .input(z.object({ roundId: z.string().uuid() }))
+      .mutation(async ({ ctx, input }) => {
+        const { user } = await getActor(ctx);
+        const db = await getDb();
+        if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const [round, currentProfile, activePackage, daily] = await Promise.all([
+          db.select().from(gameRounds).where(and(eq(gameRounds.id, input.roundId), eq(gameRounds.userId, user.id), eq(gameRounds.gameKey, "mining"), eq(gameRounds.status, "active"))).limit(1).then((rows: any[]) => rows[0]),
+          db.select().from(profiles).where(eq(profiles.userId, user.id)).limit(1).then((rows: any[]) => rows[0]),
+          getActivePackageForUser(user.id),
+          getGameDailyStat(db, user.id, getDayKey()),
+        ]);
+        if (!round || !currentProfile) fail("This Mining round is no longer active.");
+        const state = parseEuroState(round.privateState);
+        if (!Array.isArray(state.revealed) || state.revealed.length === 0) fail("Reveal one safe Mining tile before cashing out.");
+        const result = cappedAviatorPayout({ stakePkr: round.stakePkr, multiplierX100: round.multiplierX100, priorProfitPkr: daily?.profitPkr ?? 0, dailyProfitLimitPkr: maxDailyGameProfit(activePackage?.plan.pricePkr) });
+        const now = new Date();
+        await Promise.all([
+          db.update(gameRounds).set({ payoutPkr: result.payoutPkr, status: "cashed_out", settledAt: now }).where(eq(gameRounds.id, round.id)),
+          db.update(profiles).set({ gameBalancePkr: currentProfile.gameBalancePkr + result.payoutPkr }).where(eq(profiles.userId, user.id)),
+          updateGameDailyStat(db, { userId: user.id, profitPkr: result.profitPkr }),
+          db.insert(gameWalletTransactions).values({ userId: user.id, type: "game_payout", direction: "credit", amountPkr: result.payoutPkr, note: `Mining cash-out at ${(round.multiplierX100 / 100).toFixed(2)}x`, referenceType: "game_round", referenceId: round.id }),
+        ]);
+        return { success: true, payoutPkr: result.payoutPkr, multiplierX100: round.multiplierX100 };
+      }),
+    claimTaskReward: protectedProcedure
+      .input(z.object({ taskKey: z.enum(["whatsapp", "watch_ad"]) }))
+      .mutation(async ({ ctx, input }) => {
+        const { user, profile } = await getActor(ctx);
+        const db = await getDb();
+        if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const dayKey = input.taskKey === "watch_ad" ? getDayKey() : "lifetime";
+        const existing = (await db.select({ id: gameTaskClaims.id }).from(gameTaskClaims).where(and(eq(gameTaskClaims.userId, user.id), eq(gameTaskClaims.taskKey, input.taskKey), eq(gameTaskClaims.dayKey, dayKey))).limit(1))[0];
+        if (existing) fail("This Game Wallet task reward was already claimed.");
+        if (input.taskKey === "whatsapp" && !profile.whatsappJoined) fail("Please join the WhatsApp channel first, then claim this Game Wallet task reward.");
+        if (input.taskKey === "watch_ad") {
+          const watched = (await db.select().from(adSessions).where(and(eq(adSessions.userId, user.id), eq(adSessions.dayKey, dayKey)))).some(session => Boolean(session.claimedAt));
+          if (!watched) fail("Please complete and claim a daily ad first, then claim this Game Wallet task reward.");
+        }
+        const rewardPkr = 20;
+        await Promise.all([
+          db.update(profiles).set({ gameBalancePkr: profile.gameBalancePkr + rewardPkr }).where(eq(profiles.userId, user.id)),
+          db.insert(gameTaskClaims).values({ userId: user.id, taskKey: input.taskKey, dayKey, rewardPkr }),
+          db.insert(gameWalletTransactions).values({ userId: user.id, type: "task_reward", direction: "credit", amountPkr: rewardPkr, note: `${input.taskKey === "whatsapp" ? "WhatsApp" : "Daily ad"} task reward`, referenceType: "game_task", referenceId: `${input.taskKey}:${dayKey}` }),
+        ]);
+        return { success: true, rewardPkr, taskKey: input.taskKey };
       }),
   }),
   earning: router({

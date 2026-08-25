@@ -16,3 +16,17 @@
 | Aircraft marker | Minimal gold plane marker that moves on the multiplier curve. | 32x32 px | Lucide icon/CSS in the Euro component |
 | Wallet and game icons | Accessible line icons for balances, exchange, settings, and tasks. | 16–24 px | Lucide icons in the Euro component |
 
+## Game card assets
+
+| Name | Description | Size | Image |
+|---|---|---:|---|
+| Aviator | Climbing modern aeroplane. | Square card | `/manus-storage/euro-aviator-card_5cdc8f1c.png` |
+| Slots | Glowing three-reel 777 slot machine. | Square card | `/manus-storage/euro-slots-card_30e747fe.png` |
+| Mining | Gold mine cart, lantern, and nuggets. | Square card | `/manus-storage/euro-mining-card_44fec3cf.png` |
+| Ludo Dice | Ludo board with falling dice. | Square card | `/manus-storage/euro-ludo-card_17d522f8.png` |
+| Plinko | Gold ball and Plinko pins. | Square card | `/manus-storage/euro-plinko-card_e62da2b0.png` |
+| Wheel | Emerald and gold spinning wheel. | Square card | `/manus-storage/euro-wheel-card_629ce9fc.png` |
+| Crash | Ascending then broken gold graph. | Square card | `/manus-storage/euro-crash-card_15d31905.png` |
+| Mines | Bomb and 5x5 game tile grid. | Square card | `/manus-storage/euro-mines-card_0cb56a39.png` |
+| Color Prediction | Red and green glowing orbs. | Square card | `/manus-storage/euro-color-card_dde37390.png` |
+| Lucky Number | Gold token and number tiles. | Square card | `/manus-storage/euro-lucky-card_d6632511.png` |

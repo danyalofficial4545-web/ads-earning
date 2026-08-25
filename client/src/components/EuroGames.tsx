@@ -1,223 +1,77 @@
 import { trpc } from "@/lib/trpc";
 import type { TranslationKey } from "@/lib/i18n";
-import {
-  ArrowDownLeft,
-  ArrowUpRight,
-  CircleDollarSign,
-  Gamepad2,
-  History,
-  Landmark,
-  Loader2,
-  Plus,
-  Plane,
-  Rocket,
-  Trophy,
-  WalletCards,
-  X,
-} from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Bomb, CircleDollarSign, Dices, Gem, Gift, Landmark, Loader2, Plane, Plus, Rocket, Target, Trophy, WalletCards, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-const quickAmounts = [16, 32, 64, 640, 1600, 3200, 20000];
-const futureGames = ["Slots", "Mines", "Ludo Dice", "Plinko", "Wheel", "Crash", "Color", "Lucky Number"];
+const amounts = [16, 32, 64, 640, 1600, 3200, 20000];
+const cards = [
+  ["aviator", "Aviator", "/manus-storage/euro-aviator-card_5cdc8f1c.png"],
+  ["slots", "Slots", "/manus-storage/euro-slots-card_30e747fe.png"],
+  ["mining", "Mining", "/manus-storage/euro-mining-card_44fec3cf.png"],
+  ["ludo", "Ludo Dice", "/manus-storage/euro-ludo-card_17d522f8.png"],
+  ["plinko", "Plinko", "/manus-storage/euro-plinko-card_e62da2b0.png"],
+  ["wheel", "Wheel", "/manus-storage/euro-wheel-card_629ce9fc.png"],
+  ["crash", "Crash", "/manus-storage/euro-crash-card_15d31905.png"],
+  ["mines", "Mines", "/manus-storage/euro-mines-card_0cb56a39.png"],
+  ["color", "Color Prediction", "/manus-storage/euro-color-card_dde37390.png"],
+  ["lucky", "Lucky Number", "/manus-storage/euro-lucky-card_d6632511.png"],
+] as const;
 
-function pkr(amount: number) {
-  return `PKR ${Math.max(0, amount ?? 0).toLocaleString()}`;
+const pkr = (value: number) => `PKR ${Math.max(0, value || 0).toLocaleString()}`;
+const message = (error: unknown) => error instanceof Error ? error.message : "Please try again.";
+const isGeneric = (key: string): key is "slots" | "mining" | "ludo" | "wheel" | "plinko" | "color" | "lucky" => ["slots", "mining", "ludo", "wheel", "plinko", "color", "lucky"].includes(key);
+
+function Chips({ value, setValue, disabled = false }: { value: string; setValue: (v: string) => void; disabled?: boolean }) {
+  return <div className="flex flex-wrap gap-1.5">{amounts.map(amount => <button key={amount} disabled={disabled} onClick={() => setValue(String(amount))} className={`h-[25px] min-w-[45px] rounded-full border px-2 text-[11px] font-black transition ${value === String(amount) ? "border-amber-300 bg-amber-300 text-slate-950" : "border-white/15 bg-[#222] text-white"} disabled:opacity-40`}>{amount}</button>)}</div>;
 }
 
-function readError(error: unknown) {
-  return error instanceof Error ? error.message : "Please try again.";
-}
-
-function liveMultiplier(round: any, now: number) {
-  if (!round) return 1;
-  const startsAt = new Date(round.startsAt).getTime();
-  const elapsed = Math.max(0, now - startsAt - 3000);
-  return Math.max(1, Math.exp(elapsed / 7500));
-}
-
-function ExchangeDialog({
-  mode,
-  open,
-  onClose,
-  t,
-  mainBalancePkr,
-  gameBalancePkr,
-  onDone,
-}: any) {
+function Exchange({ mode, data, close, refresh, t }: any) {
   const [amount, setAmount] = useState("");
-  const utils = trpc.useUtils();
-  const fromMain = trpc.euro.exchangeFromMain.useMutation({
-    onSuccess: async () => {
-      toast.success(t("saved"));
-      setAmount("");
-      onClose();
-      await onDone();
-    },
-    onError: error => toast.error(readError(error)),
-  });
-  const toMain = trpc.euro.exchangeToMain.useMutation({
-    onSuccess: async () => {
-      toast.success(t("saved"));
-      setAmount("");
-      onClose();
-      await onDone();
-    },
-    onError: error => toast.error(readError(error)),
-  });
-  const mutation = mode === "to-game" ? fromMain : toMain;
-  const available = mode === "to-game" ? mainBalancePkr : gameBalancePkr;
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-[70] grid place-items-center bg-slate-950/75 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-3xl border border-amber-300/20 bg-[#113129] p-5 shadow-2xl">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="eyebrow">{mode === "to-game" ? t("exchangeToGame") : t("exchangeToMain")}</p>
-            <h2 className="mt-1 text-xl font-bold">{t("transferAmount")}</h2>
-          </div>
-          <button onClick={onClose} className="grid size-9 place-items-center rounded-xl bg-white/5 text-slate-200"><X className="size-4" /></button>
-        </div>
-        <p className="mt-3 text-sm leading-6 text-slate-300">
-          {mode === "to-game" ? t("transferToGameHint") : t("transferToMainHint")}
-        </p>
-        <p className="mt-3 text-sm font-bold text-amber-300">{t("balance")}: {pkr(available)}</p>
-        <input
-          className="field mt-4"
-          type="number"
-          min="1"
-          step="1"
-          inputMode="numeric"
-          value={amount}
-          onChange={event => setAmount(event.target.value)}
-          placeholder="PKR"
-        />
-        <button
-          disabled={mutation.isPending}
-          onClick={() => mutation.mutate({ amountPkr: Number(amount) })}
-          className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-300 font-bold text-slate-950 disabled:opacity-60"
-        >
-          {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <ArrowUpRight className="size-4" />}
-          {t("transfer")}
-        </button>
-      </div>
-    </div>
-  );
+  const mutation = mode === "main" ? trpc.euro.exchangeToMain.useMutation() : trpc.euro.exchangeFromMain.useMutation();
+  if (!mode) return null;
+  return <div className="fixed inset-0 z-[90] grid place-items-center bg-black/70 p-4 backdrop-blur-sm"><div className="w-full max-w-sm rounded-3xl border border-amber-300/25 bg-[#0c211c] p-5 shadow-2xl"><div className="flex items-center justify-between"><div><p className="text-xs font-black uppercase tracking-widest text-amber-300">{mode === "main" ? t("exchangeToMain") : t("exchangeToGame")}</p><p className="mt-1 text-sm text-slate-300">{pkr(mode === "main" ? data.gameBalancePkr : data.mainBalancePkr)}</p></div><button onClick={close} className="grid size-8 place-items-center rounded-full bg-white/10"><X className="size-4" /></button></div><input value={amount} onChange={e => setAmount(e.target.value)} type="number" min="1" className="field mt-5" placeholder="PKR"/><button disabled={mutation.isPending} onClick={() => mutation.mutate({ amountPkr: Number(amount) }, { onSuccess: async () => { toast.success(t("saved")); close(); await refresh(); }, onError: e => toast.error(message(e)) })} className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-full bg-amber-300 text-xs font-black text-slate-950 disabled:opacity-50"><ArrowUpRight className="size-4" />{t("transfer")}</button></div></div>;
 }
 
-function AviatorBoard({ data, t, refresh }: any) {
-  const [primaryBet, setPrimaryBet] = useState("16");
-  const [secondBet, setSecondBet] = useState("");
-  const [now, setNow] = useState(Date.now());
-  const [showSecondBet, setShowSecondBet] = useState(false);
-  const utils = trpc.useUtils();
-  const state = trpc.euro.aviatorState.useQuery(undefined, {
-    refetchInterval: data?.round?.status === "active" ? 750 : false,
-  });
-  const round = state.data?.round ?? data?.round;
-  const bets = state.data?.bets ?? data?.activeBets ?? [];
-  const multiplier = round?.status === "active" ? liveMultiplier(round, now) : (round?.crashMultiplierX100 ?? 100) / 100;
-  const startsAt = round ? new Date(round.startsAt).getTime() : 0;
-  const isPreflight = round?.status === "active" && now < startsAt + 3000;
-  const isCrashed = round?.status === "crashed";
-  const canStart = data?.settings?.aviatorEnabled && !round?.id;
-  const start = trpc.euro.startAviator.useMutation({
-    onSuccess: async () => {
-      await Promise.all([utils.euro.bootstrap.invalidate(), utils.euro.aviatorState.invalidate()]);
-    },
-    onError: error => toast.error(readError(error)),
-  });
-  const cashOut = trpc.euro.cashOutAviator.useMutation({
-    onSuccess: async result => {
-      toast.success(`${t("cashOutAt")} ${(result.multiplierX100 / 100).toFixed(2)}x · ${pkr(result.payoutPkr)}`);
-      await Promise.all([utils.euro.bootstrap.invalidate(), utils.euro.aviatorState.invalidate()]);
-    },
-    onError: error => toast.error(readError(error)),
-  });
-
-  useEffect(() => {
-    if (round?.status !== "active") return;
-    const interval = window.setInterval(() => {
-      setNow(Date.now());
-      if (Date.now() >= new Date(round.crashesAt).getTime()) void refresh();
-    }, 120);
-    return () => window.clearInterval(interval);
-  }, [refresh, round?.crashesAt, round?.status]);
-
-  const stakeValues = [Number(primaryBet), ...(showSecondBet ? [Number(secondBet)] : [])].filter(value => Number.isFinite(value) && value > 0);
-  const maxX = Math.max(2, Math.min(100, isCrashed ? multiplier : multiplier + 0.8));
-  const markerX = Math.min(94, Math.max(8, (Math.log(Math.max(1, multiplier)) / Math.log(maxX)) * 86 + 5));
-  const markerY = Math.max(10, 86 - ((Math.log(Math.max(1, multiplier)) / Math.log(maxX)) * 72));
-
-  return (
-    <section className="panel overflow-hidden p-0">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 px-5 py-4">
-        <div className="flex items-center gap-3"><div className="grid size-10 place-items-center rounded-xl bg-amber-300 text-slate-950"><Plane className="size-5" /></div><div><p className="eyebrow">{t("aviator")}</p><h2 className="mt-1 text-xl font-bold">{t("aviatorSubtitle")}</h2></div></div>
-        <span className={`rounded-full px-3 py-1 text-xs font-bold ${isCrashed ? "bg-red-400/15 text-red-200" : round ? "bg-emerald-400/15 text-emerald-200" : "bg-white/10 text-slate-300"}`}>{isCrashed ? t("crashed") : isPreflight ? t("waitingForFlight") : round ? "LIVE" : "READY"}</span>
-      </div>
-      <div className="relative min-h-[290px] overflow-hidden bg-[radial-gradient(circle_at_65%_25%,rgba(251,191,36,.17),transparent_33%),linear-gradient(140deg,#08251f,#07130f)] p-5">
-        <img src="/manus-storage/euro-aviator-reference_5642a3dd.png" alt="" className="pointer-events-none absolute inset-0 size-full object-cover opacity-[.07]" />
-        <div className="relative flex h-[250px] flex-col items-center justify-center rounded-2xl border border-white/10 bg-slate-950/25">
-          <div className="absolute inset-x-8 bottom-7 top-7 opacity-30 [background-image:linear-gradient(rgba(255,255,255,.14)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.14)_1px,transparent_1px)] [background-size:32px_32px]" />
-          <svg className="absolute inset-8 size-[calc(100%-4rem)]" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M5,88 C18,84 30,78 45,62 S73,34 95,12" fill="none" stroke="#fbbf24" strokeWidth="1.5" vectorEffect="non-scaling-stroke" /></svg>
-          {round && <div className="absolute z-10 transition-all duration-100" style={{ left: `${markerX}%`, top: `${markerY}%` }}><Rocket className="size-8 -translate-x-1/2 -translate-y-1/2 rotate-[-32deg] text-amber-300 drop-shadow-[0_0_16px_rgba(251,191,36,.8)]" /></div>}
-          <p className="relative text-6xl font-black tracking-tighter text-white md:text-7xl">{multiplier.toFixed(2)}<span className="text-amber-300">x</span></p>
-          <p className="relative mt-2 text-xs font-bold uppercase tracking-[.2em] text-slate-400">{isCrashed ? t("crashed") : isPreflight ? t("waitingForFlight") : round ? t("cashOut") : t("placeBet")}</p>
-        </div>
-      </div>
-      <div className="grid gap-4 p-5 md:grid-cols-2">
-        {[0, 1].map(index => {
-          const enabled = index === 0 || showSecondBet;
-          const value = index === 0 ? primaryBet : secondBet;
-          const setValue = index === 0 ? setPrimaryBet : setSecondBet;
-          const activeBet = bets[index];
-          return (
-            <div key={index} className={`rounded-2xl border p-4 ${enabled ? "border-white/10 bg-slate-950/25" : "border-dashed border-white/10 bg-white/[.02] opacity-80"}`}>
-              <div className="mb-3 flex items-center justify-between gap-3"><p className="text-sm font-bold">{t("betAmount")} {index + 1}</p>{index === 1 && <button onClick={() => { setShowSecondBet(!showSecondBet); setSecondBet(""); }} className="text-xs font-bold text-amber-300">{showSecondBet ? t("removeSecondBet") : t("addSecondBet")}</button>}</div>
-              {enabled ? <><input className="field" type="number" min={data.settings.minimumBetPkr} max={data.settings.maximumBetPkr} value={value} onChange={event => setValue(event.target.value)} disabled={Boolean(round?.id)} />
-              <div className="mt-3 flex flex-wrap gap-2">{quickAmounts.map(amount => <button key={amount} disabled={Boolean(round?.id)} onClick={() => setValue(String(amount))} className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-bold text-slate-200 disabled:opacity-40">{amount}</button>)}</div>
-              {activeBet?.status === "active" && round?.status === "active" ? <button disabled={cashOut.isPending || isPreflight} onClick={() => cashOut.mutate({ betId: activeBet.id })} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 font-bold text-slate-950 disabled:opacity-50"><ArrowDownLeft className="size-4" />{t("cashOut")} · {(Number(activeBet.stakePkr) * multiplier).toFixed(0)} PKR</button> : index === 0 ? <button disabled={!canStart || start.isPending || stakeValues.length === 0} onClick={() => start.mutate({ stakesPkr: stakeValues })} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-300 font-bold text-slate-950 disabled:opacity-50">{start.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plane className="size-4" />}{t("placeBet")}</button> : null}</> : <button onClick={() => setShowSecondBet(true)} className="grid h-[108px] w-full place-items-center rounded-xl border border-dashed border-white/10 text-sm font-bold text-amber-300"><Plus className="mr-2 inline size-4" />{t("addSecondBet")}</button>}
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
+function TaskModal({ data, close, refresh, t }: any) {
+  const claim = trpc.euro.claimTaskReward.useMutation();
+  if (!data) return null;
+  const system = data.systemTasks ?? [];
+  return <div className="fixed inset-0 z-[90] grid place-items-center bg-black/70 p-4 backdrop-blur-sm"><div className="w-full max-w-md rounded-3xl border border-amber-300/25 bg-[#0c211c] p-5 shadow-2xl"><div className="flex items-center justify-between"><div><h2 className="font-black">{t("gameTasks")}</h2><p className="mt-1 text-xs text-slate-400">Please complete tasks and get reward into Game Wallet</p></div><button onClick={close} className="grid size-8 place-items-center rounded-full bg-white/10"><X className="size-4" /></button></div><div className="mt-5 space-y-3">{system.map((task: any) => <div key={task.key} className="rounded-2xl border border-white/10 bg-white/[.03] p-3"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black">{task.title}</p><p className="mt-1 text-xs text-amber-300">{pkr(task.rewardPkr)} → Game Wallet</p></div>{task.claimed ? <span className="text-xs font-black text-emerald-300">Completed</span> : <div className="flex gap-2"><a href={task.targetUrl} target={task.targetUrl.startsWith("http") ? "_blank" : undefined} rel="noreferrer" className="rounded-full border border-white/15 px-3 py-1.5 text-[11px] font-black">Open</a><button disabled={claim.isPending} onClick={() => claim.mutate({ taskKey: task.key }, { onSuccess: async r => { toast.success(`${pkr(r.rewardPkr)} added to Game Wallet`); await refresh(); }, onError: e => toast.error(message(e)) })} className="rounded-full bg-amber-300 px-3 py-1.5 text-[11px] font-black text-slate-950">Claim</button></div>}</div></div>)}{data.tasks?.map((task: any) => <a key={task.id} href={task.targetUrl} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[.03] p-3"><div className="grid size-9 place-items-center rounded-xl bg-amber-300/10 text-amber-300"><Gift className="size-4" /></div><div><p className="text-sm font-black">{task.title}</p><p className="mt-1 text-xs text-amber-300">{pkr(task.rewardPkr)}</p></div></a>)}</div></div></div>;
 }
 
-export function EuroGames({ t }: { t: (key: TranslationKey) => string }) {
-  const utils = trpc.useUtils();
-  const data = trpc.euro.bootstrap.useQuery();
-  const [exchangeMode, setExchangeMode] = useState<"to-game" | "to-main" | null>(null);
-  const claimBonus = trpc.euro.claimFirstVisitBonus.useMutation({
-    onSuccess: async result => {
-      if (result.bonusPkr) toast.success(`${t("claimBonus")}: ${pkr(result.bonusPkr)}`);
-      await utils.euro.bootstrap.invalidate();
-    },
-    onError: error => toast.error(readError(error)),
-  });
-  const refresh = async () => {
-    await Promise.all([utils.euro.bootstrap.invalidate(), utils.euro.aviatorState.invalidate(), utils.wallet.get.invalidate(), utils.platform.overview.invalidate()]);
-  };
+function Aviator({ data, refresh, t }: any) {
+  const [stake, setStake] = useState("16"); const [second, setSecond] = useState(""); const [dual, setDual] = useState(false); const [now, setNow] = useState(Date.now()); const [crashNotice, setCrashNotice] = useState<any>(null);
+  const state = trpc.euro.aviatorState.useQuery(undefined, { refetchInterval: 350 });
+  const start = trpc.euro.startAviator.useMutation(); const cash = trpc.euro.cashOutAviator.useMutation();
+  const round = state.data ? state.data.round : data.round; const bets = state.data ? state.data.bets : data.activeBets ?? [];
+  const starts = round ? new Date(round.startsAt).getTime() : 0; const crashes = round ? new Date(round.crashesAt).getTime() : 0;
+  const preflight = Boolean(round?.status === "active" && now < starts + 3000);
+  const mult = crashNotice ? crashNotice.crashMultiplierX100 / 100 : round?.status === "active" ? Math.max(1, Math.min(100, Math.exp(Math.max(0, now - starts - 3000) / 7500))) : ((round?.crashMultiplierX100 ?? 100) / 100);
+  const flightProgress = Math.min(1, Math.max(0, Math.log(Math.max(1, mult)) / Math.log(100)));
+  useEffect(() => { const id = window.setInterval(() => setNow(Date.now()), 100); return () => clearInterval(id); }, []);
+  useEffect(() => { if (state.data?.round?.status === "crashed") setCrashNotice(state.data.round); }, [state.data?.round]);
+  useEffect(() => { if (crashNotice) { const id = window.setTimeout(() => { setCrashNotice(null); void refresh(); }, 3000); return () => clearTimeout(id); } }, [crashNotice, refresh]);
+  const stakes = [Number(stake), ...(dual ? [Number(second)] : [])].filter(v => Number.isInteger(v) && v > 0);
+  return <div className="relative min-h-full overflow-y-auto bg-[#061711] p-4 text-white md:p-7"><div className="mx-auto max-w-3xl"><div className="relative overflow-hidden rounded-3xl border border-amber-300/25 bg-[radial-gradient(circle_at_65%_20%,rgba(251,191,36,.2),transparent_30%),#071f18] p-5"><img src="/manus-storage/euro-aviator-reference_5642a3dd.png" className="pointer-events-none absolute inset-0 size-full object-cover opacity-[.07]"/><div className="relative flex items-center justify-between"><div className="flex items-center gap-2"><Plane className="size-5 text-amber-300"/><span className="font-black">Aviator</span></div><span className={`rounded-full px-3 py-1 text-xs font-black ${crashNotice ? "bg-red-400/20 text-red-200" : "bg-white/10"}`}>{crashNotice ? `Crashed at ${mult.toFixed(2)}x` : preflight ? "Preparing" : round ? "LIVE" : "READY"}</span></div><div className="relative mt-5 grid h-56 place-items-center overflow-hidden rounded-2xl border border-white/10 bg-black/25"><svg className="absolute inset-6 size-[calc(100%-3rem)] opacity-60" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M4,90 C20,87 36,80 53,61 S80,30 96,12" fill="none" stroke="#fbbf24" strokeWidth="1.5"/></svg>{(round || crashNotice) && <Rocket style={{ left: `${7 + flightProgress * 82}%`, top: `${78 - flightProgress * 62}%` }} className="absolute size-9 -translate-x-1/2 -translate-y-1/2 -rotate-45 text-amber-300 transition-all duration-100"/>}<p className="relative text-6xl font-black">{mult.toFixed(2)}<span className="text-amber-300">x</span></p></div></div><div className="mt-4 rounded-3xl border border-white/10 bg-white/[.03] p-4"><input className="field" disabled={Boolean(round) || Boolean(crashNotice)} value={stake} onChange={e => setStake(e.target.value)} type="number"/><div className="mt-3"><Chips value={stake} setValue={setStake} disabled={Boolean(round) || Boolean(crashNotice)}/></div><div className="mt-4 flex gap-2"><button onClick={() => setDual(!dual)} disabled={Boolean(round) || Boolean(crashNotice)} className="h-8 rounded-full border border-white/15 px-3 text-xs font-black">{dual ? "Remove dual bet" : "Dual bet"}</button>{dual && <input className="field h-8" value={second} onChange={e => setSecond(e.target.value)} type="number"/>}</div><div className="mt-4 flex gap-3">{bets.map((bet: any) => bet.status === "active" && round?.status === "active" && <button key={bet.id} disabled={preflight || cash.isPending} onClick={() => cash.mutate({ betId: bet.id }, { onSuccess: async r => { toast.success(`Cashout ${pkr(r.payoutPkr)}`); await refresh(); }, onError: e => toast.error(message(e)) })} className="h-10 flex-1 rounded-full bg-emerald-400 text-sm font-black text-slate-950">{t("cashOut")} · {pkr(Math.floor(Number(bet.stakePkr) * mult))}</button>)}{!round && !crashNotice && <button disabled={!stakes.length || start.isPending} onClick={() => start.mutate({ stakesPkr: stakes }, { onSuccess: refresh, onError: e => toast.error(message(e)) })} className="h-10 flex-1 rounded-full bg-amber-300 text-sm font-black text-slate-950">{t("placeBet")}</button>}</div></div></div></div>;
+}
 
-  useEffect(() => {
-    if (data.data?.canClaimBonus && !claimBonus.isPending) claimBonus.mutate();
-  }, [claimBonus, data.data?.canClaimBonus]);
+function GenericGame({ gameKey, title, data, refresh, t }: any) {
+  const [stake, setStake] = useState("16"); const [selection, setSelection] = useState(gameKey === "color" ? "red" : gameKey === "ludo" ? "1" : gameKey === "lucky" ? "0" : "");
+  const state = trpc.euro.gameState.useQuery({ gameKey }); const play = trpc.euro.playGame.useMutation(); const reveal = trpc.euro.revealMining.useMutation(); const cash = trpc.euro.cashOutMining.useMutation();
+  const active = state.data?.activeRound; const result = !active ? state.data?.recent?.[0] : null; const isMining = gameKey === "mining";
+  const submit = () => play.mutate({ gameKey, stakePkr: Number(stake), selection: selection || undefined }, { onSuccess: async r => { if (r.round?.status !== "active") toast.success(r.round?.payoutPkr ? `Won ${pkr(r.round.payoutPkr)}` : "No win this round"); await refresh(); }, onError: e => toast.error(message(e)) });
+  const revealed = active?.publicState?.revealed ?? [];
+  return <div className="min-h-full overflow-y-auto bg-[#061711] p-4 text-white md:p-7"><div className="mx-auto max-w-xl"><div className="rounded-3xl border border-amber-300/20 bg-[#0b251e] p-5"><div className="flex items-center gap-3"><div className="grid size-11 place-items-center rounded-2xl bg-amber-300 text-slate-950">{isMining ? <Bomb/> : <Trophy/>}</div><div><p className="text-xs font-black uppercase tracking-widest text-amber-300">Euro Game</p><h2 className="mt-1 text-2xl font-black">{title}</h2></div></div>{isMining && active ? <><p className="mt-5 text-center text-3xl font-black text-amber-300">{(active.multiplierX100 / 100).toFixed(2)}x</p><div className="mt-5 grid grid-cols-5 gap-2">{Array.from({ length: 25 }, (_, index) => <button key={index} disabled={revealed.includes(index) || reveal.isPending} onClick={() => reveal.mutate({ roundId: active.id, tileIndex: index }, { onSuccess: refresh, onError: e => toast.error(message(e)) })} className={`aspect-square rounded-xl border text-xs font-black ${revealed.includes(index) ? "border-amber-300 bg-amber-300 text-slate-950" : "border-white/15 bg-white/[.05]"}`}>{revealed.includes(index) ? <Gem className="mx-auto size-4"/> : "?"}</button>)}</div><button disabled={!revealed.length || cash.isPending} onClick={() => cash.mutate({ roundId: active.id }, { onSuccess: async r => { toast.success(`Cashout ${pkr(r.payoutPkr)}`); await refresh(); }, onError: e => toast.error(message(e)) })} className="mt-5 h-10 w-full rounded-full bg-emerald-400 font-black text-slate-950">{t("cashOut")}</button></> : <><div className="mt-5 grid h-28 place-items-center rounded-2xl border border-white/10 bg-black/20 text-3xl font-black text-amber-300">{gameKey === "slots" ? (result?.publicState?.reels?.join(" · ") ?? "7 · ★ · ♦") : gameKey === "wheel" ? "◉" : gameKey === "plinko" ? "● · ⠿ · ●" : gameKey === "ludo" ? `⚄ ${result?.publicState?.rolled ?? ""}` : gameKey === "color" ? (result?.publicState?.result ?? "RED / GREEN").toUpperCase() : gameKey === "lucky" ? (result?.publicState?.result ?? "0–9") : "⛏"}</div><input className="field mt-5" value={stake} onChange={e => setStake(e.target.value)} type="number"/><div className="mt-3"><Chips value={stake} setValue={setStake}/></div>{gameKey === "ludo" && <div className="mt-4 grid grid-cols-6 gap-2">{[1,2,3,4,5,6].map(n => <button key={n} onClick={() => setSelection(String(n))} className={`aspect-square rounded-xl text-sm font-black ${selection === String(n) ? "bg-amber-300 text-slate-950" : "bg-white/10"}`}>{n}</button>)}</div>}{gameKey === "color" && <div className="mt-4 flex gap-3"><button onClick={() => setSelection("red")} className={`h-10 flex-1 rounded-full font-black ${selection === "red" ? "bg-red-500" : "bg-red-500/25"}`}>Red</button><button onClick={() => setSelection("green")} className={`h-10 flex-1 rounded-full font-black ${selection === "green" ? "bg-emerald-500 text-slate-950" : "bg-emerald-500/25"}`}>Green</button></div>}{gameKey === "lucky" && <div className="mt-4 grid grid-cols-5 gap-2">{Array.from({ length: 10 }, (_, n) => <button key={n} onClick={() => setSelection(String(n))} className={`aspect-square rounded-xl font-black ${selection === String(n) ? "bg-amber-300 text-slate-950" : "bg-white/10"}`}>{n}</button>)}</div>}<button disabled={play.isPending} onClick={submit} className="mt-5 h-10 w-full rounded-full bg-amber-300 font-black text-slate-950">{isMining ? "Start Mining" : gameKey === "wheel" ? "Spin" : gameKey === "plinko" ? "Drop" : gameKey === "ludo" ? "Roll" : "Play"}</button>{result && <div className={`mt-5 rounded-2xl p-4 text-center ${result.payoutPkr ? "bg-emerald-400/15 text-emerald-200" : "bg-red-400/10 text-red-200"}`}><p className="font-black">{result.payoutPkr ? `You won ${pkr(result.payoutPkr)}` : "No win this round"}</p><p className="mt-1 text-xs">{result.publicState?.rolled ? `Dice: ${result.publicState.rolled}` : result.publicState?.result ? `Result: ${result.publicState.result}` : result.multiplierX100 ? `${(result.multiplierX100 / 100).toFixed(2)}x` : ""}</p></div>}</>}</div></div></div>;
+}
 
-  if (data.isLoading || !data.data) return <div className="panel"><Loader2 className="mx-auto size-6 animate-spin text-amber-300" /></div>;
-  const euro = data.data;
-  return (
-    <>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p className="eyebrow">€ {t("euro")}</p><h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">{t("euroTitle")}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">{t("euroSubtitle")}</p></div><div className="flex items-center gap-2 rounded-xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-sm font-bold text-amber-100"><Trophy className="size-4 text-amber-300" />{t("dailyGameProfit")}: {pkr(euro.dailyProfitPkr)} / {pkr(euro.dailyProfitLimitPkr)}</div></div>
-      <section className="mb-5 grid gap-4 lg:grid-cols-[1.15fr_.85fr]">
-        <div className="relative overflow-hidden rounded-3xl border border-amber-300/20 bg-[linear-gradient(120deg,#143c31,#0b1c18)] p-5 shadow-xl"><div className="absolute -right-8 -top-8 size-40 rounded-full bg-amber-300/10 blur-3xl" /><div className="relative flex flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><div className="grid size-12 place-items-center rounded-2xl bg-amber-300 text-slate-950"><Gamepad2 className="size-6" /></div><div><p className="text-sm font-bold text-amber-200">{t("gameWallet")}</p><p className="mt-1 text-3xl font-black">{pkr(euro.gameBalancePkr)}</p></div></div><button onClick={() => setExchangeMode("to-game")} className="grid size-11 place-items-center rounded-2xl border border-amber-300/30 bg-amber-300/15 text-amber-200"><Plus className="size-5" /></button></div><div className="relative mt-5 grid gap-2 sm:grid-cols-2"><button onClick={() => setExchangeMode("to-main")} className="flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 text-sm font-bold"><Landmark className="size-4" />{t("exchangeToMain")}</button><button onClick={() => setExchangeMode("to-game")} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-amber-300 text-sm font-bold text-slate-950"><WalletCards className="size-4" />{t("exchangeToGame")}</button></div></div>
-        <div className="panel flex flex-col justify-between"><div><p className="eyebrow">{t("mainWallet")}</p><p className="mt-2 text-3xl font-black">{pkr(euro.mainBalancePkr)}</p><p className="mt-3 text-sm leading-6 text-slate-400">{euro.canExchangeToMain ? t("transferToMainHint") : t("euroPackageRequired")}</p></div><button onClick={() => setExchangeMode("to-game")} className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-amber-300/30 bg-amber-300/10 text-sm font-bold text-amber-200"><CircleDollarSign className="size-4" />{t("addToGameWallet")}</button></div>
-      </section>
-      {euro.gameBalancePkr === 0 && <section className="mb-5 rounded-3xl border border-dashed border-amber-300/40 bg-amber-300/[.04] px-5 py-10 text-center"><Gamepad2 className="mx-auto size-8 text-amber-300" /><p className="mx-auto mt-4 max-w-md text-sm font-semibold leading-6 text-amber-50">{t("gameWalletEmpty")}</p><button onClick={() => setExchangeMode("to-game")} className="mx-auto mt-5 grid size-12 place-items-center rounded-2xl bg-amber-300 text-slate-950"><Plus className="size-6" /></button></section>}
-      <AviatorBoard data={euro} t={t} refresh={refresh} />
-      <section className="mt-5 grid gap-5 xl:grid-cols-[1.1fr_.9fr]"><div className="panel"><div className="flex items-center justify-between"><div><p className="eyebrow">{t("gameTasks")}</p><h2 className="mt-1 text-xl font-bold">{t("gameTasks")}</h2></div><Gamepad2 className="size-5 text-amber-300" /></div>{euro.tasks.length ? <div className="mt-4 grid gap-3 sm:grid-cols-2">{euro.tasks.map((task: any) => <a key={task.id} href={task.targetUrl} target="_blank" rel="noreferrer" className="rounded-2xl border border-white/10 bg-slate-950/20 p-3 transition hover:border-amber-300/30"><div className="flex items-center gap-3">{task.imageData ? <img src={task.imageData} alt="" className="size-10 rounded-xl object-cover" /> : <div className="grid size-10 place-items-center rounded-xl bg-amber-300/10 text-amber-300"><Gamepad2 className="size-4" /></div>}<div className="min-w-0"><p className="truncate text-sm font-bold">{task.title}</p><p className="mt-1 text-xs text-amber-300">{pkr(task.rewardPkr)}</p></div></div></a>)}</div> : <p className="mt-5 text-sm text-slate-400">{t("noGameTasks")}</p>}</div><div className="panel"><div className="flex items-center gap-3"><div className="grid size-10 place-items-center rounded-xl bg-white/5"><History className="size-5 text-amber-300" /></div><div><p className="eyebrow">{t("gameWalletHistory")}</p><h2 className="mt-1 text-xl font-bold">{t("transactions")}</h2></div></div><div className="mt-4 divide-y divide-white/10">{euro.recent.length ? euro.recent.map((row: any) => <div key={row.id} className="flex items-center justify-between gap-4 py-3"><div><p className="text-sm font-bold">{row.note}</p><p className="mt-1 text-xs text-slate-500">{new Date(row.createdAt).toLocaleString()}</p></div><p className={`text-sm font-black ${row.direction === "credit" ? "text-emerald-300" : "text-red-300"}`}>{row.direction === "credit" ? "+" : "−"}{pkr(row.amountPkr)}</p></div>) : <p className="py-5 text-sm text-slate-400">{t("noTransactions")}</p>}</div></div></section>
-      <section className="mt-5"><p className="eyebrow">{t("euro")}</p><div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">{futureGames.map(game => <div key={game} className="rounded-2xl border border-white/10 bg-white/[.03] p-4 text-center"><Gamepad2 className="mx-auto size-5 text-slate-500" /><p className="mt-2 text-sm font-bold text-slate-300">{game}</p><p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Next</p></div>)}</div></section>
-      <ExchangeDialog mode={exchangeMode ?? "to-game"} open={Boolean(exchangeMode)} onClose={() => setExchangeMode(null)} t={t} mainBalancePkr={euro.mainBalancePkr} gameBalancePkr={euro.gameBalancePkr} onDone={refresh} />
-    </>
-  );
+export function EuroGames({ t, onWithdraw }: { t: (key: TranslationKey) => string; onWithdraw?: () => void }) {
+  const utils = trpc.useUtils(); const data = trpc.euro.bootstrap.useQuery(); const [exchange, setExchange] = useState<"main" | "game" | null>(null); const [tasks, setTasks] = useState(false); const [game, setGame] = useState<string | null>(null);
+  const bonus = trpc.euro.claimFirstVisitBonus.useMutation();
+  const refresh = async () => { await Promise.all([utils.euro.bootstrap.invalidate(), utils.euro.aviatorState.invalidate(), utils.wallet.get.invalidate()]); };
+  useEffect(() => { if (data.data?.canClaimBonus && !bonus.isPending) bonus.mutate(undefined, { onSuccess: refresh }); }, [data.data?.canClaimBonus]);
+  if (!data.data) return <div className="panel"><Loader2 className="mx-auto size-6 animate-spin text-amber-300" /></div>;
+  const euro = data.data; const actual = game === "crash" ? "aviator" : game === "mines" ? "mining" : game;
+  if (game) return <div className="fixed inset-0 z-[80] bg-[#061711]"><button onClick={() => setGame(null)} className="absolute left-4 top-4 z-10 flex h-8 items-center gap-1 rounded-full bg-black/40 px-3 text-xs font-black text-white"><ArrowLeft className="size-3"/>Back</button>{actual === "aviator" ? <Aviator data={euro} refresh={refresh} t={t}/> : isGeneric(actual || "") ? <GenericGame gameKey={actual} title={cards.find(c => c[0] === game)?.[1] ?? "Game"} data={euro} refresh={refresh} t={t}/> : null}</div>;
+  return <><div className="relative min-h-[620px] rounded-3xl border border-amber-300/15 bg-[radial-gradient(circle_at_5%_0%,rgba(251,191,36,.1),transparent_30%),#071d17] p-3 md:p-5"><div className="flex items-start justify-between gap-2"><button onClick={() => setExchange("game")} className="flex h-7 items-center gap-1 rounded-full border border-white/15 bg-[#222] px-2.5 text-[11px] font-black text-white"><WalletCards className="size-3.5 text-amber-300"/>Game: {euro.gameBalancePkr} PKR <Plus className="ml-0.5 size-4 text-amber-300"/></button><div className="flex gap-1.5"><button onClick={() => setTasks(true)} className="h-7 w-[70px] rounded-full border border-white/15 bg-[#222] px-2 text-[11px] font-black text-white">Tasks</button><button onClick={() => setExchange("main")} className="h-7 w-[80px] rounded-full border border-white/15 bg-[#222] px-2 text-[10px] font-black text-white">Exchange</button><button onClick={onWithdraw} className="h-7 w-[80px] rounded-full border border-white/15 bg-[#222] px-2 text-[11px] font-black text-white">{t("withdrawal")}</button></div></div><div className="mt-5 flex items-center justify-between"><div><p className="text-[10px] font-black uppercase tracking-[.22em] text-amber-300">Euro</p><h1 className="mt-1 text-xl font-black">{t("euroTitle")}</h1></div><p className="text-right text-[10px] text-slate-400">Daily profit<br/><b className="text-amber-200">{pkr(euro.dailyProfitPkr)} / {pkr(euro.dailyProfitLimitPkr)}</b></p></div><div className="mt-4 grid max-h-[630px] grid-cols-2 gap-2.5 overflow-y-auto pr-1 sm:gap-3">{cards.map(([key, label, image]) => <button key={key} onClick={() => setGame(key)} className="group aspect-square min-h-[140px] overflow-hidden rounded-2xl border border-white/10 bg-[#102c24] text-left shadow transition hover:-translate-y-0.5 hover:border-amber-300/60"><img src={image} alt={label} className="h-[78%] w-full object-cover transition duration-300 group-hover:scale-105"/><div className="flex h-[22%] items-center justify-between px-3"><span className="text-xs font-black text-white">{label}</span><ArrowUpRight className="size-3.5 text-amber-300"/></div></button>)}</div></div><Exchange mode={exchange} data={euro} close={() => setExchange(null)} refresh={refresh} t={t}/><TaskModal data={tasks ? euro : null} close={() => setTasks(false)} refresh={refresh} t={t}/></>;
 }

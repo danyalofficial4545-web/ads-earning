@@ -9,7 +9,7 @@ describe("Euro workspace navigation", () => {
     expect(appSource).toContain('path={"/euro"} component={Home}');
     expect(source).toContain('location === "/euro" ? "euro" : "dashboard"');
     expect(source).toContain('navigate(next === "euro" ? "/euro" : "/")');
-    expect(source).toContain('euro: <EuroGames t={t} />');
+    expect(source).toContain('euro: <EuroGames t={t} onWithdraw={() => setPage("withdrawal")} />');
   });
 
   it("keeps an Exchange to Game Wallet entry in the main profile wallet", () => {

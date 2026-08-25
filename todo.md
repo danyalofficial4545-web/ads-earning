@@ -289,3 +289,14 @@
 - [x] Implement only the initial Aviator game with server-authoritative crash outcomes, single/dual bet support, configured 16–20000 PKR limits, and the specified non-overlapping crash bands.
 - [x] Add administrator Euro game settings and game-task controls for bonus, enabled state, crash bands, and bet limits.
 - [x] Generate Euro game visual direction/assets, add focused tests, validate desktop/mobile behavior and builds, publish the same domain, and synchronize both GitHub branches.
+
+### Current request: Euro compact UI and functional game suite
+
+- [x] Audit the current Euro components, game-wallet records, Aviator round lifecycle, and administrator controls before expanding the game suite.
+- [x] Replace the Euro header with compact top-corner Game Wallet, plus, Tasks, Exchange to Main, and Withdraw controls without changing the existing main-wallet withdrawal rules.
+- [x] Add a task modal that lists server-controlled WhatsApp and ad tasks, prevents duplicate rewards, and credits only the Game Wallet after verified completion.
+- [x] Create and register one visual game-card image each for Aviator, Slots, Mining, Ludo Dice, Plinko, Wheel, Crash, Mines, Color Prediction, and Lucky Number.
+- [x] Render a responsive two-column compact game-card grid and open every game in its own full-screen playable experience.
+- [x] Correct Aviator to show its crash point for three seconds, reset to a fresh round, support exact 1.10x–100x weighted bands, and retain safe single/dual bet settlement.
+- [x] Implement server-authoritative betting and settlement mechanics for Slots, Mining, Ludo Dice, Wheel, Plinko, Color Prediction, and Lucky Number, including minimum/maximum bet validation and Game Wallet records.
+- [x] Add focused tests for wallet safety, game results/distributions, task duplicate protection, game transition states, mobile layout, full builds, same-domain publication, and both GitHub branch synchronization.

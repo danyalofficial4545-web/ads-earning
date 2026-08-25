@@ -1122,7 +1122,7 @@ function Workspace({
     earn: <AdsTasks t={t} onDone={invalidateCore} />,
     history: <TransactionHistory t={t} />,
     invite: <Referral t={t} />,
-    euro: <EuroGames t={t} />,
+    euro: <EuroGames t={t} onWithdraw={() => setPage("withdrawal")} />,
     support: <Support t={t} />,
     admin: <AdminPanel t={t} />,
   };
