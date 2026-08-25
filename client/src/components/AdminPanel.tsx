@@ -1,9 +1,11 @@
 import { trpc } from "@/lib/trpc";
 import { translate, type Language, type TranslationKey } from "@/lib/i18n";
 import { toast } from "sonner";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import {
   Check,
+  Copy,
   ClipboardCheck,
   CreditCard,
   FileText,
@@ -23,6 +25,7 @@ type Tab =
   | "depositHistory"
   | "withdrawalHistory"
   | "ads"
+  | "packages"
   | "payments"
   | "broadcasts"
   | "users"
@@ -33,12 +36,23 @@ const tabItems: Array<{ id: Tab; label: string; icon: typeof ClipboardCheck }> =
     { id: "depositHistory", label: "depositHistory", icon: CreditCard },
     { id: "withdrawalHistory", label: "withdrawalHistory", icon: ClipboardCheck },
     { id: "ads", label: "adSettings", icon: PlaySquare },
+    { id: "packages", label: "packages", icon: ClipboardCheck },
     { id: "payments", label: "paymentAccounts", icon: CreditCard },
     { id: "broadcasts", label: "broadcast", icon: Megaphone },
     { id: "users", label: "users", icon: Users },
     { id: "settings", label: "settings", icon: Settings2 },
     { id: "tickets", label: "tickets", icon: TicketCheck },
   ];
+const adminRoutes: Partial<Record<Tab, string>> = {
+  users: "/admin/users",
+  depositHistory: "/admin/deposits",
+  withdrawalHistory: "/admin/withdrawals",
+};
+const routeTabs: Record<string, Tab> = {
+  "/admin/users": "users",
+  "/admin/deposits": "depositHistory",
+  "/admin/withdrawals": "withdrawalHistory",
+};
 const money = (amount: number) => `PKR ${amount.toLocaleString()}`;
 const dateTime = (value: Date | string) =>
   new Date(value).toLocaleString([], {
@@ -70,6 +84,16 @@ const statusKeys: Record<string, TranslationKey> = {
 
 export function AdminPanel({ t }: { t: (key: any) => string }) {
   const [tab, setTab] = useState<Tab>("depositHistory");
+  const [location, navigate] = useLocation();
+  const routeTab = routeTabs[location];
+  const activeTab = routeTab ?? tab;
+  useEffect(() => {
+    if (routeTab) setTab(routeTab);
+  }, [routeTab]);
+  const selectTab = (next: Tab) => {
+    setTab(next);
+    navigate(adminRoutes[next] ?? "/admin");
+  };
   const dashboard = trpc.admin.dashboard.useQuery();
   const metrics = [
     {
@@ -110,14 +134,28 @@ export function AdminPanel({ t }: { t: (key: any) => string }) {
           </div>
         ))}
       </div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {[
+          { id: "users" as Tab, label: "users", icon: Users },
+          { id: "depositHistory" as Tab, label: "depositHistory", icon: CreditCard },
+          { id: "withdrawalHistory" as Tab, label: "withdrawalHistory", icon: ClipboardCheck },
+          { id: "packages" as Tab, label: "packages", icon: ClipboardCheck },
+          { id: "ads" as Tab, label: "adSettings", icon: PlaySquare },
+        ].map(({ id, label, icon: Icon }) => (
+          <button key={id} onClick={() => selectTab(id)} className="panel flex items-center gap-3 p-4 text-left transition hover:-translate-y-0.5 hover:border-red-400/40">
+            <span className="grid size-10 place-items-center rounded-xl bg-red-600 text-white"><Icon className="size-5" /></span>
+            <span className="font-bold">{t(label)}</span>
+          </button>
+        ))}
+      </div>
       <div className="mt-5 grid gap-5 xl:grid-cols-[210px_1fr]">
         <aside className="panel h-fit p-2">
           <nav>
             {tabItems.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
-                onClick={() => setTab(id)}
-                className={`nav-item mb-1 w-full text-left ${tab === id ? "nav-item-active" : ""}`}
+                onClick={() => selectTab(id)}
+                className={`nav-item mb-1 w-full text-left ${activeTab === id ? "nav-item-active" : ""}`}
               >
                 <Icon className="size-4" />
                 {t(label)}
@@ -126,19 +164,44 @@ export function AdminPanel({ t }: { t: (key: any) => string }) {
           </nav>
         </aside>
         <section className="min-w-0">
-          {tab === "depositHistory" && (
+          {activeTab === "depositHistory" && (
             <Approvals t={t} mode="deposits" onChange={() => dashboard.refetch()} />
           )}
-          {tab === "withdrawalHistory" && (
+          {activeTab === "withdrawalHistory" && (
             <Approvals t={t} mode="withdrawals" onChange={() => dashboard.refetch()} />
           )}
-          {tab === "ads" && <Ads t={t} />}
-          {tab === "payments" && <Payments t={t} />}
-          {tab === "broadcasts" && <Broadcasts t={t} />}
-          {tab === "users" && <UserManagement t={t} />}
-          {tab === "settings" && <GlobalSettings t={t} />}
-          {tab === "tickets" && <Tickets t={t} />}
+          {activeTab === "ads" && <Ads t={t} />}
+          {activeTab === "packages" && <PackageCatalog t={t} />}
+          {activeTab === "payments" && <Payments t={t} />}
+          {activeTab === "broadcasts" && <Broadcasts t={t} />}
+          {activeTab === "users" && <UserManagement t={t} />}
+          {activeTab === "settings" && <GlobalSettings t={t} />}
+          {activeTab === "tickets" && <Tickets t={t} />}
         </section>
+      </div>
+    </>
+  );
+}
+
+function PackageCatalog({ t }: any) {
+  const list = trpc.package.list.useQuery();
+  const packages = [...(list.data ?? [])].sort((a, b) => a.pricePkr - b.pricePkr);
+  return (
+    <>
+      <Heading title={t("packages")} description={t("packageSubtitle")} />
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {packages.map(plan => (
+          <div key={plan.id} className="panel border-t-4 border-red-600 p-4">
+            <p className="text-sm font-bold">{plan.name}</p>
+            <p className="mt-2 text-2xl font-black text-red-600">{money(plan.pricePkr)}</p>
+            <p className="mt-3 text-sm font-bold">
+              {plan.dailyAds} {plan.dailyAds === 1 ? t("ad") : t("ads")} · {money(plan.adRewardPkr)} / {t("ad")}
+            </p>
+            <p className="mt-1 text-xs text-slate-400">
+              {t("totalDailyEarning")}: {money(plan.dailyAds * plan.adRewardPkr)}
+            </p>
+          </div>
+        ))}
       </div>
     </>
   );
@@ -163,6 +226,26 @@ function Empty({ children }: { children: React.ReactNode }) {
     <div className="rounded-2xl border border-dashed border-white/15 p-8 text-center text-sm text-slate-400">
       {children}
     </div>
+  );
+}
+function CopyRecordValue({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null;
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(value);
+          toast.success("Copied");
+        } catch {
+          toast.error("Copy failed");
+        }
+      }}
+      className="inline-flex h-10 items-center gap-2 rounded-lg border border-red-400/25 bg-red-50 px-3 text-xs font-bold text-red-700 transition hover:bg-red-100"
+    >
+      <Copy className="size-4" />
+      {label}
+    </button>
   );
 }
 function Button({
@@ -213,6 +296,8 @@ function Pill({
 
 function Approvals({ t, onChange, mode }: any) {
   const data = trpc.admin.financialRequests.useQuery();
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const utils = trpc.useUtils();
   const refresh = () => {
     data.refetch();
@@ -235,6 +320,26 @@ function Approvals({ t, onChange, mode }: any) {
     onSuccess: refresh,
     onError: e => toast.error(e.message),
   });
+  const filteredRows = (rows: any[]) => {
+    const query = search.trim().toLowerCase();
+    return rows.filter(row => {
+      const searchable = [
+        row.member?.username,
+        row.member?.email,
+        row.senderAccountNumber,
+        row.accountDetails,
+        row.transactionId,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return (statusFilter === "all" || row.status === statusFilter) &&
+        (!query || searchable.includes(query));
+    });
+  };
+  const rows = mode === "deposits"
+    ? filteredRows(data.data?.deposits ?? [])
+    : filteredRows(data.data?.withdrawals ?? []);
   return (
     <>
       <Heading
@@ -242,11 +347,17 @@ function Approvals({ t, onChange, mode }: any) {
         description={mode === "deposits" ? t("depositHistoryText") : t("withdrawalHistoryText")}
       />
       <div className="space-y-5">
+        <div className="panel flex flex-col gap-3 sm:flex-row">
+          <input className="field" value={search} onChange={event => setSearch(event.target.value)} placeholder={mode === "deposits" ? "Search username, phone, or transaction ID" : "Search username or wallet number"} />
+          <select className="field sm:max-w-44" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
+            <option value="all">All statuses</option><option value="pending">{t("pending")}</option><option value="approved">{t("approved")}</option><option value="rejected">{t("rejected")}</option>
+          </select>
+        </div>
         <div className={mode === "deposits" ? "panel" : "hidden"}>
           <h3 className="font-bold">{t("depositHistory")}</h3>
-          {data.data?.deposits.length ? (
+          {rows.length ? (
             <div className="mt-4 space-y-3">
-              {data.data.deposits.map(row => (
+              {rows.map(row => (
                 <div
                   key={row.id}
                   className="rounded-2xl border border-white/10 bg-slate-950/15 p-4"
@@ -264,6 +375,11 @@ function Approvals({ t, onChange, mode }: any) {
                         {t("transactionId")}: {row.transactionId ?? "—"} · {t("requestedPackage")}: {row.requestedPackageName ?? t("walletDeposit")}<br />
                         {t("activePackage")}: {row.member?.activePackageName ?? t("noPackage")}
                       </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <CopyRecordValue label={t("senderAccountName")} value={row.senderAccountName} />
+                        <CopyRecordValue label={t("senderAccountNumber")} value={row.senderAccountNumber} />
+                        <CopyRecordValue label={t("transactionId")} value={row.transactionId} />
+                      </div>
                     </div>
                     <Pill status={row.status}>{row.status}</Pill>
                   </div>
@@ -323,9 +439,9 @@ function Approvals({ t, onChange, mode }: any) {
         </div>
         <div className={mode === "withdrawals" ? "panel" : "hidden"}>
           <h3 className="font-bold">{t("withdrawalHistory")}</h3>
-          {data.data?.withdrawals.length ? (
+          {rows.length ? (
             <div className="mt-4 space-y-3">
-              {data.data.withdrawals.map(row => (
+              {rows.map(row => (
                 <div
                   key={row.id}
                   className="rounded-2xl border border-white/10 bg-slate-950/15 p-4"
@@ -343,6 +459,10 @@ function Approvals({ t, onChange, mode }: any) {
                         {t("balance")}: {money(row.member?.balancePkr ?? 0)} · {t("referralCount")}: {row.member?.referralCount ?? 0}<br />
                         {t("withdrawalLimit")}: {money(row.member?.withdrawalLimitPkr ?? 0)} · {t("activePackage")}: {row.member?.activePackageName ?? t("noPackage")}
                       </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <CopyRecordValue label={t("walletAccountName")} value={row.accountName} />
+                        <CopyRecordValue label={t("walletNumber")} value={row.accountDetails} />
+                      </div>
                     </div>
                     <Pill status={row.status}>{row.status}</Pill>
                   </div>

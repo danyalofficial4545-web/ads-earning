@@ -24,11 +24,22 @@ import {
 } from "@/lib/formValidation";
 import { FieldError } from "@/components/ui/field";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   dashboardMetricKeys,
   type DashboardMetricKey,
 } from "@/lib/dashboardMetrics";
 import { translate, type Language, type TranslationKey } from "@/lib/i18n";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 import {
   ArrowDownToLine,
   ArrowUpRight,
@@ -142,6 +153,7 @@ export default function Home() {
     () => (localStorage.getItem("pep-language") as Language) || "en"
   );
   const [page, setPage] = useState<Page>("dashboard");
+  const [location, navigate] = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const t = (key: TranslationKey) => translate(language, key);
   const utils = trpc.useUtils();
@@ -167,6 +179,10 @@ export default function Home() {
     document.documentElement.lang = language === "ur" ? "ur" : "en";
     document.documentElement.dir = language === "ur" ? "rtl" : "ltr";
   }, [language]);
+  useEffect(() => {
+    if (location === "/admin" || location.startsWith("/admin/"))
+      setPage("admin");
+  }, [location]);
 
   if (loading || (isAuthenticated && session.isLoading))
     return <LoadingScreen text={t("loading")} />;
@@ -204,6 +220,8 @@ export default function Home() {
   const needsProfile = workspaceGate === "profile-setup";
   const selectPage = (next: Page) => {
     setPage(next);
+    if (next === "admin" && !location.startsWith("/admin")) navigate("/admin");
+    if (next !== "admin" && location.startsWith("/admin")) navigate("/");
     setMobileNavOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -307,6 +325,7 @@ export default function Home() {
                 t={t}
                 language={language}
                 user={user}
+                isAdmin={isAdmin}
                 profile={profile}
                 overview={overview.data}
                 overviewLoading={overview.isLoading}
@@ -1021,6 +1040,7 @@ function Workspace({
   t,
   language,
   user,
+  isAdmin,
   profile,
   overview,
   overviewLoading,
@@ -1032,6 +1052,7 @@ function Workspace({
 }: any) {
   const [automaticAdRequest, setAutomaticAdRequest] = useState<AutomaticAdRequest | null>(null);
   const [depositPackageId, setDepositPackageId] = useState("");
+  const [depositAmount, setDepositAmount] = useState("");
   const [showChannelPrompt, setShowChannelPrompt] = useState(false);
   const [signupGatePending, setSignupGatePending] = useState(
     () => sessionStorage.getItem("pep-signup-automatic-ad") === "1"
@@ -1110,9 +1131,19 @@ function Workspace({
       !rewardWithdrawalRequested;
   const openWithdrawal = () =>
     requestAutomaticAd("withdrawal_entry", () => setPage("withdrawal"));
-  const openPackagePayment = (packageId: number) =>
+  const purchasePackage = trpc.package.buy.useMutation({
+    onSuccess: () => {
+      toast.success(language === "ur" ? "پیکیج کامیابی سے فعال ہو گیا ہے۔" : "Package activated successfully.");
+      invalidateCore();
+      setPage("dashboard");
+    },
+    onError: error =>
+      toast.error(friendlyServerError(error, "amount").amount || friendlyMessages.requestFailed),
+  });
+  const openPackagePayment = (packageId: number, requiredAmount: number) =>
     requestAutomaticAd("package_entry", () => {
       setDepositPackageId(String(packageId));
+      setDepositAmount(String(requiredAmount));
       setPage("deposit");
     });
   const content: Record<Page, ReactNode> = {
@@ -1128,11 +1159,19 @@ function Workspace({
     packages: (
       <Packages
         t={t}
+        language={language}
         plans={packages}
         balance={profile.balancePkr}
         active={overview.activePackage}
         onDone={invalidateCore}
-        onPurchase={openPackagePayment}
+        onPurchase={(plan: any) =>
+          requestAutomaticAd("package_entry", () =>
+            purchasePackage.mutate({ packageId: plan.id })
+          )
+        }
+        onRequestDeposit={(plan: any, shortfall: number) =>
+          openPackagePayment(plan.id, Math.max(100, shortfall))
+        }
       />
     ),
     profile: (
@@ -1147,7 +1186,7 @@ function Workspace({
         onRequestWithdrawal={openWithdrawal}
       />
     ),
-    deposit: <Deposit t={t} settings={settings} packages={packages} onDone={invalidateCore} initialRequestedPackageId={depositPackageId} />,
+    deposit: <Deposit t={t} settings={settings} packages={packages} onDone={invalidateCore} initialRequestedPackageId={depositPackageId} initialAmount={depositAmount} />,
     withdrawal: (
       <Withdrawal
         t={t}
@@ -1166,7 +1205,7 @@ function Workspace({
     history: <TransactionHistory t={t} />,
     invite: <Referral t={t} />,
     support: <Support t={t} />,
-    admin: <AdminPanel t={t} />,
+    admin: isAdmin ? <AdminPanel t={t} /> : <Empty text={language === "ur" ? "یہ صفحہ صرف ایڈمن کے لیے ہے۔" : "This page is restricted to administrators."} />,
   };
   return (
     <>
@@ -1426,7 +1465,23 @@ function QuickAction({ icon: Icon, label, onClick, disabled = false }: any) {
   );
 }
 
-function Packages({ t, plans, balance, active, onPurchase }: any) {
+function Packages({ t, language, plans, balance, active, onPurchase, onRequestDeposit }: any) {
+  const [shortfallPlan, setShortfallPlan] = useState<any>(null);
+  const orderedPlans = [...plans].sort((a, b) => a.pricePkr - b.pricePkr);
+  const shortfall = shortfallPlan
+    ? Math.max(0, shortfallPlan.pricePkr - balance)
+    : 0;
+  const handlePurchase = (plan: any) => {
+    if (balance >= plan.pricePkr) {
+      onPurchase(plan);
+      return;
+    }
+    if (balance <= 0) {
+      onRequestDeposit(plan, plan.pricePkr);
+      return;
+    }
+    setShortfallPlan(plan);
+  };
   return (
     <>
       <PageHeading
@@ -1435,12 +1490,12 @@ function Packages({ t, plans, balance, active, onPurchase }: any) {
         description={t("packageSubtitle")}
       />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {plans.map((plan: any) => {
+        {orderedPlans.map((plan: any) => {
           const isActive = active?.id === plan.id;
           return (
             <div
               key={plan.id}
-              className={`panel relative overflow-hidden ${isActive ? "border-amber-300/45" : ""}`}
+              className={`panel premium-package-card relative overflow-hidden ${isActive ? "border-red-600/45" : ""}`}
             >
               <div className="absolute right-4 top-4 text-3xl opacity-70">
                 {plan.icon}
@@ -1468,7 +1523,7 @@ function Packages({ t, plans, balance, active, onPurchase }: any) {
               </div>
               <button
                 disabled={isActive}
-                onClick={() => onPurchase(plan.id)}
+                onClick={() => handlePurchase(plan)}
                 className={`mt-6 h-11 w-full rounded-xl text-sm font-bold transition active:scale-[.97] disabled:opacity-60 ${isActive ? "bg-emerald-400/15 text-emerald-200" : "bg-amber-300 text-slate-950"}`}
               >
                 {isActive ? t("currentPackage") : t("buyPackage")}
@@ -1482,6 +1537,35 @@ function Packages({ t, plans, balance, active, onPurchase }: any) {
           );
         })}
       </div>
+      <AlertDialog
+        open={Boolean(shortfallPlan)}
+        onOpenChange={open => !open && setShortfallPlan(null)}
+      >
+        <AlertDialogContent className="border-red-500/30 bg-slate-950 text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {language === "ur" ? "والٹ بیلنس ناکافی ہے" : "Wallet balance is short"}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="leading-6 text-slate-300">
+              {shortfallPlan && (language === "ur"
+                ? `آپ کے والٹ میں ${money(balance)} ہے۔ ${shortfallPlan.name} کے لیے مزید ${money(shortfall)} درکار ہیں۔ براہِ کرم ڈپازٹ کریں۔`
+                : `Apke wallet me ${money(balance)} hai, is package ke liye ${money(shortfall)} aur chahiye. Please Deposit ${money(Math.max(100, shortfall))}.`)}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 text-white hover:bg-red-500"
+              onClick={() => {
+                if (shortfallPlan) onRequestDeposit(shortfallPlan, shortfall);
+                setShortfallPlan(null);
+              }}
+            >
+              {language === "ur" ? `${money(Math.max(100, shortfall))} ڈپازٹ کریں` : `Deposit ${money(Math.max(100, shortfall))}`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
@@ -1671,9 +1755,16 @@ function GroupedFinancialHistory({ rows, t, kind }: { rows: any[]; t: (key: Tran
             <div className="mt-2 divide-y divide-white/10">
               {group.items.map((item: any) => (
                 <div key={item.id} className="flex items-center justify-between gap-3 py-3 text-sm">
-                  <div>
+                  <div className="min-w-0">
                     <p className="font-bold">{money(item.amountPkr)} {t(kind)}</p>
                     <p className="mt-1 text-xs text-slate-500">{kind === "deposit" ? `${item.method} · ` : ""}{dateTime(item.createdAt)}</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {kind === "deposit" && item.senderAccountName && <CopyValue value={item.senderAccountName} label={t("senderAccountName")} />}
+                      {kind === "deposit" && item.senderAccountNumber && <CopyValue value={item.senderAccountNumber} label={t("senderAccountNumber")} />}
+                      {kind === "deposit" && item.transactionId && <CopyValue value={item.transactionId} label={t("transactionId")} />}
+                      {kind === "withdrawal" && item.accountName && <CopyValue value={item.accountName} label={t("walletAccountName")} />}
+                      {kind === "withdrawal" && item.accountDetails && <CopyValue value={item.accountDetails} label={t("walletNumber")} />}
+                    </div>
                   </div>
                   <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${statusClass(item.status)}`}>{t(statusLabels[item.status] ?? "status")}</span>
                 </div>
@@ -1686,9 +1777,31 @@ function GroupedFinancialHistory({ rows, t, kind }: { rows: any[]; t: (key: Tran
   );
 }
 
-function Deposit({ t, settings, packages, onDone, initialRequestedPackageId = "" }: any) {
+function CopyValue({ value, label }: { value: string; label: string }) {
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success("Copied");
+    } catch {
+      toast.error(friendlyMessages.requestFailed);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-red-500/20 bg-red-50 px-2.5 py-1.5 text-left text-[11px] font-bold text-red-700 transition hover:bg-red-100"
+      aria-label={`Copy ${label}`}
+    >
+      <Copy className="size-3.5 shrink-0" />
+      <span className="truncate">{label}: {value}</span>
+    </button>
+  );
+}
+
+function Deposit({ t, settings, packages, onDone, initialRequestedPackageId = "", initialAmount = "" }: any) {
   const [currency, setCurrency] = useState<"PKR" | "USD">("PKR");
-  const [amount, setAmount] = useState("");
+  const [amount, setAmount] = useState(initialAmount);
   const [method, setMethod] = useState("");
   const [senderAccountNumber, setSenderAccountNumber] = useState("");
   const [senderAccountName, setSenderAccountName] = useState("");

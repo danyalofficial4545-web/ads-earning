@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
@@ -669,11 +669,14 @@ export const appRouter = router({
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
       const settings = await getSettings();
-      return {
-        packages: await db
+      const activePackages = (
+        await db
           .select()
           .from(packages)
-          .where(eq(packages.isActive, true)),
+          .where(eq(packages.isActive, true))
+      ).sort((a, b) => a.pricePkr - b.pricePkr);
+      return {
+        packages: activePackages,
         branding: {
           websiteName: settings.websiteName,
           themeName: settings.themeName,
@@ -738,7 +741,9 @@ export const appRouter = router({
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
       await ensurePlatformData();
-      return db.select().from(packages).where(eq(packages.isActive, true));
+      return (
+        await db.select().from(packages).where(eq(packages.isActive, true))
+      ).sort((a, b) => a.pricePkr - b.pricePkr);
     }),
     buy: protectedProcedure
       .input(z.object({ packageId: z.number().int().positive() }))
