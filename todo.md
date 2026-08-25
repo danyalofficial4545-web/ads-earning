@@ -314,4 +314,4 @@
 - [x] Change protected rewarded-ad sessions and visible countdowns to five seconds while preserving server-side elapsed-time validation and the existing purchase/withdrawal Adsterra continuation gate.
 - [x] Limit member Ads/Tasks to five reusable slot contents, show only the active package’s allowed slot count and per-ad reward, and add the requested no-package centered guidance.
 - [x] Update package cards with requested bold Ad/reward line and total daily earning; retain only safe user-facing earning information.
-- [ ] Add regression coverage for every new package tier, active legacy-package compatibility, five-second sessions, reward credits, empty state, and display copy; validate builds, publish same domain, synchronize both GitHub main branches, and verify Vercel deployment.
+- [x] Add regression coverage for every new package tier, active legacy-package compatibility, five-second sessions, reward credits, empty state, and display copy; validate builds, publish same domain, synchronize both GitHub main branches, and verify Vercel deployment.
