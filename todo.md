@@ -332,4 +332,4 @@
 - [x] Render only the active package’s entitled sequential ads, never locked/blurred/unpaid slots, and show the requested no-package centered message with a Go to Packages action.
 - [x] Make the four main administrator controls navigate directly to Users, Deposit History, Withdraw History and Ad Settings routes; provide an explicit Back to Admin action on each full-page route.
 - [x] Remove form validation interference from all Ad Watch/Verify interactions while retaining protected server-side five-second session/reward validation.
-- [ ] Add focused tests, run type/build validation, publish same domain, synchronize both GitHub main branches, and verify Vercel deployment without changing wallet-first buying, package order, red theme, copy controls or Adsterra scripts.
+- [x] Add focused tests, run type/build validation, publish same domain, synchronize both GitHub main branches, and verify Vercel deployment without changing wallet-first buying, package order, red theme, copy controls or Adsterra scripts.
