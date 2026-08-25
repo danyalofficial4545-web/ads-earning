@@ -1,1 +1,0 @@
-ALTER TABLE `appSettings` MODIFY COLUMN `euroCrashBandWeights` varchar(64) NOT NULL DEFAULT '70,10,10,10';

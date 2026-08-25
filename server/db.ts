@@ -230,9 +230,7 @@ export async function ensureProfile(user: User): Promise<Profile> {
     username: baseUsername,
     referralCode,
     balancePkr: 0,
-    gameBalancePkr: 0,
     withdrawalLimitPkr: 0,
-    euroBonusEligible: true,
     whatsappRewardEligible: isEligibleForNewUserWhatsappReward(user.createdAt),
   });
   const created = await db

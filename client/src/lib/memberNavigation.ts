@@ -3,7 +3,6 @@ export const memberBottomNavigationIds = [
   "packages",
   "profile",
   "invite",
-  "euro",
 ] as const;
 
 export function isMemberBottomNavigationId(id: string) {
