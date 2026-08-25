@@ -324,12 +324,4 @@
 - [x] Generate and integrate a scalable red-and-white AdEarn logo, then apply an accessible premium red/black/white visual system to public, member and package-card surfaces without concealing text or changing financial rules.
 - [x] Add clear clipboard copy controls and success feedback for member deposit/withdrawal details and administrator deposit/withdrawal records.
 - [x] Split administrator Users, Deposit History and Withdrawal History into protected full-page routes with searchable/filterable records and clean dashboard navigation; retain Packages and Ad Settings access.
-- [x] Preserve the two supplied Adsterra head scripts, five-second ads, eight-package reward rules, and administrator ad logic while adding regression tests, validating builds, publishing the same domain, synchronizing both GitHub main branches, and verifying Vercel deployment.
-
-### Current request: Strict ad visibility, admin routes and click validation
-
-- [x] Audit member Ads/Tasks card mapping, no-package state, administrator dashboard card navigation, and any form ownership/required attributes that can block ad clicks.
-- [x] Render only the active package’s entitled sequential ads, never locked/blurred/unpaid slots, and show the requested no-package centered message with a Go to Packages action.
-- [x] Make the four main administrator controls navigate directly to Users, Deposit History, Withdraw History and Ad Settings routes; provide an explicit Back to Admin action on each full-page route.
-- [x] Remove form validation interference from all Ad Watch/Verify interactions while retaining protected server-side five-second session/reward validation.
-- [x] Add focused tests, run type/build validation, publish same domain, synchronize both GitHub main branches, and verify Vercel deployment without changing wallet-first buying, package order, red theme, copy controls or Adsterra scripts.
+- [ ] Preserve the two supplied Adsterra head scripts, five-second ads, eight-package reward rules, and administrator ad logic while adding regression tests, validating builds, publishing the same domain, synchronizing both GitHub main branches, and verifying Vercel deployment.

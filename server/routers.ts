@@ -911,9 +911,7 @@ export const appRouter = router({
           }))
       );
       return {
-        ads: Array.from({
-          length: continuationRequired ? claimedCount : quota,
-        }, (_, index) => {
+        ads: Array.from({ length: quota }, (_, index) => {
           const slot = index + 1;
           return {
             id: slot,
@@ -921,7 +919,7 @@ export const appRouter = router({
             contentType: "rewarded" as const,
             rewardPkr: getDailyAdRewardPkr(activePackage?.plan.pricePkr ?? 0),
             timerSeconds: REWARDED_AD_TIMER_SECONDS,
-            state: slot <= claimedCount ? "watched" as const : "unlocked" as const,
+            state: slot <= claimedCount ? "watched" as const : slot === claimedCount + 1 && !continuationRequired ? "unlocked" as const : "locked" as const,
           };
         }),
         watched: claimedCount,
