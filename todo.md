@@ -296,7 +296,7 @@
 - [x] Show the five-second skippable placeholder interstitial at the requested signup, WhatsApp completion, package-payment, rewarded-ad cadence, and pre-withdrawal entry points.
 - [x] Replace the member rewarded-ad presentation with the placeholder automatic-ad flow while retaining user reward eligibility, daily limits, and wallet accounting.
 - [x] Add an administrator Ad Settings page for enable/disable, every-N rewarded-ad cadence, and today’s real-ad impressions; remove the old custom-ad creation controls.
-- [ ] Add focused tests, run type/build validation, publish to the same domain, synchronize both GitHub main branches, and verify the linked deployment.
+- [x] Add focused tests, run type/build validation, publish to the same domain, synchronize both GitHub main branches, and verify the linked deployment.
 
 ### Updated request: Adsterra integration and seven-package daily ad mapping
 
@@ -305,4 +305,4 @@
 - [x] Retire administrator custom-ad creation/edit/delete controls and custom-ad inventory rendering while preserving the protected PKR 20 per completed rewarded-ad wallet credit.
 - [x] Implement server-authorized five-second continuation overlays after signup, WhatsApp reward completion, package/deposit entry, withdrawal entry, and the requested completed-reward cadence.
 - [x] Persist automatic-ad enable state and daily Pakistan-time display counts, then add an administrator Ad Settings page with the requested 0.007-per-display estimate and read-only Adsterra code references.
-- [ ] Add/update regression tests, run database migration and all build checks, publish to the same domain, synchronize both GitHub main branches, and verify deployment.
+- [x] Add/update regression tests, run database migration and all build checks, publish to the same domain, synchronize both GitHub main branches, and verify deployment.
