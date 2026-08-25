@@ -334,4 +334,4 @@
 
 ### Current request: Roll back the Vercel production domain
 
-- [ ] Restore the existing Vercel production domain to the deployment corresponding to checkpoint 4a1116fb, without creating a new project or domain, then verify the production alias and readiness.
+- [x] Restore the existing Vercel production domain to the deployment corresponding to checkpoint 4a1116fb, without creating a new project or domain, then verify the production alias and readiness.
