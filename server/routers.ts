@@ -919,7 +919,7 @@ export const appRouter = router({
             contentType: "rewarded" as const,
             rewardPkr: getDailyAdRewardPkr(activePackage?.plan.pricePkr ?? 0),
             timerSeconds: REWARDED_AD_TIMER_SECONDS,
-            state: slot <= claimedCount ? "watched" as const : slot === claimedCount + 1 && !continuationRequired ? "unlocked" as const : "locked" as const,
+            state: slot <= claimedCount ? "watched" as const : "unlocked" as const,
           };
         }),
         watched: claimedCount,
@@ -955,8 +955,8 @@ export const appRouter = router({
         ]);
         const quota = getDailyAdQuota(active.plan.pricePkr);
         const claimedCount = sessions.filter(session => session.claimedAt).length;
-        if (input.slot !== claimedCount + 1 || input.slot > quota)
-          fail("This rewarded ad is locked or has already been watched today.", "FORBIDDEN");
+        if (input.slot > quota || sessions.some(session => session.adId === input.slot && session.claimedAt))
+          fail("This rewarded ad has already been watched today or is not available.", "FORBIDDEN");
         const breakSequence = rewardedBreakSequence(active.plan.pricePkr, claimedCount);
         if (settings.automaticAdsEnabled && breakSequence && !(await hasCompletedAutomaticAd({ userId: user.id, dayKey, placement: "rewarded_break", sequence: breakSequence })))
           fail("Complete the short sponsored continuation before the next reward.", "FORBIDDEN");

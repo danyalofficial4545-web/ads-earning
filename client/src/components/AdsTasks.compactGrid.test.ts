@@ -6,7 +6,8 @@ describe("compact Ads/Tasks grid", () => {
     const source = readFileSync(new URL("./AdsTasks.tsx", import.meta.url), "utf8");
     expect(source).toContain('className="grid grid-cols-2 gap-3"');
     expect(source).toContain('h-[140px]');
-    expect(source).toContain('t("lockedAd")');
+    expect(source).not.toContain('t("lockedAd")');
+    expect(source).toContain('type="button"');
     expect(source).toContain('t("claimReward")');
     expect(source).toContain('t("watchAd")');
   });

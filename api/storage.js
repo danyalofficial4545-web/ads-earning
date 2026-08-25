@@ -76,7 +76,9 @@ var profiles = mysqlTable("profiles", {
   preferredCurrency: mysqlEnum("preferredCurrency", ["PKR", "USD"]).notNull().default("PKR"),
   isBlocked: boolean("isBlocked").notNull().default(false),
   whatsappJoined: boolean("whatsappJoined").notNull().default(false),
+  whatsappRewardEligible: boolean("whatsappRewardEligible").notNull().default(false),
   whatsappBonusClaimed: boolean("whatsappBonusClaimed").notNull().default(false),
+  whatsappRewardWithdrawn: boolean("whatsappRewardWithdrawn").notNull().default(false),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
 }, (table) => [
@@ -91,6 +93,7 @@ var packages = mysqlTable("packages", {
   icon: varchar("icon", { length: 12 }).notNull(),
   pricePkr: int("pricePkr").notNull(),
   dailyAds: int("dailyAds").notNull(),
+  adRewardPkr: int("adRewardPkr").notNull().default(20),
   durationDays: int("durationDays").notNull().default(30),
   isActive: boolean("isActive").notNull().default(true),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -145,6 +148,24 @@ var adSessions = mysqlTable("adSessions", {
 }, (table) => [
   index("ad_sessions_user_day_idx").on(table.userId, table.dayKey)
 ]);
+var adminAdImpressions = mysqlTable("adminAdImpressions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  dayKey: varchar("dayKey", { length: 10 }).notNull(),
+  placement: varchar("placement", { length: 32 }).notNull(),
+  sequence: int("sequence").notNull().default(0),
+  startedAt: timestamp("startedAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull()
+}, (table) => [
+  index("admin_ad_impressions_day_idx").on(table.dayKey, table.completedAt),
+  uniqueIndex("admin_ad_impressions_user_slot_unique").on(
+    table.userId,
+    table.dayKey,
+    table.placement,
+    table.sequence
+  )
+]);
 var transactions = mysqlTable("transactions", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
@@ -190,6 +211,7 @@ var withdrawals = mysqlTable("withdrawals", {
   userId: int("userId").notNull(),
   currency: mysqlEnum("currency", ["PKR", "USD"]).notNull(),
   amountPkr: int("amountPkr").notNull(),
+  walletType: varchar("walletType", { length: 64 }).notNull().default("Other"),
   accountName: varchar("accountName", { length: 128 }).notNull(),
   accountDetails: varchar("accountDetails", { length: 512 }).notNull(),
   status: mysqlEnum("status", ["pending", "approved", "rejected"]).notNull().default("pending"),
@@ -221,9 +243,10 @@ var broadcasts = mysqlTable("broadcasts", {
 var appSettings = mysqlTable("appSettings", {
   id: int("id").primaryKey(),
   exchangeRatePkrPerUsd: int("exchangeRatePkrPerUsd").notNull().default(280),
-  minimumWithdrawalPkr: int("minimumWithdrawalPkr").notNull().default(50),
+  minimumWithdrawalPkr: int("minimumWithdrawalPkr").notNull().default(0),
   maximumWithdrawalPkr: int("maximumWithdrawalPkr").notNull().default(3e3),
-  adTimerSeconds: int("adTimerSeconds").notNull().default(10),
+  adTimerSeconds: int("adTimerSeconds").notNull().default(5),
+  automaticAdsEnabled: boolean("automaticAdsEnabled").notNull().default(true),
   referralCommissionPercent: int("referralCommissionPercent").notNull().default(50),
   websiteName: varchar("websiteName", { length: 80 }).notNull().default("Ads Earning"),
   themeName: mysqlEnum("themeName", ["green", "blue", "dark", "white", "black", "red", "yellow"]).notNull().default("green"),
@@ -247,10 +270,25 @@ var ENV = {
 };
 
 // server/rules.ts
-var WITHDRAWAL_LOCK_MESSAGE = "Please invite someone. When your invited user buys a package, 50% of his package price will be added to your withdraw limit.";
-var WITHDRAWAL_NO_PACKAGE_MESSAGE = "Withdrawal requires an active package before referral withdrawal access can be displayed.";
-var AD_TIMER_MESSAGE = "Please wait for the 10-second timer before claiming this reward.";
-var AD_REWARD_PKR = 20;
+var WITHDRAWAL_NO_PACKAGE_MESSAGE = "Your balance is zero, please purchase a package and start earning";
+var REWARDED_AD_TIMER_SECONDS = 5;
+var AD_TIMER_MESSAGE = "Please wait for the 5-second timer before claiming this reward.";
+var WHATSAPP_JOIN_REWARD_PKR = 10;
+var WHATSAPP_REWARD_NEW_USER_STARTS_AT = /* @__PURE__ */ new Date("2026-08-23T16:00:00.000Z");
+function isEligibleForNewUserWhatsappReward(createdAt) {
+  return createdAt.getTime() >= WHATSAPP_REWARD_NEW_USER_STARTS_AT.getTime();
+}
+var WITHDRAWAL_MAX_PKR = 3e3;
+var WITHDRAWAL_ZERO_LIMIT_MESSAGE = "Your withdrawal limit is zero, you cannot withdraw. Please purchase a package or invite friends to increase your limit";
+var WITHDRAWAL_FREE_REWARD_USED_MESSAGE = "You have already taken free withdrawal. Please purchase a package to continue earning and withdrawing. Your balance is zero, please buy a package";
+var WITHDRAWAL_MINIMUM_MESSAGE = "Please enter a valid withdrawal amount, minimum withdrawal is 50 PKR";
+var WITHDRAWAL_WALLET_TYPE_MESSAGE = "Please select your wallet type first - JazzCash, Easypaisa, SadaPay";
+var WITHDRAWAL_ACCOUNT_NAME_MESSAGE = "Please enter account holder name (wallet name)";
+var WITHDRAWAL_WALLET_NUMBER_MESSAGE = "Your wallet number is wrong/incomplete, please enter correct JazzCash/Easypaisa number";
+function withdrawalLimitMessage(limitPkr) {
+  const allowed = Math.max(0, Math.min(limitPkr, WITHDRAWAL_MAX_PKR));
+  return `You entered amount more than your limit. Maximum withdrawal is 3000 PKR and your limit is PKR ${limitPkr}. Please enter PKR ${allowed} or less`;
+}
 var DESIGNATED_ADMIN_EMAIL = "muhammaddanyal4545@gmail.com";
 var DESIGNATED_ADMIN_USERNAME = "danyal955163";
 function toPkr(amount, currency, exchangeRate) {
@@ -269,13 +307,14 @@ function refundRejectedWithdrawal(balancePkr, amountPkr) {
   return balancePkr + amountPkr;
 }
 function validateWithdrawalRequest(input) {
-  if (input.withdrawalLimitPkr < 50)
-    return input.activePackage === false ? WITHDRAWAL_NO_PACKAGE_MESSAGE : WITHDRAWAL_LOCK_MESSAGE;
-  if (input.amountPkr < input.minimumWithdrawalPkr || input.amountPkr > input.maximumWithdrawalPkr) {
-    return `Withdrawal amount must be between PKR ${input.minimumWithdrawalPkr} and PKR ${input.maximumWithdrawalPkr}.`;
-  }
-  if (input.amountPkr > input.withdrawalLimitPkr)
-    return `Your current withdrawal limit is PKR ${input.withdrawalLimitPkr}. Invite friends to unlock more withdrawal limit.`;
+  if (input.freeWithdrawalCompleted && input.activePackage === false)
+    return WITHDRAWAL_FREE_REWARD_USED_MESSAGE;
+  if (input.withdrawalLimitPkr <= 0)
+    return WITHDRAWAL_ZERO_LIMIT_MESSAGE;
+  if ((!Number.isFinite(input.amountPkr) || input.amountPkr < WITHDRAWAL_MIN_PKR) && !(input.allowChannelRewardAmount && input.amountPkr === WHATSAPP_JOIN_REWARD_PKR))
+    return WITHDRAWAL_MINIMUM_MESSAGE;
+  if (input.amountPkr > WITHDRAWAL_MAX_PKR || input.amountPkr > input.withdrawalLimitPkr)
+    return withdrawalLimitMessage(input.withdrawalLimitPkr);
   if (input.amountPkr > input.balancePkr)
     return "Your wallet balance is insufficient for this withdrawal request.";
   return null;
@@ -293,10 +332,20 @@ function canUseMemberWorkspace(isBlocked) {
   return !isBlocked;
 }
 var DEPOSIT_MIN_PKR = 100;
-var DEPOSIT_MAX_PKR = 5e3;
+var DEPOSIT_MAX_PKR = 15e3;
+var WITHDRAWAL_MIN_PKR = 50;
+function normalizePakistanMobileNumber(value) {
+  const digits = value.replace(/\D/g, "");
+  return digits.startsWith("92") && digits.length === 12 ? `0${digits.slice(2)}` : digits;
+}
+function isValidPakistanMobileNumber(value) {
+  return /^03\d{9}$/.test(normalizePakistanMobileNumber(value));
+}
 function validateDepositAmountPkr(amountPkr) {
-  if (amountPkr < DEPOSIT_MIN_PKR || amountPkr > DEPOSIT_MAX_PKR)
-    return `Deposit Limit: ${DEPOSIT_MIN_PKR} PKR to ${DEPOSIT_MAX_PKR} PKR.`;
+  if (amountPkr < DEPOSIT_MIN_PKR)
+    return "Please deposit minimum 100 PKR";
+  if (amountPkr > DEPOSIT_MAX_PKR)
+    return "Maximum deposit is 15000 PKR";
   return null;
 }
 
@@ -322,13 +371,30 @@ function getNextPakistanMidnight(date = /* @__PURE__ */ new Date()) {
   return new Date(Date.UTC(year, month - 1, day + 1) - PAKISTAN_UTC_OFFSET_MS);
 }
 function getDailyAdQuota(packagePricePkr) {
-  return Math.max(0, Math.floor(packagePricePkr / 100));
+  const quotas = {
+    100: 1,
+    200: 2,
+    300: 2,
+    400: 2,
+    500: 3,
+    1e3: 4,
+    2e3: 5,
+    5e3: 5
+  };
+  return quotas[packagePricePkr] ?? 0;
 }
-function getDailyAdStates(adIds, quota, watchedAdIds) {
-  return adIds.map((id, index2) => ({
-    id,
-    state: watchedAdIds.has(id) ? "watched" : index2 < quota ? "unlocked" : "locked"
-  }));
+function getDailyAdRewardPkr(packagePricePkr) {
+  const rewards = {
+    100: 30,
+    200: 30,
+    300: 40,
+    400: 60,
+    500: 70,
+    1e3: 80,
+    2e3: 100,
+    5e3: 200
+  };
+  return rewards[packagePricePkr] ?? 0;
 }
 
 // server/db.ts
@@ -336,24 +402,14 @@ var _db = null;
 var ADMIN_EMAIL = DESIGNATED_ADMIN_EMAIL;
 var ADMIN_USERNAME = DESIGNATED_ADMIN_USERNAME;
 var defaultPackages = [
-  { tier: "bronze", name: "Bronze", icon: "\u{1F949}", pricePkr: 100, dailyAds: 1 },
-  { tier: "silver", name: "Silver", icon: "\u{1F948}", pricePkr: 200, dailyAds: 2 },
-  { tier: "gold", name: "Gold", icon: "\u{1F947}", pricePkr: 500, dailyAds: 5 },
-  {
-    tier: "platinum",
-    name: "Platinum",
-    icon: "\u{1F48E}",
-    pricePkr: 1e3,
-    dailyAds: 10
-  },
-  {
-    tier: "diamond",
-    name: "Diamond",
-    icon: "\u{1F4A0}",
-    pricePkr: 2e3,
-    dailyAds: 20
-  },
-  { tier: "vip", name: "VIP", icon: "\u{1F451}", pricePkr: 5e3, dailyAds: 50 }
+  { tier: "pkr_100", name: "100 PKR Package", icon: "\u{1F949}", pricePkr: 100, dailyAds: 1, adRewardPkr: 30 },
+  { tier: "pkr_200", name: "200 PKR Package", icon: "\u{1F948}", pricePkr: 200, dailyAds: 2, adRewardPkr: 30 },
+  { tier: "pkr_300", name: "300 PKR Package", icon: "\u{1F537}", pricePkr: 300, dailyAds: 2, adRewardPkr: 40 },
+  { tier: "pkr_400", name: "400 PKR Package", icon: "\u{1F536}", pricePkr: 400, dailyAds: 2, adRewardPkr: 60 },
+  { tier: "pkr_500", name: "500 PKR Package", icon: "\u{1F947}", pricePkr: 500, dailyAds: 3, adRewardPkr: 70 },
+  { tier: "pkr_1000", name: "1000 PKR Package", icon: "\u{1F48E}", pricePkr: 1e3, dailyAds: 4, adRewardPkr: 80 },
+  { tier: "pkr_2000", name: "2000 PKR Package", icon: "\u{1F4A0}", pricePkr: 2e3, dailyAds: 5, adRewardPkr: 100 },
+  { tier: "pkr_5000", name: "5000 PKR Package", icon: "\u{1F451}", pricePkr: 5e3, dailyAds: 5, adRewardPkr: 200 }
 ];
 var defaultAccounts = [
   {
@@ -450,27 +506,27 @@ async function ensurePlatformData() {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
   const settings = await db.select().from(appSettings).where(eq(appSettings.id, 1)).limit(1);
-  if (!settings[0]) await db.insert(appSettings).values({ id: 1 });
+  if (!settings[0]) await db.insert(appSettings).values({ id: 1, adTimerSeconds: 5 });
+  await db.update(appSettings).set({ adTimerSeconds: 5 }).where(eq(appSettings.id, 1));
+  const existingPackages = await db.select().from(packages);
+  const retainedPackageIds = /* @__PURE__ */ new Set();
   for (const item of defaultPackages) {
-    const existing = await db.select({ id: packages.id }).from(packages).where(eq(packages.tier, item.tier)).limit(1);
-    if (!existing[0])
-      await db.insert(packages).values({ ...item, durationDays: 30, isActive: true });
+    const existing = existingPackages.find((row) => row.tier === item.tier) ?? existingPackages.find((row) => row.pricePkr === item.pricePkr);
+    if (existing) {
+      retainedPackageIds.add(existing.id);
+      await db.update(packages).set({ ...item, durationDays: 30, isActive: true }).where(eq(packages.id, existing.id));
+    } else {
+      const result = await db.insert(packages).values({ ...item, durationDays: 30, isActive: true });
+      retainedPackageIds.add(Number(result[0].insertId));
+    }
+  }
+  for (const existing of existingPackages) {
+    if (!retainedPackageIds.has(existing.id))
+      await db.update(packages).set({ isActive: false }).where(eq(packages.id, existing.id));
   }
   const existingAccounts = await db.select({ id: paymentAccounts.id }).from(paymentAccounts).limit(1);
   if (!existingAccounts[0])
     await db.insert(paymentAccounts).values(defaultAccounts);
-  for (const item of defaultPackages) {
-    const existing = await db.select({ id: ads.id }).from(ads).where(and(eq(ads.packageTier, item.tier), eq(ads.isActive, true))).limit(1);
-    if (!existing[0]) {
-      await db.insert(ads).values({
-        packageTier: item.tier,
-        title: `${item.name} daily opportunity`,
-        contentType: "text",
-        content: "Read this sponsored opportunity until the reward timer completes.",
-        isActive: true
-      });
-    }
-  }
 }
 async function ensureProfile(user) {
   const db = await getDb();
@@ -486,7 +542,8 @@ async function ensureProfile(user) {
     username: baseUsername,
     referralCode,
     balancePkr: 0,
-    withdrawalLimitPkr: 0
+    withdrawalLimitPkr: 0,
+    whatsappRewardEligible: isEligibleForNewUserWhatsappReward(user.createdAt)
   });
   const created = await db.select().from(profiles).where(eq(profiles.userId, user.id)).limit(1);
   if (!created[0]) throw new Error("Profile creation failed");
@@ -1155,6 +1212,31 @@ async function readLocalSession(token) {
 function fail(message, code = "BAD_REQUEST") {
   throw new TRPCError3({ code, message });
 }
+var automaticAdPlacementSchema = z2.enum([
+  "signup",
+  "whatsapp_reward",
+  "package_entry",
+  "withdrawal_entry",
+  "rewarded_break"
+]);
+function rewardedBreakSequence(packagePricePkr, claimedCount) {
+  void packagePricePkr;
+  void claimedCount;
+  return null;
+}
+async function hasCompletedAutomaticAd(input) {
+  const db = await getDb();
+  if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+  const row = (await db.select({ completedAt: adminAdImpressions.completedAt }).from(adminAdImpressions).where(
+    and2(
+      eq2(adminAdImpressions.userId, input.userId),
+      eq2(adminAdImpressions.dayKey, input.dayKey),
+      eq2(adminAdImpressions.placement, input.placement),
+      eq2(adminAdImpressions.sequence, input.sequence)
+    )
+  ).limit(1))[0];
+  return Boolean(row?.completedAt);
+}
 function publicUser(user) {
   const { passwordHash: _passwordHash, ...safeUser } = user;
   return { ...safeUser, hasPassword: Boolean(_passwordHash) };
@@ -1207,13 +1289,6 @@ function validateDirectBrandLogo(raw) {
     fail("Please upload a valid image or provide a valid logo URL.");
   }
 }
-function saveAdMedia(raw, contentType) {
-  return validateInlineUpload(raw, {
-    label: contentType === "image" ? "image" : "video",
-    maxBytes: 5 * 1024 * 1024,
-    acceptedType: (mimeType) => mimeType.startsWith(`${contentType}/`)
-  });
-}
 async function consumeHumanChallenge(db, input) {
   const deviceFingerprintHash = hashSecurityValue(input.deviceId);
   const challenge = (await db.select().from(authChallenges).where(eq2(authChallenges.id, input.challengeId)).limit(1))[0];
@@ -1233,6 +1308,16 @@ async function buildOverview(userId) {
   const profile = (await db.select().from(profiles).where(eq2(profiles.userId, userId)).limit(1))[0];
   if (!profile) fail("Profile was not found.", "NOT_FOUND");
   const activePackage = await getActivePackageForUser(userId);
+  const rewardWithdrawalHistory = await db.select({ id: withdrawals.id }).from(withdrawals).where(
+    and2(
+      eq2(withdrawals.userId, userId),
+      eq2(withdrawals.currency, "PKR"),
+      eq2(withdrawals.amountPkr, WHATSAPP_JOIN_REWARD_PKR)
+    )
+  ).limit(1);
+  const rewardWithdrawalRequested = profile.whatsappRewardWithdrawn || rewardWithdrawalHistory.length > 0;
+  const rewardProfile = rewardWithdrawalRequested && !profile.whatsappRewardWithdrawn ? { ...profile, whatsappRewardWithdrawn: true } : profile;
+  const hasPendingChannelReward = rewardProfile.whatsappRewardEligible && rewardProfile.whatsappBonusClaimed && !rewardProfile.whatsappRewardWithdrawn;
   const dayKey = getDayKey();
   const watchedRows = await db.select({ count: sql`count(*)` }).from(adSessions).where(
     and2(
@@ -1254,10 +1339,11 @@ async function buildOverview(userId) {
       (activePackage.ownership.expiresAt.getTime() - Date.now()) / 864e5
     )
   ) : 0;
-  const activeAdRows = await db.select({ id: ads.id }).from(ads).where(eq2(ads.isActive, true)).orderBy(ads.id);
   const dailyQuota = activePackage ? getDailyAdQuota(activePackage.plan.pricePkr) : 0;
+  const visibleProfile = activePackage || hasPendingChannelReward ? rewardProfile : { ...rewardProfile, balancePkr: 0, withdrawalLimitPkr: 0 };
   return {
-    profile,
+    profile: visibleProfile,
+    rewardWithdrawalRequested,
     settings,
     activePackage: activePackage ? {
       ...activePackage.plan,
@@ -1267,7 +1353,7 @@ async function buildOverview(userId) {
     } : null,
     todayAds: {
       watched: Number(watchedRows[0]?.count ?? 0),
-      total: Math.min(dailyQuota, activeAdRows.length),
+      total: dailyQuota,
       resetAt: getNextPakistanMidnight()
     },
     totalEarnedPkr: Number(totalEarned[0]?.total ?? 0)
@@ -1310,8 +1396,8 @@ var appRouter = router({
           /^[a-zA-Z0-9_]+$/,
           "Use letters, numbers, and underscores only."
         ),
-        email: z2.string().trim().email("Enter a valid Gmail or email address.").max(320),
-        password: z2.string().min(8, "Password must be at least 8 characters.").max(128),
+        email: z2.string().trim().email("You entered wrong Gmail/Email, please correct your Gmail").max(320),
+        password: z2.string().min(8, "Your password is incorrect/weak, please enter strong password").max(128),
         referralCode: z2.string().trim().max(32).optional(),
         challengeId: z2.string().uuid(),
         challengeAnswer: z2.string().trim().min(1).max(32),
@@ -1352,11 +1438,11 @@ var appRouter = router({
         db.select({ id: users.id }).from(users).where(eq2(users.registrationIpHash, registrationIpHash)).limit(1)
       ]);
       if (emailMatch[0])
-        fail("An account already exists for this email address.", "CONFLICT");
+        fail("This Email/Gmail is already registered", "CONFLICT");
       if (usernameMatch[0])
-        fail("That username is already in use.", "CONFLICT");
+        fail("This username already exists, please choose another", "CONFLICT");
       if (deviceMatch[0] || networkMatch[0])
-        fail("Only one account per device or network is allowed.", "FORBIDDEN");
+        fail("You cannot create multiple accounts on same device, only one account allowed per device", "FORBIDDEN");
       let referredByUserId = null;
       if (input.referralCode) {
         const referralValue = input.referralCode.trim();
@@ -1385,7 +1471,8 @@ var appRouter = router({
         referredByUserId,
         balancePkr: 0,
         withdrawalLimitPkr: 0,
-        preferredCurrency: "PKR"
+        preferredCurrency: "PKR",
+        whatsappRewardEligible: true
       });
       const user = (await db.select().from(users).where(eq2(users.id, userId)).limit(1))[0];
       if (!user) fail("Account creation failed.", "INTERNAL_SERVER_ERROR");
@@ -1401,8 +1488,8 @@ var appRouter = router({
     }),
     signIn: publicProcedure.input(
       z2.object({
-        email: z2.string().trim().email("Enter a valid Gmail or email address.").max(320),
-        password: z2.string().min(1, "Enter your password."),
+        email: z2.string().trim().email("You entered wrong Gmail/Email, please correct your Gmail").max(320),
+        password: z2.string().min(8, "Your password is incorrect/weak, please enter strong password"),
         challengeId: z2.string().uuid(),
         challengeAnswer: z2.string().trim().min(1).max(32),
         deviceId: z2.string().trim().min(16).max(256)
@@ -1531,8 +1618,9 @@ var appRouter = router({
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
       const settings = await getSettings();
+      const activePackages = (await db.select().from(packages).where(eq2(packages.isActive, true))).sort((a, b) => a.pricePkr - b.pricePkr);
       return {
-        packages: await db.select().from(packages).where(eq2(packages.isActive, true)),
+        packages: activePackages,
         branding: {
           websiteName: settings.websiteName,
           themeName: settings.themeName,
@@ -1556,24 +1644,31 @@ var appRouter = router({
       const db = await getDb();
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      if (!profile.whatsappRewardEligible)
+        return { success: true, bonusPkr: 0, alreadyJoined: true };
       if (profile.whatsappJoined || profile.whatsappBonusClaimed)
         return { success: true, bonusPkr: 0, alreadyJoined: true };
       await db.update(profiles).set({
         whatsappJoined: true,
         whatsappBonusClaimed: true,
-        balancePkr: profile.balancePkr + 30
+        balancePkr: profile.balancePkr + WHATSAPP_JOIN_REWARD_PKR,
+        withdrawalLimitPkr: profile.withdrawalLimitPkr + WHATSAPP_JOIN_REWARD_PKR
       }).where(eq2(profiles.userId, user.id));
       await db.insert(transactions).values({
         userId: user.id,
         type: "adjustment",
         direction: "credit",
-        amountPkr: 30,
+        amountPkr: WHATSAPP_JOIN_REWARD_PKR,
         status: "completed",
         note: "WhatsApp Channel join bonus",
         referenceType: "whatsapp_bonus",
         referenceId: user.id
       });
-      return { success: true, bonusPkr: 30, alreadyJoined: false };
+      return {
+        success: true,
+        bonusPkr: WHATSAPP_JOIN_REWARD_PKR,
+        alreadyJoined: false
+      };
     })
   }),
   package: router({
@@ -1582,7 +1677,7 @@ var appRouter = router({
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
       await ensurePlatformData();
-      return db.select().from(packages).where(eq2(packages.isActive, true));
+      return (await db.select().from(packages).where(eq2(packages.isActive, true))).sort((a, b) => a.pricePkr - b.pricePkr);
     }),
     buy: protectedProcedure.input(z2.object({ packageId: z2.number().int().positive() })).mutation(async ({ ctx, input }) => {
       const { user, profile } = await getActor(ctx);
@@ -1687,152 +1782,140 @@ var appRouter = router({
     ads: protectedProcedure.query(async ({ ctx }) => {
       const { user } = await getActor(ctx);
       const db = await getDb();
-      if (!db)
-        fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-      const [activePackage, activeAds] = await Promise.all([
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const [activePackage, settings] = await Promise.all([
         getActivePackageForUser(user.id),
-        db.select().from(ads).where(eq2(ads.isActive, true)).orderBy(ads.id)
+        getSettings()
       ]);
       const dayKey = getDayKey();
-      const sessions = await db.select().from(adSessions).where(
-        and2(eq2(adSessions.userId, user.id), eq2(adSessions.dayKey, dayKey))
-      );
-      const watchedAdIds = new Set(
-        sessions.filter((session) => session.claimedAt).map((session) => session.adId)
-      );
+      const sessions = await db.select().from(adSessions).where(and2(eq2(adSessions.userId, user.id), eq2(adSessions.dayKey, dayKey)));
       const quota = activePackage ? getDailyAdQuota(activePackage.plan.pricePkr) : 0;
-      const stateById = new Map(
-        getDailyAdStates(
-          activeAds.map((ad) => ad.id),
-          quota,
-          watchedAdIds
-        ).map((item) => [item.id, item.state])
+      const claimedCount = sessions.filter((session) => session.claimedAt).length;
+      const breakSequence = activePackage ? rewardedBreakSequence(activePackage.plan.pricePkr, claimedCount) : null;
+      const continuationRequired = Boolean(
+        settings.automaticAdsEnabled && breakSequence && !await hasCompletedAutomaticAd({
+          userId: user.id,
+          dayKey,
+          placement: "rewarded_break",
+          sequence: breakSequence
+        })
       );
       return {
-        ads: activeAds.map((ad) => ({
-          ...ad,
-          state: stateById.get(ad.id) ?? "locked"
-        })),
-        watched: watchedAdIds.size,
-        total: Math.min(quota, activeAds.length),
+        ads: Array.from({ length: quota }, (_, index2) => {
+          const slot = index2 + 1;
+          return {
+            id: slot,
+            title: `Ad ${slot}`,
+            contentType: "rewarded",
+            rewardPkr: getDailyAdRewardPkr(activePackage?.plan.pricePkr ?? 0),
+            timerSeconds: REWARDED_AD_TIMER_SECONDS,
+            state: slot <= claimedCount ? "watched" : "unlocked"
+          };
+        }),
+        watched: claimedCount,
+        total: quota,
         resetAt: getNextPakistanMidnight(),
+        continuation: continuationRequired && breakSequence ? { placement: "rewarded_break", sequence: breakSequence } : null,
         activePackage: activePackage ? {
           name: activePackage.plan.name,
           pricePkr: activePackage.plan.pricePkr,
-          quota
+          quota,
+          rewardPkr: getDailyAdRewardPkr(activePackage.plan.pricePkr),
+          totalDailyPkr: quota * getDailyAdRewardPkr(activePackage.plan.pricePkr)
         } : null
       };
     }),
-    startAd: protectedProcedure.input(z2.object({ adId: z2.number().int().positive() }).optional()).mutation(async ({ ctx, input }) => {
+    startAd: protectedProcedure.input(z2.object({ slot: z2.number().int().positive() })).mutation(async ({ ctx, input }) => {
       const { user } = await getActor(ctx);
       const db = await getDb();
-      if (!db)
-        fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-      if (!input) fail("Select an unlocked ad to begin.");
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
       const active = await getActivePackageForUser(user.id);
-      if (!active)
-        fail("Please purchase an active package to start earning.");
+      if (!active) fail("Please purchase an active package to start earning.");
       const dayKey = getDayKey();
-      const activeAds = await db.select().from(ads).where(eq2(ads.isActive, true)).orderBy(ads.id);
-      const sessions = await db.select().from(adSessions).where(
-        and2(eq2(adSessions.userId, user.id), eq2(adSessions.dayKey, dayKey))
-      );
-      const watchedAdIds = new Set(
-        sessions.filter((session) => session.claimedAt).map((session) => session.adId)
-      );
+      const [settings, sessions] = await Promise.all([
+        getSettings(),
+        db.select().from(adSessions).where(and2(eq2(adSessions.userId, user.id), eq2(adSessions.dayKey, dayKey)))
+      ]);
       const quota = getDailyAdQuota(active.plan.pricePkr);
-      const stateById = new Map(
-        getDailyAdStates(
-          activeAds.map((ad) => ad.id),
-          quota,
-          watchedAdIds
-        ).map((item) => [item.id, item.state])
-      );
-      const available = activeAds.find((ad) => ad.id === input.adId);
-      if (!available || stateById.get(available.id) !== "unlocked")
-        fail(
-          "This ad is locked or has already been watched today.",
-          "FORBIDDEN"
-        );
-      if (sessions.some(
-        (session) => session.adId === available.id && !session.claimedAt && !session.invalidatedAt
-      ))
-        fail(
-          "This ad is already open. Complete it or wait for it to expire.",
-          "CONFLICT"
-        );
+      const claimedCount = sessions.filter((session) => session.claimedAt).length;
+      if (input.slot > quota || sessions.some((session) => session.adId === input.slot && session.claimedAt))
+        fail("This rewarded ad has already been watched today or is not available.", "FORBIDDEN");
+      const breakSequence = rewardedBreakSequence(active.plan.pricePkr, claimedCount);
+      if (settings.automaticAdsEnabled && breakSequence && !await hasCompletedAutomaticAd({ userId: user.id, dayKey, placement: "rewarded_break", sequence: breakSequence }))
+        fail("Complete the short sponsored continuation before the next reward.", "FORBIDDEN");
+      if (sessions.some((session) => !session.claimedAt && !session.invalidatedAt))
+        fail("This rewarded ad is already open. Complete it before starting another.", "CONFLICT");
       const startedAt = /* @__PURE__ */ new Date();
       const result = await db.insert(adSessions).values({
         userId: user.id,
         userPackageId: active.ownership.id,
-        adId: available.id,
+        adId: input.slot,
         dayKey,
         startedAt,
         lastHeartbeatAt: startedAt,
-        rewardPkr: AD_REWARD_PKR
+        rewardPkr: getDailyAdRewardPkr(active.plan.pricePkr)
       });
-      const settings = await getSettings();
       return {
         sessionId: Number(result[0].insertId),
-        ad: available,
+        ad: { id: input.slot, title: `Ad ${input.slot}` },
         startedAt,
-        availableAt: new Date(
-          startedAt.getTime() + settings.adTimerSeconds * 1e3
-        ),
-        timerSeconds: settings.adTimerSeconds
+        availableAt: new Date(startedAt.getTime() + REWARDED_AD_TIMER_SECONDS * 1e3),
+        timerSeconds: REWARDED_AD_TIMER_SECONDS
       };
     }),
     heartbeat: protectedProcedure.input(z2.object({ sessionId: z2.number().int().positive() })).mutation(async ({ ctx, input }) => {
       const { user } = await getActor(ctx);
       const db = await getDb();
-      if (!db)
-        fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-      const session = (await db.select().from(adSessions).where(
-        and2(
-          eq2(adSessions.id, input.sessionId),
-          eq2(adSessions.userId, user.id)
-        )
-      ).limit(1))[0];
-      if (!session || session.claimedAt || session.invalidatedAt)
-        fail(AD_TIMER_MESSAGE, "FORBIDDEN");
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const session = (await db.select().from(adSessions).where(and2(eq2(adSessions.id, input.sessionId), eq2(adSessions.userId, user.id))).limit(1))[0];
+      if (!session || session.claimedAt || session.invalidatedAt) fail(AD_TIMER_MESSAGE, "FORBIDDEN");
       await db.update(adSessions).set({ lastHeartbeatAt: /* @__PURE__ */ new Date() }).where(eq2(adSessions.id, session.id));
       return { success: true };
     }),
     claimAd: protectedProcedure.input(z2.object({ sessionId: z2.number().int().positive() })).mutation(async ({ ctx, input }) => {
       const { user } = await getActor(ctx);
       const db = await getDb();
-      if (!db)
-        fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-      const session = (await db.select().from(adSessions).where(
-        and2(
-          eq2(adSessions.id, input.sessionId),
-          eq2(adSessions.userId, user.id)
-        )
-      ).limit(1))[0];
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const session = (await db.select().from(adSessions).where(and2(eq2(adSessions.id, input.sessionId), eq2(adSessions.userId, user.id))).limit(1))[0];
       if (!session) fail("Earning session was not found.", "NOT_FOUND");
       if (session.claimedAt) fail("This reward has already been claimed.");
-      const settings = await getSettings();
-      const claimStatus = getAdClaimStatus({
-        startedAt: session.startedAt,
-        lastHeartbeatAt: session.lastHeartbeatAt,
-        invalidatedAt: session.invalidatedAt,
-        now: /* @__PURE__ */ new Date(),
-        timerSeconds: settings.adTimerSeconds
-      });
-      if (claimStatus === "early") fail(AD_TIMER_MESSAGE);
+      if (getAdClaimStatus({ startedAt: session.startedAt, lastHeartbeatAt: session.lastHeartbeatAt, invalidatedAt: session.invalidatedAt, now: /* @__PURE__ */ new Date(), timerSeconds: REWARDED_AD_TIMER_SECONDS }) === "early") fail(AD_TIMER_MESSAGE);
       const profile = (await db.select().from(profiles).where(eq2(profiles.userId, user.id)).limit(1))[0];
       if (!profile) fail("Profile was not found.", "NOT_FOUND");
       await db.update(adSessions).set({ claimedAt: /* @__PURE__ */ new Date() }).where(eq2(adSessions.id, session.id));
       await db.update(profiles).set({ balancePkr: profile.balancePkr + session.rewardPkr }).where(eq2(profiles.userId, user.id));
-      await db.insert(transactions).values({
-        userId: user.id,
-        type: "ad_reward",
-        direction: "credit",
-        amountPkr: session.rewardPkr,
-        status: "completed",
-        note: "Daily ad reward claimed"
-      });
-      return { success: true, rewardPkr: session.rewardPkr };
+      await db.insert(transactions).values({ userId: user.id, type: "ad_reward", direction: "credit", amountPkr: session.rewardPkr, status: "completed", note: "Daily ad reward claimed" });
+      const claimedSessions = await db.select({ id: adSessions.id }).from(adSessions).where(and2(eq2(adSessions.userId, user.id), eq2(adSessions.dayKey, session.dayKey), sql`${adSessions.claimedAt} IS NOT NULL`));
+      const active = await getActivePackageForUser(user.id);
+      const breakSequence = active ? rewardedBreakSequence(active.plan.pricePkr, claimedSessions.length) : null;
+      return {
+        success: true,
+        rewardPkr: session.rewardPkr,
+        continuation: null
+      };
+    }),
+    startAdminAd: protectedProcedure.input(z2.object({ placement: automaticAdPlacementSchema, sequence: z2.number().int().min(0).max(50).default(0) })).mutation(async ({ ctx, input }) => {
+      const { user } = await getActor(ctx);
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const settings = await getSettings();
+      if (!settings.automaticAdsEnabled) return { show: false };
+      const dayKey = getDayKey();
+      let impression = (await db.select().from(adminAdImpressions).where(and2(eq2(adminAdImpressions.userId, user.id), eq2(adminAdImpressions.dayKey, dayKey), eq2(adminAdImpressions.placement, input.placement), eq2(adminAdImpressions.sequence, input.sequence))).limit(1))[0];
+      if (!impression) {
+        const result = await db.insert(adminAdImpressions).values({ userId: user.id, dayKey, placement: input.placement, sequence: input.sequence });
+        impression = (await db.select().from(adminAdImpressions).where(eq2(adminAdImpressions.id, Number(result[0].insertId))).limit(1))[0];
+      }
+      return impression?.completedAt ? { show: false } : { show: true, impressionId: impression?.id };
+    }),
+    completeAdminAd: protectedProcedure.input(z2.object({ impressionId: z2.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const { user } = await getActor(ctx);
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const impression = (await db.select().from(adminAdImpressions).where(and2(eq2(adminAdImpressions.id, input.impressionId), eq2(adminAdImpressions.userId, user.id))).limit(1))[0];
+      if (!impression) fail("Sponsored continuation was not found.", "NOT_FOUND");
+      if (!impression.completedAt) await db.update(adminAdImpressions).set({ completedAt: /* @__PURE__ */ new Date() }).where(eq2(adminAdImpressions.id, impression.id));
+      return { success: true };
     })
   }),
   deposit: router({
@@ -1850,16 +1933,18 @@ var appRouter = router({
     create: protectedProcedure.input(
       z2.object({
         currency: z2.enum(["PKR", "USD"]),
-        amount: z2.number().positive(),
+        amount: z2.number().positive("Please deposit minimum 100 PKR"),
         method: z2.string().trim().min(2).max(64),
-        senderAccountNumber: z2.string().trim().min(4).max(256),
+        senderAccountNumber: z2.string().trim().min(4, "Please enter correct JazzCash number linked with account").max(256),
         senderAccountName: z2.string().trim().min(2).max(128),
-        transactionId: z2.string().trim().min(3).max(128),
+        transactionId: z2.string().trim().min(3, "You entered wrong deposit number / Transaction ID, please enter correct TID").max(128),
         requestedPackageId: z2.number().int().positive().optional(),
         proofData: z2.string().min(24).max(2e6)
       })
     ).mutation(async ({ ctx, input }) => {
       const { user, profile } = await getActor(ctx);
+      if (input.currency === "PKR" && !isValidPakistanMobileNumber(input.senderAccountNumber))
+        fail("Please enter correct JazzCash number linked with account");
       const settings = await getSettings();
       const db = await getDb();
       if (!db)
@@ -1874,10 +1959,10 @@ var appRouter = router({
         input.currency,
         settings.exchangeRatePkrPerUsd
       );
-      const isUsdAmountWithinDisplayedRange = input.currency === "USD" && input.amount >= 0.35 && input.amount <= 17.85;
+      const isUsdAmountWithinDisplayedRange = input.currency === "USD" && input.amount >= 0.35 && input.amount <= 53.57;
       const depositError = isUsdAmountWithinDisplayedRange ? null : validateDepositAmountPkr(convertedAmountPkr);
       if (depositError) fail(depositError);
-      const amountPkr = isUsdAmountWithinDisplayedRange ? Math.max(100, Math.min(5e3, convertedAmountPkr)) : convertedAmountPkr;
+      const amountPkr = isUsdAmountWithinDisplayedRange ? Math.max(100, Math.min(15e3, convertedAmountPkr)) : convertedAmountPkr;
       const duplicateTransaction = (await db.select({ id: deposits.id }).from(deposits).where(eq2(deposits.transactionId, input.transactionId)).limit(1))[0];
       if (duplicateTransaction)
         fail("This transaction ID has already been submitted.", "CONFLICT");
@@ -1933,9 +2018,10 @@ var appRouter = router({
     create: protectedProcedure.input(
       z2.object({
         currency: z2.enum(["PKR", "USD"]),
-        amount: z2.number().positive(),
-        accountName: z2.string().trim().min(2).max(128),
-        accountDetails: z2.string().trim().min(4).max(512)
+        amount: z2.number(),
+        walletType: z2.string().trim().max(64),
+        accountName: z2.string().trim().max(128),
+        accountDetails: z2.string().trim().max(512)
       })
     ).mutation(async ({ ctx, input }) => {
       const { user, profile } = await getActor(ctx);
@@ -1945,18 +2031,25 @@ var appRouter = router({
         input.currency,
         settings.exchangeRatePkrPerUsd
       );
-      if (amountPkr < 50 || amountPkr > 3e3)
-        fail("Withdraw Limit: 50 PKR to 3000 PKR.");
       const activePackage = Boolean(await getActivePackageForUser(user.id));
+      const hasPendingChannelReward = profile.whatsappRewardEligible && profile.whatsappBonusClaimed && !profile.whatsappRewardWithdrawn;
+      if (!activePackage && hasPendingChannelReward && amountPkr !== WHATSAPP_JOIN_REWARD_PKR)
+        fail(WITHDRAWAL_NO_PACKAGE_MESSAGE);
       const withdrawalError = validateWithdrawalRequest({
         balancePkr: profile.balancePkr,
         withdrawalLimitPkr: profile.withdrawalLimitPkr,
         amountPkr,
-        minimumWithdrawalPkr: settings.minimumWithdrawalPkr,
-        maximumWithdrawalPkr: settings.maximumWithdrawalPkr,
-        activePackage
+        activePackage: activePackage || hasPendingChannelReward,
+        freeWithdrawalCompleted: profile.whatsappRewardEligible && profile.whatsappRewardWithdrawn,
+        allowChannelRewardAmount: hasPendingChannelReward
       });
       if (withdrawalError) fail(withdrawalError);
+      if (!["JazzCash", "Easypaisa", "SadaPay", "NayaPay", "Skrill", "Payoneer", "Binance", "Other"].includes(input.walletType))
+        fail(WITHDRAWAL_WALLET_TYPE_MESSAGE);
+      if (!input.accountName) fail(WITHDRAWAL_ACCOUNT_NAME_MESSAGE);
+      if (!input.accountDetails) fail(WITHDRAWAL_WALLET_NUMBER_MESSAGE);
+      if (input.currency === "PKR" && !isValidPakistanMobileNumber(input.accountDetails))
+        fail(WITHDRAWAL_WALLET_NUMBER_MESSAGE);
       const db = await getDb();
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
@@ -1964,15 +2057,18 @@ var appRouter = router({
         userId: user.id,
         currency: input.currency,
         amountPkr,
+        walletType: input.walletType,
         accountName: input.accountName,
         accountDetails: input.accountDetails,
         status: "pending"
       });
       const withdrawalId = Number(result[0].insertId);
       const reserved = applyWithdrawalRequest(profile.balancePkr, amountPkr);
+      const completedChannelRewardWithdrawal = hasPendingChannelReward && amountPkr === WHATSAPP_JOIN_REWARD_PKR;
       await db.update(profiles).set({
         balancePkr: reserved.balancePkr,
-        withdrawalLimitPkr: reserved.withdrawalLimitPkr
+        withdrawalLimitPkr: reserved.withdrawalLimitPkr,
+        ...completedChannelRewardWithdrawal ? { whatsappRewardWithdrawn: true } : {}
       }).where(eq2(profiles.userId, user.id));
       await db.insert(transactions).values({
         userId: user.id,
@@ -1989,10 +2085,13 @@ var appRouter = router({
           "\u{1F4B8} WITHDRAW REQUEST",
           `\u{1F464} User: ${profile.username}`,
           `\u{1F4B5} Amount: ${input.amount} ${input.currency}`,
-          `\u{1F4F1} Easypaisa/JazzCash: ${input.accountDetails}`
+          `\u{1F4F1} ${input.walletType}: ${input.accountName} \xB7 ${input.accountDetails}`
         ].join("\n")
       );
-      return { success: true };
+      return {
+        success: true,
+        rewardWithdrawalSubmitted: completedChannelRewardWithdrawal
+      };
     }),
     list: protectedProcedure.query(async ({ ctx }) => {
       const { user } = await getActor(ctx);
@@ -2130,13 +2229,15 @@ var appRouter = router({
             (referralCounts.get(row.referredByUserId) ?? 0) + 1
           );
       });
+      const approvedVisibilityCutoff = Date.now() - 60 * 60 * 1e3;
+      const remainsVisibleInActiveRequests = (row) => row.status !== "approved" || !row.reviewedAt || row.reviewedAt.getTime() > approvedVisibilityCutoff;
       return {
-        deposits: depositRows.map((row) => ({
+        deposits: depositRows.filter(remainsVisibleInActiveRequests).map((row) => ({
           ...row,
           member: members.get(row.userId) ?? null,
           requestedPackageName: row.requestedPackageId ? packageNames.get(row.requestedPackageId) ?? null : null
         })),
-        withdrawals: withdrawalRows.map((row) => ({
+        withdrawals: withdrawalRows.filter(remainsVisibleInActiveRequests).map((row) => ({
           ...row,
           member: members.get(row.userId) ? {
             ...members.get(row.userId),
@@ -2212,6 +2313,8 @@ var appRouter = router({
         adminNote: input.note ?? null,
         reviewedAt: /* @__PURE__ */ new Date()
       }).where(eq2(withdrawals.id, request.id));
+      if (input.approved && profile.whatsappRewardEligible && profile.whatsappBonusClaimed && !profile.whatsappRewardWithdrawn && request.currency === "PKR" && request.amountPkr === WHATSAPP_JOIN_REWARD_PKR)
+        await db.update(profiles).set({ whatsappRewardWithdrawn: true }).where(eq2(profiles.userId, request.userId));
       await db.update(transactions).set({
         status: input.approved ? "approved" : "rejected",
         direction: input.approved ? "debit" : "neutral"
@@ -2315,64 +2418,33 @@ var appRouter = router({
       await db.update(profiles).set({ isBlocked: input.blocked }).where(eq2(profiles.userId, input.userId));
       return { success: true };
     }),
-    ads: protectedProcedure.query(async ({ ctx }) => {
+    adSettings: protectedProcedure.query(async ({ ctx }) => {
       await getAdmin(ctx);
       const db = await getDb();
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-      return db.select().from(ads).orderBy(desc2(ads.updatedAt));
-    }),
-    saveAd: protectedProcedure.input(
-      z2.object({
-        id: z2.number().int().positive().optional(),
-        packageTier: z2.string().min(3).max(24),
-        title: z2.string().trim().min(3).max(128),
-        contentType: z2.enum(["text", "image", "video", "link", "app"]),
-        content: z2.string().trim().max(5e3).optional(),
-        mediaData: z2.string().max(8e6).optional(),
-        targetUrl: z2.string().url().optional(),
-        isActive: z2.boolean()
-      })
-    ).mutation(async ({ ctx, input }) => {
-      await getAdmin(ctx);
-      const db = await getDb();
-      if (!db)
-        fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-      if (!input.id && input.contentType === "text")
-        fail("New advertisements must use Image, Video, Link, or App Ad.");
-      const content = input.content ?? "";
-      let mediaData = input.contentType === "image" || input.contentType === "video" ? void 0 : null;
-      if (input.mediaData) {
-        if (input.contentType !== "image" && input.contentType !== "video")
-          fail("Only image or video ad types accept gallery uploads.");
-        mediaData = saveAdMedia(input.mediaData, input.contentType);
-      }
-      if ((input.contentType === "image" || input.contentType === "video") && !mediaData && !input.id)
-        fail("Please upload media for this ad type.");
-      if ((input.contentType === "link" || input.contentType === "app") && !input.targetUrl)
-        fail("Please paste a destination link for this ad type.");
-      const values = {
-        packageTier: input.packageTier,
-        title: input.title,
-        contentType: input.contentType,
-        content: content || input.targetUrl || "Custom advertisement",
-        mediaData,
-        targetUrl: input.targetUrl ?? null,
-        isActive: input.isActive
+      const [settings, counts] = await Promise.all([
+        getSettings(),
+        db.select({ count: sql`count(*)` }).from(adminAdImpressions).where(
+          and2(
+            eq2(adminAdImpressions.dayKey, getDayKey()),
+            sql`${adminAdImpressions.completedAt} IS NOT NULL`
+          )
+        )
+      ]);
+      const shownToday = Number(counts[0]?.count ?? 0);
+      return {
+        automaticAdsEnabled: settings.automaticAdsEnabled,
+        shownToday,
+        estimatedEarningUsd: Number((shownToday * 7e-3).toFixed(3))
       };
-      if (input.id) {
-        await db.update(ads).set(values).where(eq2(ads.id, input.id));
-      } else {
-        await db.insert(ads).values(values);
-      }
-      return { success: true };
     }),
-    deleteAd: protectedProcedure.input(z2.object({ id: z2.number().int().positive() })).mutation(async ({ ctx, input }) => {
+    saveAdSettings: protectedProcedure.input(z2.object({ automaticAdsEnabled: z2.boolean() })).mutation(async ({ ctx, input }) => {
       await getAdmin(ctx);
       const db = await getDb();
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-      await db.delete(ads).where(eq2(ads.id, input.id));
+      await db.update(appSettings).set(input).where(eq2(appSettings.id, 1));
       return { success: true };
     }),
     paymentAccounts: protectedProcedure.query(async ({ ctx }) => {
@@ -2396,9 +2468,13 @@ var appRouter = router({
       const db = await getDb();
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const paymentAccountValues = {
+        ...input,
+        currencyType: input.currency
+      };
       if (input.id)
-        await db.update(paymentAccounts).set(input).where(eq2(paymentAccounts.id, input.id));
-      else await db.insert(paymentAccounts).values(input);
+        await db.update(paymentAccounts).set(paymentAccountValues).where(eq2(paymentAccounts.id, input.id));
+      else await db.insert(paymentAccounts).values(paymentAccountValues);
       return { success: true };
     }),
     deletePaymentAccount: protectedProcedure.input(z2.object({ id: z2.number().int().positive() })).mutation(async ({ ctx, input }) => {
@@ -2462,8 +2538,6 @@ var appRouter = router({
     saveSettings: protectedProcedure.input(
       z2.object({
         exchangeRatePkrPerUsd: z2.number().int().min(1),
-        minimumWithdrawalPkr: z2.number().int().min(1),
-        maximumWithdrawalPkr: z2.number().int().min(1),
         adTimerSeconds: z2.number().int().min(5).max(600),
         referralCommissionPercent: z2.number().int().min(0).max(100),
         websiteName: z2.string().trim().min(2).max(80),
@@ -2472,12 +2546,15 @@ var appRouter = router({
       })
     ).mutation(async ({ ctx, input }) => {
       await getAdmin(ctx);
-      if (input.maximumWithdrawalPkr < input.minimumWithdrawalPkr)
-        fail("Maximum withdrawal must be greater than the minimum.");
       const db = await getDb();
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-      await db.update(appSettings).set(input).where(eq2(appSettings.id, 1));
+      await db.update(appSettings).set({
+        ...input,
+        adTimerSeconds: REWARDED_AD_TIMER_SECONDS,
+        minimumWithdrawalPkr: 0,
+        maximumWithdrawalPkr: 3e3
+      }).where(eq2(appSettings.id, 1));
       return { success: true };
     }),
     saveBrandLogo: protectedProcedure.input(z2.object({ logoData: z2.string().trim().min(1).max(2e6) })).mutation(async ({ ctx, input }) => {

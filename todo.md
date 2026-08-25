@@ -334,3 +334,7 @@
 ### Current request: Roll back the Vercel production domain
 
 - [x] Restore the existing Vercel production domain to the deployment corresponding to checkpoint 4a1116fb, without creating a new project or domain, then verify the production alias and readiness.
+
+### Current request: Audit and complete pasted rebuild prompt
+
+- [x] Audit all pasted package, rewarded-ad, wallet-first purchase, premium red design, copy controls, admin-room navigation, Adsterra head scripts, and validation requirements against the current implementation; fix only missing or inconsistent behavior, run tests/build/UI checks, and publish the same existing domain.

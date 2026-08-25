@@ -105,7 +105,7 @@ describe("rewarded slot start access", () => {
 
     await expect(
       appRouter.createCaller(callerContext()).earning.startAd({ slot: 3 })
-    ).rejects.toThrow("locked");
+    ).rejects.toThrow("not available");
     expect(inserts).toHaveLength(0);
   });
 });

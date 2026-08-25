@@ -43,15 +43,28 @@ const tabItems: Array<{ id: Tab; label: string; icon: typeof ClipboardCheck }> =
     { id: "settings", label: "settings", icon: Settings2 },
     { id: "tickets", label: "tickets", icon: TicketCheck },
   ];
-const adminRoutes: Partial<Record<Tab, string>> = {
+const adminRoutes: Record<Tab, string> = {
   users: "/admin/users",
   depositHistory: "/admin/deposits",
-  withdrawalHistory: "/admin/withdrawals",
+  withdrawalHistory: "/admin/withdraws",
+  ads: "/admin/ads",
+  packages: "/admin/packages",
+  payments: "/admin/payments",
+  broadcasts: "/admin/broadcasts",
+  settings: "/admin/settings",
+  tickets: "/admin/tickets",
 };
 const routeTabs: Record<string, Tab> = {
   "/admin/users": "users",
   "/admin/deposits": "depositHistory",
+  "/admin/withdraws": "withdrawalHistory",
   "/admin/withdrawals": "withdrawalHistory",
+  "/admin/ads": "ads",
+  "/admin/packages": "packages",
+  "/admin/payments": "payments",
+  "/admin/broadcasts": "broadcasts",
+  "/admin/settings": "settings",
+  "/admin/tickets": "tickets",
 };
 const money = (amount: number) => `PKR ${amount.toLocaleString()}`;
 const dateTime = (value: Date | string) =>
@@ -134,14 +147,8 @@ export function AdminPanel({ t }: { t: (key: any) => string }) {
           </div>
         ))}
       </div>
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {[
-          { id: "users" as Tab, label: "users", icon: Users },
-          { id: "depositHistory" as Tab, label: "depositHistory", icon: CreditCard },
-          { id: "withdrawalHistory" as Tab, label: "withdrawalHistory", icon: ClipboardCheck },
-          { id: "packages" as Tab, label: "packages", icon: ClipboardCheck },
-          { id: "ads" as Tab, label: "adSettings", icon: PlaySquare },
-        ].map(({ id, label, icon: Icon }) => (
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {tabItems.map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => selectTab(id)} className="panel flex items-center gap-3 p-4 text-left transition hover:-translate-y-0.5 hover:border-red-400/40">
             <span className="grid size-10 place-items-center rounded-xl bg-red-600 text-white"><Icon className="size-5" /></span>
             <span className="font-bold">{t(label)}</span>

@@ -7,7 +7,11 @@ describe("administrator route dashboards", () => {
 
     expect(source).toContain('users: "/admin/users"');
     expect(source).toContain('depositHistory: "/admin/deposits"');
-    expect(source).toContain('withdrawalHistory: "/admin/withdrawals"');
+    expect(source).toContain('withdrawalHistory: "/admin/withdraws"');
+    expect(source).toContain('"/admin/withdrawals": "withdrawalHistory"');
+    expect(source).toContain('packages: "/admin/packages"');
+    expect(source).toContain('ads: "/admin/ads"');
+    expect(source).toContain('settings: "/admin/settings"');
     expect(source).toContain("const [location, navigate] = useLocation()");
   });
 
