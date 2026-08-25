@@ -7,6 +7,7 @@ import {
   ClipboardCheck,
   CreditCard,
   FileText,
+  Gamepad2,
   Loader2,
   Megaphone,
   Pencil,
@@ -27,6 +28,7 @@ type Tab =
   | "broadcasts"
   | "users"
   | "settings"
+  | "euro"
   | "tickets";
 const tabItems: Array<{ id: Tab; label: string; icon: typeof ClipboardCheck }> =
   [
@@ -37,6 +39,7 @@ const tabItems: Array<{ id: Tab; label: string; icon: typeof ClipboardCheck }> =
     { id: "broadcasts", label: "broadcast", icon: Megaphone },
     { id: "users", label: "users", icon: Users },
     { id: "settings", label: "settings", icon: Settings2 },
+    { id: "euro", label: "euroGamesAdmin", icon: Gamepad2 },
     { id: "tickets", label: "tickets", icon: TicketCheck },
   ];
 const money = (amount: number) => `PKR ${amount.toLocaleString()}`;
@@ -137,6 +140,7 @@ export function AdminPanel({ t }: { t: (key: any) => string }) {
           {tab === "broadcasts" && <Broadcasts t={t} />}
           {tab === "users" && <UserManagement t={t} />}
           {tab === "settings" && <GlobalSettings t={t} />}
+          {tab === "euro" && <EuroGameSettings t={t} />}
           {tab === "tickets" && <Tickets t={t} />}
         </section>
       </div>
@@ -1029,6 +1033,73 @@ function GlobalSettings({ t }: any) {
           {t("saveGlobalSettings")}
         </button>
       </form>
+    </>
+  );
+}
+
+function EuroGameSettings({ t }: any) {
+  const settings = trpc.admin.euroSettings.useQuery();
+  const tasks = trpc.admin.gameTasks.useQuery();
+  const [settingsForm, setSettingsForm] = useState<any>(null);
+  const [taskForm, setTaskForm] = useState<any>({
+    title: "",
+    targetUrl: "",
+    imageData: "",
+    rewardPkr: 20,
+    isActive: true,
+  });
+  const values = settingsForm ?? settings.data;
+  const saveSettings = trpc.admin.saveEuroSettings.useMutation({
+    onSuccess: () => {
+      toast.success(t("saved"));
+      settings.refetch();
+      setSettingsForm(null);
+    },
+    onError: error => toast.error(error.message),
+  });
+  const saveTask = trpc.admin.saveGameTask.useMutation({
+    onSuccess: () => {
+      toast.success(t("saved"));
+      tasks.refetch();
+      setTaskForm({ title: "", targetUrl: "", imageData: "", rewardPkr: 20, isActive: true });
+    },
+    onError: error => toast.error(error.message),
+  });
+  const deleteTask = trpc.admin.deleteGameTask.useMutation({
+    onSuccess: () => {
+      toast.success(t("saved"));
+      tasks.refetch();
+    },
+    onError: error => toast.error(error.message),
+  });
+  if (!values) return <div className="panel"><Loader2 className="animate-spin text-amber-300" /></div>;
+  return (
+    <>
+      <Heading title={t("euroGamesAdmin")} description={t("euroGamesAdminText")} />
+      <form className="panel" onSubmit={event => { event.preventDefault(); saveSettings.mutate(values); }}>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label={t("euroBonus")}><input className="field" type="number" min="100" max="150" value={values.euroBonusPkr} onChange={event => setSettingsForm({ ...values, euroBonusPkr: Number(event.target.value) })} /></Field>
+          <Field label={t("aviatorEnabled")}><select className="field" value={String(values.euroAviatorEnabled)} onChange={event => setSettingsForm({ ...values, euroAviatorEnabled: event.target.value === "true" })}><option value="true">{t("active")}</option><option value="false">{t("inactive")}</option></select></Field>
+          <Field label={t("aviatorMinimumBet")}><input className="field" type="number" min="16" max="20000" value={values.euroMinimumBetPkr} onChange={event => setSettingsForm({ ...values, euroMinimumBetPkr: Number(event.target.value) })} /></Field>
+          <Field label={t("aviatorMaximumBet")}><input className="field" type="number" min="16" max="20000" value={values.euroMaximumBetPkr} onChange={event => setSettingsForm({ ...values, euroMaximumBetPkr: Number(event.target.value) })} /></Field>
+          <Field label={t("crashBandWeights")}><input className="field" value={values.euroCrashBandWeights} onChange={event => setSettingsForm({ ...values, euroCrashBandWeights: event.target.value })} /></Field>
+        </div>
+        <button disabled={saveSettings.isPending} className="mt-5 inline-flex h-9 items-center gap-1.5 rounded-lg bg-amber-300 px-3 text-xs font-bold text-slate-950 disabled:opacity-50"><Settings2 className="size-4" />{t("saveEuroSettings")}</button>
+      </form>
+      <div className="mt-5 grid gap-5 xl:grid-cols-[.95fr_1.05fr]">
+        <form className="panel" onSubmit={event => { event.preventDefault(); saveTask.mutate(taskForm); }}>
+          <div className="mb-4 flex items-center justify-between gap-3"><div><p className="eyebrow">{t("gameTasks")}</p><h3 className="mt-1 text-xl font-bold">{taskForm.id ? t("editGameTask") : t("createGameTask")}</h3></div>{taskForm.id && <Button onClick={() => setTaskForm({ title: "", targetUrl: "", imageData: "", rewardPkr: 20, isActive: true })}>{t("cancel")}</Button>}</div>
+          <div className="space-y-4">
+            <Field label={t("gameTaskTitle")}><input className="field" required value={taskForm.title} onChange={event => setTaskForm({ ...taskForm, title: event.target.value })} /></Field>
+            <Field label={t("gameTaskLink")}><input className="field" type="url" required value={taskForm.targetUrl} onChange={event => setTaskForm({ ...taskForm, targetUrl: event.target.value })} /></Field>
+            <Field label={t("gameTaskReward")}><input className="field" type="number" min="1" value={taskForm.rewardPkr} onChange={event => setTaskForm({ ...taskForm, rewardPkr: Number(event.target.value) })} /></Field>
+            <Field label={t("gameTaskImage")}><input className="field h-auto py-2" type="file" accept="image/*" onChange={async event => { const file = event.target.files?.[0]; if (file) setTaskForm({ ...taskForm, imageData: await toDataUrl(file) }); }} /></Field>
+            <Field label={t("status")}><select className="field" value={String(taskForm.isActive)} onChange={event => setTaskForm({ ...taskForm, isActive: event.target.value === "true" })}><option value="true">{t("active")}</option><option value="false">{t("inactive")}</option></select></Field>
+          </div>
+          <button disabled={saveTask.isPending} className="mt-5 inline-flex h-9 items-center gap-1.5 rounded-lg bg-amber-300 px-3 text-xs font-bold text-slate-950 disabled:opacity-50"><Gamepad2 className="size-4" />{taskForm.id ? t("saved") : t("createGameTask")}</button>
+        </form>
+        <div className="panel"><p className="eyebrow">{t("gameTasks")}</p><div className="mt-4 space-y-3">{tasks.data?.length ? tasks.data.map(task => <div key={task.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/15 p-3"><div className="flex min-w-0 items-center gap-3">{task.imageData ? <img src={task.imageData} alt="" className="size-10 rounded-xl object-cover" /> : <div className="grid size-10 place-items-center rounded-xl bg-amber-300/10 text-amber-300"><Gamepad2 className="size-4" /></div>}<div className="min-w-0"><p className="truncate text-sm font-bold">{task.title}</p><p className="mt-1 text-xs text-slate-400">{money(task.rewardPkr)} · {task.isActive ? t("active") : t("inactive")}</p></div></div><div className="flex gap-2"><button onClick={() => setTaskForm(task)} className="grid size-9 place-items-center rounded-xl bg-white/5 text-amber-300"><Pencil className="size-4" /></button><button onClick={() => { if (confirm(t("confirmDeleteHistory"))) deleteTask.mutate({ id: task.id }); }} className="grid size-9 place-items-center rounded-xl bg-red-400/10 text-red-200"><Trash2 className="size-4" /></button></div></div>) : <Empty>{t("noGameTasks")}</Empty>}</div></div>
+      </div>
     </>
   );
 }

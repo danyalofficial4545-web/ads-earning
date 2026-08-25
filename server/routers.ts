@@ -6,9 +6,14 @@ import {
   adSessions,
   ads,
   appSettings,
+  aviatorBets,
+  aviatorRounds,
   authChallenges,
   broadcasts,
   deposits,
+  gameDailyStats,
+  gameTasks,
+  gameWalletTransactions,
   packages,
   paymentAccounts,
   profiles,
@@ -66,6 +71,15 @@ import {
   getDailyAdStates,
   getNextPakistanMidnight,
 } from "../shared/adRules";
+import {
+  cappedAviatorPayout,
+  chooseCrashMultiplierX100,
+  crashTimeFor,
+  maxDailyGameProfit,
+  multiplierAt,
+  parseCrashBandWeights,
+  validateEuroBetAmount,
+} from "./euroRules";
 
 function fail(message: string, code: TRPCError["code"] = "BAD_REQUEST"): never {
   throw new TRPCError({ code, message });
@@ -251,6 +265,102 @@ async function buildOverview(userId: number) {
       resetAt: getNextPakistanMidnight(),
     },
     totalEarnedPkr: Number(totalEarned[0]?.total ?? 0),
+  };
+}
+
+async function getGameDailyStat(db: any, userId: number, dayKey: string) {
+  return (
+    await db
+      .select()
+      .from(gameDailyStats)
+      .where(
+        and(
+          eq(gameDailyStats.userId, userId),
+          eq(gameDailyStats.dayKey, dayKey)
+        )
+      )
+      .limit(1)
+  )[0];
+}
+
+async function updateGameDailyStat(
+  db: any,
+  input: { userId: number; profitPkr?: number; lossPkr?: number }
+) {
+  const dayKey = getDayKey();
+  const current = await getGameDailyStat(db, input.userId, dayKey);
+  const profitPkr = (current?.profitPkr ?? 0) + (input.profitPkr ?? 0);
+  const lossPkr = (current?.lossPkr ?? 0) + (input.lossPkr ?? 0);
+  if (current) {
+    await db
+      .update(gameDailyStats)
+      .set({ profitPkr, lossPkr })
+      .where(eq(gameDailyStats.id, current.id));
+  } else {
+    await db
+      .insert(gameDailyStats)
+      .values({ userId: input.userId, dayKey, profitPkr, lossPkr });
+  }
+  return { dayKey, profitPkr, lossPkr };
+}
+
+async function settleExpiredAviatorRound(db: any, userId: number, now = new Date()) {
+  const activeRound = (
+    await db
+      .select()
+      .from(aviatorRounds)
+      .where(
+        and(
+          eq(aviatorRounds.userId, userId),
+          eq(aviatorRounds.status, "active")
+        )
+      )
+      .orderBy(desc(aviatorRounds.createdAt))
+      .limit(1)
+  )[0];
+  if (!activeRound || activeRound.crashesAt.getTime() > now.getTime())
+    return activeRound ?? null;
+
+  const unsettledBets = await db
+    .select()
+    .from(aviatorBets)
+    .where(
+      and(
+        eq(aviatorBets.roundId, activeRound.id),
+        eq(aviatorBets.status, "active")
+      )
+    );
+  if (unsettledBets.length) {
+    await db
+      .update(aviatorBets)
+      .set({ status: "lost", settledAt: now })
+      .where(
+        and(
+          eq(aviatorBets.roundId, activeRound.id),
+          eq(aviatorBets.status, "active")
+        )
+      );
+    await updateGameDailyStat(db, {
+      userId,
+      lossPkr: unsettledBets.reduce((total: number, bet: any) => total + bet.stakePkr, 0),
+    });
+  }
+  await db
+    .update(aviatorRounds)
+    .set({ status: "crashed" })
+    .where(eq(aviatorRounds.id, activeRound.id));
+  return { ...activeRound, status: "crashed" as const };
+}
+
+function publicAviatorRound(round: typeof aviatorRounds.$inferSelect | null) {
+  if (!round) return null;
+  return {
+    id: round.id,
+    startsAt: round.startsAt,
+    crashesAt: round.crashesAt,
+    status: round.status,
+    crashMultiplierX100:
+      round.status === "crashed" ? round.crashMultiplierX100 : undefined,
   };
 }
 
@@ -821,6 +931,340 @@ export const appRouter = router({
             (input.type === "all" || row.type === input.type) &&
             (input.status === "all" || row.status === input.status)
         );
+      }),
+  }),
+  euro: router({
+    bootstrap: protectedProcedure.query(async ({ ctx }) => {
+      const { user, profile } = await getActor(ctx);
+      const db = await getDb();
+      if (!db)
+        fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const [settings, activePackage] = await Promise.all([
+        getSettings(),
+        getActivePackageForUser(user.id),
+      ]);
+      const currentRound = await settleExpiredAviatorRound(db, user.id);
+      const dayKey = getDayKey();
+      const [daily, recent, activeTasks, activeBets] = await Promise.all([
+        getGameDailyStat(db, user.id, dayKey),
+        db
+          .select()
+          .from(gameWalletTransactions)
+          .where(eq(gameWalletTransactions.userId, user.id))
+          .orderBy(desc(gameWalletTransactions.createdAt))
+          .limit(12),
+        db
+          .select()
+          .from(gameTasks)
+          .where(eq(gameTasks.isActive, true))
+          .orderBy(desc(gameTasks.updatedAt)),
+        currentRound
+          ? db
+              .select()
+              .from(aviatorBets)
+              .where(
+                and(
+                  eq(aviatorBets.roundId, currentRound.id),
+                  eq(aviatorBets.userId, user.id)
+                )
+              )
+          : Promise.resolve([]),
+      ]);
+      return {
+        gameBalancePkr: profile.gameBalancePkr,
+        mainBalancePkr: profile.balancePkr,
+        canClaimBonus: profile.euroBonusEligible && !profile.euroBonusClaimed,
+        bonusPkr: settings.euroBonusPkr,
+        activePackagePricePkr: activePackage?.plan.pricePkr ?? null,
+        canExchangeToMain: Boolean(activePackage),
+        dailyProfitPkr: daily?.profitPkr ?? 0,
+        dailyProfitLimitPkr: maxDailyGameProfit(activePackage?.plan.pricePkr),
+        settings: {
+          aviatorEnabled: settings.euroAviatorEnabled,
+          minimumBetPkr: settings.euroMinimumBetPkr,
+          maximumBetPkr: settings.euroMaximumBetPkr,
+        },
+        round: publicAviatorRound(currentRound),
+        activeBets,
+        recent,
+        tasks: activeTasks,
+      };
+    }),
+    claimFirstVisitBonus: protectedProcedure.mutation(async ({ ctx }) => {
+      const { user, profile } = await getActor(ctx);
+      const db = await getDb();
+      if (!db)
+        fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const settings = await getSettings();
+      if (!profile.euroBonusEligible || profile.euroBonusClaimed)
+        return { success: true, bonusPkr: 0, alreadyClaimed: true } as const;
+      const bonusPkr = settings.euroBonusPkr;
+      await db
+        .update(profiles)
+        .set({
+          gameBalancePkr: profile.gameBalancePkr + bonusPkr,
+          euroBonusClaimed: true,
+        })
+        .where(eq(profiles.userId, user.id));
+      await db.insert(gameWalletTransactions).values({
+        userId: user.id,
+        type: "bonus",
+        direction: "credit",
+        amountPkr: bonusPkr,
+        note: "Euro first-visit game bonus",
+        referenceType: "euro_bonus",
+        referenceId: String(user.id),
+      });
+      return { success: true, bonusPkr, alreadyClaimed: false } as const;
+    }),
+    exchangeFromMain: protectedProcedure
+      .input(z.object({ amountPkr: z.number().int().positive().max(1_000_000) }))
+      .mutation(async ({ ctx, input }) => {
+        const { user, profile } = await getActor(ctx);
+        const db = await getDb();
+        if (!db)
+          fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        if (profile.balancePkr < input.amountPkr)
+          fail("Your Main Wallet balance is insufficient for this transfer.");
+        await db
+          .update(profiles)
+          .set({
+            balancePkr: profile.balancePkr - input.amountPkr,
+            gameBalancePkr: profile.gameBalancePkr + input.amountPkr,
+          })
+          .where(eq(profiles.userId, user.id));
+        await Promise.all([
+          db.insert(gameWalletTransactions).values({
+            userId: user.id,
+            type: "main_to_game",
+            direction: "credit",
+            amountPkr: input.amountPkr,
+            note: "Transferred from Main Wallet to Game Wallet",
+            referenceType: "wallet_exchange",
+            referenceId: randomUUID(),
+          }),
+          db.insert(transactions).values({
+            userId: user.id,
+            type: "adjustment",
+            direction: "debit",
+            amountPkr: input.amountPkr,
+            status: "completed",
+            note: "Transferred to Euro Game Wallet",
+            referenceType: "euro_exchange",
+          }),
+        ]);
+        return { success: true };
+      }),
+    exchangeToMain: protectedProcedure
+      .input(z.object({ amountPkr: z.number().int().positive().max(1_000_000) }))
+      .mutation(async ({ ctx, input }) => {
+        const { user, profile } = await getActor(ctx);
+        const db = await getDb();
+        if (!db)
+          fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const activePackage = await getActivePackageForUser(user.id);
+        if (!activePackage)
+          fail("Please buy a package and then convert into Main Wallet");
+        if (profile.gameBalancePkr < input.amountPkr)
+          fail("Your Game Wallet balance is insufficient for this transfer.");
+        await db
+          .update(profiles)
+          .set({
+            balancePkr: profile.balancePkr + input.amountPkr,
+            gameBalancePkr: profile.gameBalancePkr - input.amountPkr,
+          })
+          .where(eq(profiles.userId, user.id));
+        await Promise.all([
+          db.insert(gameWalletTransactions).values({
+            userId: user.id,
+            type: "game_to_main",
+            direction: "debit",
+            amountPkr: input.amountPkr,
+            note: "Transferred from Game Wallet to Main Wallet",
+            referenceType: "wallet_exchange",
+            referenceId: randomUUID(),
+          }),
+          db.insert(transactions).values({
+            userId: user.id,
+            type: "adjustment",
+            direction: "credit",
+            amountPkr: input.amountPkr,
+            status: "completed",
+            note: "Transferred from Euro Game Wallet",
+            referenceType: "euro_exchange",
+          }),
+        ]);
+        return { success: true };
+      }),
+    aviatorState: protectedProcedure.query(async ({ ctx }) => {
+      const { user } = await getActor(ctx);
+      const db = await getDb();
+      if (!db)
+        fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const round = await settleExpiredAviatorRound(db, user.id);
+      const bets = round
+        ? await db
+            .select()
+            .from(aviatorBets)
+            .where(
+              and(
+                eq(aviatorBets.roundId, round.id),
+                eq(aviatorBets.userId, user.id)
+              )
+            )
+        : [];
+      return { round: publicAviatorRound(round), bets, serverNow: new Date() };
+    }),
+    startAviator: protectedProcedure
+      .input(
+        z.object({
+          stakesPkr: z.array(z.number().int().positive()).min(1).max(2),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { user, profile } = await getActor(ctx);
+        const db = await getDb();
+        if (!db)
+          fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const settings = await getSettings();
+        if (!settings.euroAviatorEnabled) fail("Aviator is currently unavailable.");
+        const currentRound = await settleExpiredAviatorRound(db, user.id);
+        if (currentRound?.status === "active")
+          fail("Please finish the current Aviator round before starting another.");
+        const stakes = input.stakesPkr;
+        const totalStakePkr = stakes.reduce((total, stake) => total + stake, 0);
+        for (const stake of stakes) {
+          const betError = validateEuroBetAmount(
+            stake,
+            settings.euroMinimumBetPkr,
+            settings.euroMaximumBetPkr
+          );
+          if (betError) fail(betError);
+        }
+        if (profile.gameBalancePkr < totalStakePkr)
+          fail("Your Game Wallet balance is insufficient for this Aviator bet.");
+        const startsAt = new Date();
+        const crashMultiplierX100 = chooseCrashMultiplierX100(
+          settings.euroCrashBandWeights
+        );
+        const id = randomUUID();
+        const crashesAt = crashTimeFor(startsAt, crashMultiplierX100);
+        await db
+          .update(profiles)
+          .set({ gameBalancePkr: profile.gameBalancePkr - totalStakePkr })
+          .where(eq(profiles.userId, user.id));
+        await db.insert(aviatorRounds).values({
+          id,
+          userId: user.id,
+          crashMultiplierX100,
+          startsAt,
+          crashesAt,
+        });
+        const created = await db
+          .insert(aviatorBets)
+          .values(stakes.map(stakePkr => ({ roundId: id, userId: user.id, stakePkr })));
+        await db.insert(gameWalletTransactions).values(
+          stakes.map(stakePkr => ({
+            userId: user.id,
+            type: "aviator_bet" as const,
+            direction: "debit" as const,
+            amountPkr: stakePkr,
+            note: "Aviator bet placed",
+            referenceType: "aviator_round",
+            referenceId: id,
+          }))
+        );
+        const createdBets = await db
+          .select()
+          .from(aviatorBets)
+          .where(eq(aviatorBets.roundId, id));
+        return {
+          round: publicAviatorRound({
+            id,
+            userId: user.id,
+            crashMultiplierX100,
+            startsAt,
+            crashesAt,
+            status: "active",
+            createdAt: startsAt,
+          }),
+          bets: createdBets,
+          insertedBetCount: Array.isArray(created) ? stakes.length : stakes.length,
+        };
+      }),
+    cashOutAviator: protectedProcedure
+      .input(z.object({ betId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const { user, profile } = await getActor(ctx);
+        const db = await getDb();
+        if (!db)
+          fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const bet = (
+          await db
+            .select()
+            .from(aviatorBets)
+            .where(
+              and(eq(aviatorBets.id, input.betId), eq(aviatorBets.userId, user.id))
+            )
+            .limit(1)
+        )[0];
+        if (!bet || bet.status !== "active") fail("This Aviator bet is no longer available.");
+        const round = (
+          await db
+            .select()
+            .from(aviatorRounds)
+            .where(eq(aviatorRounds.id, bet.roundId))
+            .limit(1)
+        )[0];
+        if (!round) fail("Aviator round was not found.");
+        const now = new Date();
+        if (now.getTime() >= round.crashesAt.getTime()) {
+          await settleExpiredAviatorRound(db, user.id, now);
+          fail("The Aviator round has already crashed.");
+        }
+        const multiplierX100 = Math.min(
+          round.crashMultiplierX100,
+          multiplierAt(now, round.startsAt)
+        );
+        const activePackage = await getActivePackageForUser(user.id);
+        const daily = await getGameDailyStat(db, user.id, getDayKey());
+        const result = cappedAviatorPayout({
+          stakePkr: bet.stakePkr,
+          multiplierX100,
+          priorProfitPkr: daily?.profitPkr ?? 0,
+          dailyProfitLimitPkr: maxDailyGameProfit(activePackage?.plan.pricePkr),
+        });
+        await db
+          .update(aviatorBets)
+          .set({
+            status: "cashed_out",
+            payoutPkr: result.payoutPkr,
+            cashoutMultiplierX100: multiplierX100,
+            settledAt: now,
+          })
+          .where(eq(aviatorBets.id, bet.id));
+        await db
+          .update(profiles)
+          .set({ gameBalancePkr: profile.gameBalancePkr + result.payoutPkr })
+          .where(eq(profiles.userId, user.id));
+        await Promise.all([
+          updateGameDailyStat(db, { userId: user.id, profitPkr: result.profitPkr }),
+          db.insert(gameWalletTransactions).values({
+            userId: user.id,
+            type: "aviator_payout",
+            direction: "credit",
+            amountPkr: result.payoutPkr,
+            note: `Aviator cash-out at ${(multiplierX100 / 100).toFixed(2)}x`,
+            referenceType: "aviator_bet",
+            referenceId: String(bet.id),
+          }),
+        ]);
+        return {
+          success: true,
+          payoutPkr: result.payoutPkr,
+          multiplierX100,
+          capped: result.payoutPkr < Math.floor((bet.stakePkr * multiplierX100) / 100),
+        };
       }),
   }),
   earning: router({
@@ -1947,6 +2391,97 @@ export const appRouter = router({
             maximumWithdrawalPkr: 3000,
           })
           .where(eq(appSettings.id, 1));
+        return { success: true };
+      }),
+    euroSettings: protectedProcedure.query(async ({ ctx }) => {
+      await getAdmin(ctx);
+      const settings = await getSettings();
+      return {
+        euroBonusPkr: settings.euroBonusPkr,
+        euroAviatorEnabled: settings.euroAviatorEnabled,
+        euroMinimumBetPkr: settings.euroMinimumBetPkr,
+        euroMaximumBetPkr: settings.euroMaximumBetPkr,
+        euroCrashBandWeights: settings.euroCrashBandWeights,
+      };
+    }),
+    saveEuroSettings: protectedProcedure
+      .input(
+        z.object({
+          euroBonusPkr: z.number().int().min(100).max(150),
+          euroAviatorEnabled: z.boolean(),
+          euroMinimumBetPkr: z.number().int().min(16).max(20_000),
+          euroMaximumBetPkr: z.number().int().min(16).max(20_000),
+          euroCrashBandWeights: z.string().trim().max(64),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        await getAdmin(ctx);
+        if (input.euroMinimumBetPkr > input.euroMaximumBetPkr)
+          fail("Euro minimum bet cannot be greater than the maximum bet.");
+        try {
+          parseCrashBandWeights(input.euroCrashBandWeights);
+        } catch (error) {
+          fail(error instanceof Error ? error.message : "Invalid crash-band weights.");
+        }
+        const db = await getDb();
+        if (!db)
+          fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        await db
+          .update(appSettings)
+          .set(input)
+          .where(eq(appSettings.id, 1));
+        return { success: true };
+      }),
+    gameTasks: protectedProcedure.query(async ({ ctx }) => {
+      await getAdmin(ctx);
+      const db = await getDb();
+      if (!db)
+        fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      return db.select().from(gameTasks).orderBy(desc(gameTasks.updatedAt));
+    }),
+    saveGameTask: protectedProcedure
+      .input(
+        z.object({
+          id: z.number().int().positive().optional(),
+          title: z.string().trim().min(3).max(140),
+          targetUrl: z.string().url(),
+          imageData: z.string().max(2_000_000).optional(),
+          rewardPkr: z.number().int().min(1).max(10_000),
+          isActive: z.boolean(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        await getAdmin(ctx);
+        const db = await getDb();
+        if (!db)
+          fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const imageData = input.imageData
+          ? validateInlineUpload(input.imageData, {
+              label: "game-task image",
+              maxBytes: 1 * 1024 * 1024,
+              acceptedType: mimeType => mimeType.startsWith("image/"),
+            })
+          : null;
+        const values = {
+          title: input.title,
+          targetUrl: input.targetUrl,
+          imageData,
+          rewardPkr: input.rewardPkr,
+          isActive: input.isActive,
+        };
+        if (input.id)
+          await db.update(gameTasks).set(values).where(eq(gameTasks.id, input.id));
+        else await db.insert(gameTasks).values(values);
+        return { success: true };
+      }),
+    deleteGameTask: protectedProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        await getAdmin(ctx);
+        const db = await getDb();
+        if (!db)
+          fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        await db.delete(gameTasks).where(eq(gameTasks.id, input.id));
         return { success: true };
       }),
     saveBrandLogo: protectedProcedure

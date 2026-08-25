@@ -280,3 +280,12 @@
 - [x] Show the first specific withdrawal failure in the existing large black top-center notification and beneath the matching form field in red.
 - [x] Preserve protected server-side validation and return the same specific reason without generic withdrawal-failed errors.
 - [x] Add regression coverage for every requested failure case, validate builds, publish the same domain, and synchronize both GitHub branches.
+
+### Current request: Euro games dashboard and Aviator
+
+- [x] Audit existing navigation, main-wallet accounting, schema, and administrator settings before introducing a strictly separate game-wallet subsystem.
+- [x] Create a protected Euro wallet data model, one-time administrator-configurable first-visit bonus, exchange records, daily game limits, and Aviator bet records without changing main-wallet withdrawal, package, referral, or WhatsApp-reward behavior.
+- [x] Add a dedicated authenticated `/euro` route plus Euro navigation entry, separate Euro wallet UI, protected exchange dialogs, and the main-wallet-to-game-wallet entry control.
+- [x] Implement only the initial Aviator game with server-authoritative crash outcomes, single/dual bet support, configured 16–20000 PKR limits, and the specified non-overlapping crash bands.
+- [x] Add administrator Euro game settings and game-task controls for bonus, enabled state, crash bands, and bet limits.
+- [x] Generate Euro game visual direction/assets, add focused tests, validate desktop/mobile behavior and builds, publish the same domain, and synchronize both GitHub branches.
