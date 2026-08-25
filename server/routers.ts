@@ -189,10 +189,26 @@ async function buildOverview(userId: number) {
   )[0];
   if (!profile) fail("Profile was not found.", "NOT_FOUND");
   const activePackage = await getActivePackageForUser(userId);
+  const rewardWithdrawalHistory = await db
+    .select({ id: withdrawals.id })
+    .from(withdrawals)
+    .where(
+      and(
+        eq(withdrawals.userId, userId),
+        eq(withdrawals.currency, "PKR"),
+        eq(withdrawals.amountPkr, WHATSAPP_JOIN_REWARD_PKR)
+      )
+    )
+    .limit(1);
+  const rewardWithdrawalRequested =
+    profile.whatsappRewardWithdrawn || rewardWithdrawalHistory.length > 0;
+  const rewardProfile = rewardWithdrawalRequested && !profile.whatsappRewardWithdrawn
+    ? { ...profile, whatsappRewardWithdrawn: true }
+    : profile;
   const hasPendingChannelReward =
-    profile.whatsappRewardEligible &&
-    profile.whatsappBonusClaimed &&
-    !profile.whatsappRewardWithdrawn;
+    rewardProfile.whatsappRewardEligible &&
+    rewardProfile.whatsappBonusClaimed &&
+    !rewardProfile.whatsappRewardWithdrawn;
   const dayKey = getDayKey();
   const watchedRows = await db
     .select({ count: sql<number>`count(*)` })
@@ -232,10 +248,11 @@ async function buildOverview(userId: number) {
     ? getDailyAdQuota(activePackage.plan.pricePkr)
     : 0;
   const visibleProfile = activePackage || hasPendingChannelReward
-    ? profile
-    : { ...profile, balancePkr: 0, withdrawalLimitPkr: 0 };
+    ? rewardProfile
+    : { ...rewardProfile, balancePkr: 0, withdrawalLimitPkr: 0 };
   return {
     profile: visibleProfile,
+    rewardWithdrawalRequested,
     settings,
     activePackage: activePackage
       ? {
@@ -1261,7 +1278,10 @@ export const appRouter = router({
             `📱 ${input.walletType}: ${input.accountName} · ${input.accountDetails}`,
           ].join("\n")
         );
-        return { success: true };
+        return {
+          success: true,
+          rewardWithdrawalSubmitted: completedChannelRewardWithdrawal,
+        };
       }),
     list: protectedProcedure.query(async ({ ctx }) => {
       const { user } = await getActor(ctx);
@@ -1577,7 +1597,8 @@ export const appRouter = router({
           profile.whatsappRewardEligible &&
           profile.whatsappBonusClaimed &&
           !profile.whatsappRewardWithdrawn &&
-          request.amountPkr >= WHATSAPP_JOIN_REWARD_PKR
+          request.currency === "PKR" &&
+          request.amountPkr === WHATSAPP_JOIN_REWARD_PKR
         )
           await db
             .update(profiles)

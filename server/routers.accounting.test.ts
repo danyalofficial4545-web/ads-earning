@@ -179,7 +179,7 @@ describe("router accounting flows", () => {
       insert: vi.fn(() => ({ values: async (values: any) => { inserts.push(values); return [{ insertId: 57 }]; } })),
     });
 
-    await appRouter.createCaller(context()).withdrawal.create({
+    const result = await appRouter.createCaller(context()).withdrawal.create({
       currency: "PKR",
       amount: 10,
       walletType: "JazzCash",
@@ -187,6 +187,7 @@ describe("router accounting flows", () => {
       accountDetails: "03001234567",
     });
 
+    expect(result).toMatchObject({ success: true, rewardWithdrawalSubmitted: true });
     expect(updates[0]?.values).toEqual({
       balancePkr: 0,
       withdrawalLimitPkr: 0,

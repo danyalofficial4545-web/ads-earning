@@ -27,4 +27,12 @@ describe("member channel reward and withdrawal presentation", () => {
     expect(withdrawal).not.toContain('min={currency');
     expect(withdrawal).not.toContain('max={currency');
   });
+
+  it("derives permanent prompt hiding from the server-side historical reward-request state", () => {
+    const source = readFileSync(new URL("./Home.tsx", import.meta.url), "utf8");
+
+    expect(source).toContain("overview.rewardWithdrawalRequested || rewardWithdrawalSubmittedLocally");
+    expect(source).toContain("if (data.rewardWithdrawalSubmitted) onRewardWithdrawalSubmitted()");
+    expect(source).toContain("onRewardWithdrawalSubmitted={() => setRewardWithdrawalSubmittedLocally(true)}");
+  });
 });

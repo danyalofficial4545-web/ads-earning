@@ -9,8 +9,8 @@ describe("package-gated wallet and withdrawal flow", () => {
     expect(source).toContain('disabled={!canWithdraw}');
     expect(source).toContain('hasPendingChannelReward');
     expect(source).toContain('t("noPackageBalanceMessage")');
-    expect(source).toContain('function Withdrawal({ t, profile, showRewardWithdrawalPrompt, activePackage, hasPendingChannelReward, rewardWithdrawalCompleted, onDone }: any)');
-    expect(source).toContain('!activePackage && !hasPendingChannelReward && !rewardWithdrawalCompleted');
+    expect(source).toContain('function Withdrawal({ t, profile, showRewardWithdrawalPrompt, activePackage, hasPendingChannelReward, rewardWithdrawalCompleted, onRewardWithdrawalSubmitted, onDone }: any)');
+    expect(source).toContain('!activePackage && !hasPendingChannelReward');
   });
 
   it("keeps the completed free-reward no-package case in the form so its exact reason can appear inline", () => {
@@ -28,7 +28,8 @@ describe("package-gated wallet and withdrawal flow", () => {
 
   it("derives reward guidance from persisted completion state while retaining immediate join guidance", () => {
     expect(source).toContain('profile.whatsappRewardEligible &&');
-    expect(source).toContain('!profile.whatsappRewardWithdrawn');
-    expect(source).toContain('setRewardPromptJustEarned(true)');
+    expect(source).toContain('memberProfile.whatsappBonusClaimed &&');
+    expect(source).toContain('!rewardWithdrawalRequested');
+    expect(source).toContain('setPage("withdrawal")');
   });
 });

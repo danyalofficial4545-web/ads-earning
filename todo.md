@@ -280,3 +280,11 @@
 - [x] Show the first specific withdrawal failure in the existing large black top-center notification and beneath the matching form field in red.
 - [x] Preserve protected server-side validation and return the same specific reason without generic withdrawal-failed errors.
 - [x] Add regression coverage for every requested failure case, validate builds, publish the same domain, and synchronize both GitHub branches.
+
+### Current request: One-time reward withdrawal guidance flow
+
+- [x] Audit the 10 PKR reward request/completion flags, withdrawal history state, package activity, and referral-limit accounting without changing the protected 50% one-time referral credit.
+- [x] Hide the 10 PKR reward guidance permanently as soon as a matching 10 PKR withdrawal request is submitted, whether it remains pending, is approved, or appears in historical records.
+- [x] Show the requested green Urdu package-purchase guidance only after the 10 PKR request is complete for members without an active package, and remove it after any package becomes active.
+- [x] Show the requested six-second multilingual scrolling invite ticker only for active-package members with zero withdrawal limit, restarting when the withdrawal page is opened.
+- [ ] Add regression coverage for old/new member reward histories, pending/approved 10 PKR requests, package transitions, ticker conditions, build validation, same-domain publication, and both GitHub branch synchronization.

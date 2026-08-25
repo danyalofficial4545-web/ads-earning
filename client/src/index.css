@@ -71,4 +71,21 @@
 @media (prefers-reduced-motion: no-preference) {
   .panel, .glass { animation: rise .35s cubic-bezier(0.23, 1, 0.32, 1) both; }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  .withdrawal-invite-ticker { overflow: hidden; }
+  .withdrawal-invite-ticker__text {
+    display: inline-block;
+    min-width: max-content;
+    padding-inline: 1rem;
+    animation: withdrawal-invite-ticker-ltr 6s linear both;
+    will-change: transform;
+  }
+  [dir="rtl"] .withdrawal-invite-ticker__text { animation-name: withdrawal-invite-ticker-rtl; }
+  @keyframes withdrawal-invite-ticker-ltr { from { transform: translateX(-115%); } to { transform: translateX(115%); } }
+  @keyframes withdrawal-invite-ticker-rtl { from { transform: translateX(115%); } to { transform: translateX(-115%); } }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .withdrawal-invite-ticker { overflow: hidden; }
+  .withdrawal-invite-ticker__text { display: block; padding-inline: 1rem; }
 }

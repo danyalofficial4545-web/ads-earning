@@ -1031,22 +1031,24 @@ function Workspace({
   const [showChannelPrompt, setShowChannelPrompt] = useState(
     () => profile.whatsappRewardEligible && !profile.whatsappJoined
   );
-  const [rewardPromptJustEarned, setRewardPromptJustEarned] = useState(false);
+  const [rewardWithdrawalSubmittedLocally, setRewardWithdrawalSubmittedLocally] = useState(false);
+  const memberProfile = overview.profile;
+  const rewardWithdrawalRequested = Boolean(
+    overview.rewardWithdrawalRequested || rewardWithdrawalSubmittedLocally
+  );
   const showRewardWithdrawalPrompt = Boolean(
-    rewardPromptJustEarned ||
-      (profile.whatsappRewardEligible &&
-        profile.whatsappBonusClaimed &&
-        !profile.whatsappRewardWithdrawn)
+    memberProfile.whatsappRewardEligible &&
+      memberProfile.whatsappBonusClaimed &&
+      !rewardWithdrawalRequested
   );
   const hasPendingChannelReward =
-    profile.whatsappRewardEligible &&
-    profile.whatsappBonusClaimed &&
-    !profile.whatsappRewardWithdrawn;
+    memberProfile.whatsappRewardEligible &&
+    memberProfile.whatsappBonusClaimed &&
+    !rewardWithdrawalRequested;
   const joinWhatsApp = trpc.platform.joinWhatsApp.useMutation({
     onSuccess: data => {
       if (data.bonusPkr) {
         toast.success(t("whatsappRewardClaimed"));
-        setRewardPromptJustEarned(true);
         setPage("withdrawal");
       }
       setShowChannelPrompt(false);
@@ -1095,13 +1097,14 @@ function Workspace({
     withdrawal: (
       <Withdrawal
         t={t}
-        profile={profile}
+        profile={memberProfile}
         showRewardWithdrawalPrompt={showRewardWithdrawalPrompt}
         activePackage={overview.activePackage}
         hasPendingChannelReward={hasPendingChannelReward}
         rewardWithdrawalCompleted={
-          profile.whatsappRewardEligible && profile.whatsappRewardWithdrawn
+          memberProfile.whatsappRewardEligible && rewardWithdrawalRequested
         }
+        onRewardWithdrawalSubmitted={() => setRewardWithdrawalSubmittedLocally(true)}
         onDone={invalidateCore}
       />
     ),
@@ -1843,7 +1846,7 @@ function CurrencyTabs({ value, onChange, t }: any) {
   );
 }
 
-function Withdrawal({ t, profile, showRewardWithdrawalPrompt, activePackage, hasPendingChannelReward, rewardWithdrawalCompleted, onDone }: any) {
+function Withdrawal({ t, profile, showRewardWithdrawalPrompt, activePackage, hasPendingChannelReward, rewardWithdrawalCompleted, onRewardWithdrawalSubmitted, onDone }: any) {
   const [currency, setCurrency] = useState<"PKR" | "USD">("PKR");
   const [walletType, setWalletType] = useState("");
   const walletTypes = currency === "PKR"
@@ -1854,13 +1857,26 @@ function Withdrawal({ t, profile, showRewardWithdrawalPrompt, activePackage, has
   const [accountDetails, setAccountDetails] = useState("");
   const [errors, setErrors] = useState<FormErrors>({});
   const [showHistory, setShowHistory] = useState(false);
+  const [showInviteTicker, setShowInviteTicker] = useState(
+    () => Boolean(activePackage && profile.withdrawalLimitPkr <= 0)
+  );
   const utils = trpc.useUtils();
+  useEffect(() => {
+    const shouldShowInviteTicker = Boolean(
+      activePackage && profile.withdrawalLimitPkr <= 0
+    );
+    setShowInviteTicker(shouldShowInviteTicker);
+    if (!shouldShowInviteTicker) return;
+    const tickerTimer = window.setTimeout(() => setShowInviteTicker(false), 6_000);
+    return () => window.clearTimeout(tickerTimer);
+  }, [activePackage?.ownershipId, profile.withdrawalLimitPkr]);
   const create = trpc.withdrawal.create.useMutation({
-    onSuccess: () => {
+    onSuccess: data => {
       toast.success(t("submitted"));
       setWalletType("");
       setAmount("");
       setShowHistory(true);
+      if (data.rewardWithdrawalSubmitted) onRewardWithdrawalSubmitted();
       void utils.withdrawal.list.invalidate();
       onDone();
     },
@@ -1881,9 +1897,13 @@ function Withdrawal({ t, profile, showRewardWithdrawalPrompt, activePackage, has
         action={<button onClick={() => setShowHistory(!showHistory)} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-amber-300">{showHistory ? t("hideHistory") : t("viewWithdrawalHistory")}</button>}
       />
       <div className="max-w-2xl panel">
-        {!activePackage && !hasPendingChannelReward && !rewardWithdrawalCompleted ? (
+        {rewardWithdrawalCompleted && !activePackage ? (
+          <p className="rounded-xl border border-emerald-300/25 bg-emerald-300/10 p-4 text-sm font-semibold leading-6 text-emerald-50">
+            {t("postRewardBalanceMessage")}
+          </p>
+        ) : !activePackage && !hasPendingChannelReward ? (
           <p className="rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm font-semibold text-amber-50">
-            {rewardWithdrawalCompleted ? t("postRewardBalanceMessage") : t("noPackageBalanceMessage")}
+            {t("noPackageBalanceMessage")}
           </p>
         ) : (
           <>
@@ -1892,6 +1912,11 @@ function Withdrawal({ t, profile, showRewardWithdrawalPrompt, activePackage, has
             <Gift className="size-4 shrink-0 text-amber-300" />
             {t("whatsappWithdrawalPrompt")}
           </p>
+        )}
+        {showInviteTicker && !showRewardWithdrawalPrompt && (
+          <div className="withdrawal-invite-ticker mb-5 rounded-xl border border-emerald-300/25 bg-emerald-300/10 py-3 text-sm font-semibold text-emerald-50" role="status">
+            <p className="withdrawal-invite-ticker__text">{t("withdrawalInviteTicker")}</p>
+          </div>
         )}
           <form
             onSubmit={event => {
