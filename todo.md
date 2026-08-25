@@ -325,3 +325,13 @@
 - [x] Add clear clipboard copy controls and success feedback for member deposit/withdrawal details and administrator deposit/withdrawal records.
 - [x] Split administrator Users, Deposit History and Withdrawal History into protected full-page routes with searchable/filterable records and clean dashboard navigation; retain Packages and Ad Settings access.
 - [ ] Preserve the two supplied Adsterra head scripts, five-second ads, eight-package reward rules, and administrator ad logic while adding regression tests, validating builds, publishing the same domain, synchronizing both GitHub main branches, and verifying Vercel deployment.
+
+### Current request: Publish rollback version to Vercel
+
+- [ ] Publish the rollback version to the existing linked Vercel project, synchronize both GitHub main branches if required, verify production readiness, and report the same existing deployment link.
+
+লো
+
+### Current request: Roll back the Vercel production domain
+
+- [ ] Restore the existing Vercel production domain to the deployment corresponding to checkpoint 4a1116fb, without creating a new project or domain, then verify the production alias and readiness.
