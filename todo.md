@@ -363,4 +363,4 @@
 - [x] Deduct only the requested withdrawal amount from withdrawal limit, preserving any remaining limit through pending, approved, and rejected request states.
 - [x] Show the withdrawal limit only to members with an active package, using a clear Withdrawal section label.
 - [x] Replace every user-facing WhatsApp support control with a Telegram support control targeting https://t.me/EADSEARNPRO.
-- [ ] Add regression tests, mobile/desktop checks, production build validation, and redeploy the fixed current release to ads-earning-kappa.vercel.app.
+- [x] Add regression tests, mobile/desktop checks, production build validation, and redeploy the fixed current release to ads-earning-kappa.vercel.app.
