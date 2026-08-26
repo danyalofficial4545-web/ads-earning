@@ -46,8 +46,12 @@ describe("Package Earn Pro server rules", () => {
     expect(referralLimitCredit(1000, 25)).toBe(250);
   });
 
-  it("reserves the wallet amount and resets the one-time withdrawal limit at request time", () => {
-    expect(applyWithdrawalRequest(1200, 500)).toEqual({
+  it("reserves only the requested wallet amount and withdrawal-limit amount", () => {
+    expect(applyWithdrawalRequest(6000, 5000, 100)).toEqual({
+      balancePkr: 5900,
+      withdrawalLimitPkr: 4900,
+    });
+    expect(applyWithdrawalRequest(1200, 500, 500)).toEqual({
       balancePkr: 700,
       withdrawalLimitPkr: 0,
     });

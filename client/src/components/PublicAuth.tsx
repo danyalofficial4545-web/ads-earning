@@ -154,8 +154,8 @@ export function PublicAuth({
         </div>
         <LanguageToggle language={language} onChange={setLanguage} />
       </div>
-      <main className="mx-auto grid max-w-4xl overflow-hidden rounded-3xl border border-white/10 bg-[#17342d]/90 shadow-2xl shadow-black/25 md:grid-cols-[1fr_.62fr]">
-        <section className="p-5 sm:p-8">
+      <main className="mx-auto grid w-full max-w-4xl overflow-hidden rounded-3xl border border-white/10 bg-[#17342d]/90 shadow-2xl shadow-black/25 md:grid-cols-[1fr_.62fr]">
+        <section className="min-w-0 p-4 sm:p-8">
           <div className="flex rounded-xl border border-white/10 bg-slate-950/20 p-1">
             <button type="button" onClick={() => setMode("signIn")} className={`flex-1 rounded-lg py-2 text-sm font-bold ${mode === "signIn" ? "bg-amber-300 text-slate-950" : "text-slate-300"}`}>{t("signIn")}</button>
             <button type="button" onClick={() => setMode("signUp")} className={`flex-1 rounded-lg py-2 text-sm font-bold ${mode === "signUp" ? "bg-amber-300 text-slate-950" : "text-slate-300"}`}>{t("signUp")}</button>
@@ -197,8 +197,9 @@ export function PublicAuth({
               <VisualCodeCheck t={t} imageData={signInCaptcha.data?.imageData} answer={challengeAnswer} onAnswer={setChallengeAnswer} onRefresh={() => { setChallengeAnswer(""); signInCaptcha.refetch(); }} />
               <FieldError>{signInErrors.general}</FieldError>
               <button
+                type="submit"
                 disabled={busy}
-                className="flex h-11 w-full items-center justify-center rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-60"
+                className="flex min-h-12 w-full items-center justify-center rounded-xl bg-gradient-to-r from-red-600 to-red-500 px-5 py-3 text-base font-black tracking-wide text-white shadow-lg shadow-red-950/40 transition duration-200 hover:-translate-y-0.5 hover:from-red-500 hover:to-red-400 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#17342d] active:translate-y-0 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {busy ? (
                   <Loader2 className="size-4 animate-spin" />
@@ -215,10 +216,10 @@ export function PublicAuth({
             <label><span className="field-label">{t("referralInvite")}</span><input className="field" value={signUp.referralCode} onChange={event => setSignUp({ ...signUp, referralCode: event.target.value.toUpperCase() })} /></label>
             <VisualCodeCheck t={t} imageData={signUpCaptcha.data?.imageData} answer={signUpChallengeAnswer} onAnswer={setSignUpChallengeAnswer} onRefresh={() => { setSignUpChallengeAnswer(""); signUpCaptcha.refetch(); }} />
             <FieldError>{signUpErrors.general}</FieldError>
-            <button disabled={busy} className="flex h-11 w-full items-center justify-center rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-60">{busy ? <Loader2 className="size-4 animate-spin" /> : t("createAccount")}</button>
+            <button type="submit" disabled={busy} className="flex min-h-12 w-full items-center justify-center rounded-xl bg-gradient-to-r from-red-600 to-red-500 px-5 py-3 text-base font-black tracking-wide text-white shadow-lg shadow-red-950/40 transition duration-200 hover:-translate-y-0.5 hover:from-red-500 hover:to-red-400 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#17342d] active:translate-y-0 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-60">{busy ? <Loader2 className="size-4 animate-spin" /> : t("createAccount")}</button>
           </form>}
         </section>
-        <aside className="flex flex-col items-center justify-center border-t border-white/10 bg-slate-950/20 p-7 text-center md:border-l md:border-t-0">
+        <aside className="flex min-w-0 flex-col items-center justify-center border-t border-white/10 bg-slate-950/20 p-5 text-center sm:p-7 md:border-l md:border-t-0">
           <GoogleMark />
           <p className="mt-5 text-sm font-bold text-white">
             {t("googleContinue")}
@@ -227,8 +228,9 @@ export function PublicAuth({
             {t("googleAccountHelp")}
           </p>
           <button
-            onClick={startLogin}
-            className="mt-6 flex h-11 w-full max-w-xs items-center justify-center gap-2 rounded-xl bg-white text-sm font-bold text-slate-800 transition active:scale-[.97]"
+            type="button"
+            onClick={() => startLogin()}
+            className="mt-6 flex min-h-12 w-full max-w-xs items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-black text-slate-800 shadow-lg shadow-black/20 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#17342d] active:translate-y-0 active:scale-[.98]"
           >
             <GoogleMark compact />
             {t("googleContinue")}

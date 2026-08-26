@@ -51,8 +51,15 @@ export function referralLimitCredit(
   return Math.floor((packagePricePkr * commissionPercent) / 100);
 }
 
-export function applyWithdrawalRequest(balancePkr: number, amountPkr: number) {
-  return { balancePkr: balancePkr - amountPkr, withdrawalLimitPkr: 0 };
+export function applyWithdrawalRequest(
+  balancePkr: number,
+  withdrawalLimitPkr: number,
+  amountPkr: number
+) {
+  return {
+    balancePkr: balancePkr - amountPkr,
+    withdrawalLimitPkr: Math.max(0, withdrawalLimitPkr - amountPkr),
+  };
 }
 
 export function refundRejectedWithdrawal(

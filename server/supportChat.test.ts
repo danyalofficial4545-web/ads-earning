@@ -32,7 +32,8 @@ describe("AI support system contracts", () => {
     expect(home).toContain('location === "/support"');
     expect(app).toContain('<Route path={"/support"} component={Home} />');
     expect(home).toContain("SupportChat");
-    expect(home).toContain("wa.me/923269337570");
+    expect(home).toContain("https://t.me/EADSEARNPRO");
+    expect(home).toContain("telegramSupport");
     expect(admin).toContain('supportChats: "/admin/support"');
     expect(admin).toContain("trpc.admin.supportChats.useQuery");
     expect(chat).toContain("Withdrawal issue");

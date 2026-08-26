@@ -354,3 +354,13 @@
 ### Current request: Diagnose Vercel domain version mismatch
 
 - [x] Inspect `ads-earning-kappa.vercel.app/?ref=danyal955163`, identify its actual Vercel project/deployment and compare it with the current AI Support release; align the existing domain safely if it is linked to the wrong project or deployment.
+
+### Current request: Authentication, withdrawal, and Telegram support fixes
+
+- [x] Make the public Sign In control a clearly visible, responsive, accessible button with premium styling and mobile-safe layout.
+- [x] Audit and fix manual account creation validation and submission behavior across Android/iOS browser layouts without changing account security rules.
+- [x] Audit Google OAuth flow and preserve production-origin redirect handling so Google sign-in is available to all users with cookies enabled.
+- [x] Deduct only the requested withdrawal amount from withdrawal limit, preserving any remaining limit through pending, approved, and rejected request states.
+- [x] Show the withdrawal limit only to members with an active package, using a clear Withdrawal section label.
+- [x] Replace every user-facing WhatsApp support control with a Telegram support control targeting https://t.me/EADSEARNPRO.
+- [ ] Add regression tests, mobile/desktop checks, production build validation, and redeploy the fixed current release to ads-earning-kappa.vercel.app.

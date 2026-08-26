@@ -1270,7 +1270,11 @@ export const appRouter = router({
           status: "pending",
         });
         const withdrawalId = Number(result[0].insertId);
-        const reserved = applyWithdrawalRequest(profile.balancePkr, amountPkr);
+        const reserved = applyWithdrawalRequest(
+          profile.balancePkr,
+          profile.withdrawalLimitPkr,
+          amountPkr
+        );
         const completedChannelRewardWithdrawal =
           hasPendingChannelReward && amountPkr === WHATSAPP_JOIN_REWARD_PKR;
         await db

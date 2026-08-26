@@ -8,7 +8,7 @@ describe("dual Google and Gmail account entry", () => {
 
     expect(publicEntry).toContain("trpc.auth.signIn.useMutation");
     expect(publicEntry).toContain("trpc.auth.register.useMutation");
-    expect(publicEntry).toContain("onClick={startLogin}");
+    expect(publicEntry).toContain("onClick={() => startLogin()}");
     expect(publicEntry).toContain('mode === "signUp"');
     expect(publicEntry).toContain("VisualCodeCheck");
   });

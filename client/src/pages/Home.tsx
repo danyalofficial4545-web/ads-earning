@@ -1229,7 +1229,7 @@ function Workspace({
       <div className="mt-4">{content[page as Page]}</div>
       <div className="pointer-events-none fixed bottom-20 right-4 z-40 flex flex-col items-end gap-2 lg:bottom-6 lg:right-6">
         <button type="button" onClick={() => setPage("support")} className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-red-600 px-4 py-3 text-sm font-black text-white shadow-xl shadow-red-950/40 transition hover:bg-red-500 active:scale-95" aria-label={t("help")}><CircleHelp className="size-5" />{t("help")}</button>
-        <a href="https://wa.me/923269337570" target="_blank" rel="noreferrer" className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-emerald-500 px-4 py-3 text-sm font-black text-white shadow-xl shadow-emerald-950/40 transition hover:bg-emerald-400 active:scale-95" aria-label={t("whatsappSupport")}><MessageCircle className="size-5" />{t("whatsappSupport")}</a>
+        <a href="https://t.me/EADSEARNPRO" target="_blank" rel="noreferrer" className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-sky-500 px-4 py-3 text-sm font-black text-white shadow-xl shadow-sky-950/40 transition hover:bg-sky-400 active:scale-95" aria-label={t("telegramSupport")}><Send className="size-5" />{t("telegramSupport")}</a>
       </div>
       <p className="mt-8 text-center text-[11px] text-slate-500">
         {t("brand")} ·{" "}
@@ -2087,6 +2087,12 @@ function Withdrawal({ t, profile, showRewardWithdrawalPrompt, activePackage, has
           </p>
         ) : (
           <>
+        {activePackage && (
+          <div className="mb-5 flex items-center justify-between gap-4 rounded-xl border border-amber-300/30 bg-amber-300/10 p-4">
+            <p className="text-sm font-bold text-amber-100">{t("yourWithdrawalLimit")}</p>
+            <strong className="text-lg font-black text-amber-300">PKR {Number(profile.withdrawalLimitPkr ?? 0).toLocaleString()}</strong>
+          </div>
+        )}
         {showRewardWithdrawalPrompt && (
           <p className="mb-5 flex items-center gap-2 rounded-xl border border-emerald-300/25 bg-emerald-300/10 p-3 text-sm font-semibold text-emerald-50">
             <Gift className="size-4 shrink-0 text-amber-300" />

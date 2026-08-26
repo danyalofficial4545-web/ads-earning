@@ -30,8 +30,8 @@ describe("router accounting flows", () => {
     mocks.sendTelegramAlert.mockResolvedValue(true);
   });
 
-  it("deducts wallet balance immediately and reserves the one-time withdrawal limit", async () => {
-    mocks.ensureProfile.mockResolvedValue({ ...memberProfile, balancePkr: 1000, withdrawalLimitPkr: 500 });
+  it("deducts wallet balance immediately and reserves only the requested withdrawal limit", async () => {
+    mocks.ensureProfile.mockResolvedValue({ ...memberProfile, balancePkr: 6000, withdrawalLimitPkr: 5000 });
     mocks.getActivePackageForUser.mockResolvedValue({ id: 1 });
     const updates: Array<{ table: unknown; values: any }> = [];
     const inserts: Array<{ table: unknown; values: any }> = [];
@@ -41,10 +41,10 @@ describe("router accounting flows", () => {
     };
     mocks.getDb.mockResolvedValue(db);
 
-    await appRouter.createCaller(context()).withdrawal.create({ currency: "PKR", amount: 500, walletType: "JazzCash", accountName: "Test Account", accountDetails: "03001234567" });
+    await appRouter.createCaller(context()).withdrawal.create({ currency: "PKR", amount: 100, walletType: "JazzCash", accountName: "Test Account", accountDetails: "03001234567" });
 
-    expect(updates[0]?.values).toEqual({ balancePkr: 500, withdrawalLimitPkr: 0 });
-    expect(inserts[1]?.values).toMatchObject({ direction: "debit", status: "pending", amountPkr: 500, referenceId: 44 });
+    expect(updates[0]?.values).toEqual({ balancePkr: 5900, withdrawalLimitPkr: 4900 });
+    expect(inserts[1]?.values).toMatchObject({ direction: "debit", status: "pending", amountPkr: 100, referenceId: 44 });
     expect(inserts[0]?.values).toMatchObject({ walletType: "JazzCash", accountName: "Test Account", accountDetails: "03001234567" });
     expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("💸 WITHDRAW REQUEST"));
     expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("03001234567"));
