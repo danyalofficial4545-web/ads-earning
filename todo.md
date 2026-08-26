@@ -353,4 +353,4 @@
 
 ### Current request: Diagnose Vercel domain version mismatch
 
-- [ ] Inspect `ads-earning-kappa.vercel.app/?ref=danyal955163`, identify its actual Vercel project/deployment and compare it with the current AI Support release; align the existing domain safely if it is linked to the wrong project or deployment.
+- [x] Inspect `ads-earning-kappa.vercel.app/?ref=danyal955163`, identify its actual Vercel project/deployment and compare it with the current AI Support release; align the existing domain safely if it is linked to the wrong project or deployment.
