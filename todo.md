@@ -350,3 +350,7 @@
 ### Current request: Redeploy current version to Vercel
 
 - [x] Synchronize the current AI Support checkpoint with the linked GitHub main/Vercel project, redeploy it to the existing Vercel production domain, and verify that the current version—not the rollback version—is live.
+
+### Current request: Diagnose Vercel domain version mismatch
+
+- [ ] Inspect `ads-earning-kappa.vercel.app/?ref=danyal955163`, identify its actual Vercel project/deployment and compare it with the current AI Support release; align the existing domain safely if it is linked to the wrong project or deployment.
