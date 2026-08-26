@@ -214,6 +214,15 @@ export const supportTickets = mysqlTable("supportTickets", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => [index("tickets_user_status_idx").on(table.userId, table.status)]);
 
+export const supportChatMessages = mysqlTable("supportChatMessages", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  role: mysqlEnum("role", ["user", "assistant", "admin"]).notNull(),
+  content: text("content").notNull(),
+  aiGenerated: boolean("aiGenerated").notNull().default(false),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [index("support_chat_user_created_idx").on(table.userId, table.createdAt)]);
+
 export const broadcasts = mysqlTable("broadcasts", {
   id: int("id").autoincrement().primaryKey(),
   title: varchar("title", { length: 140 }).notNull(),

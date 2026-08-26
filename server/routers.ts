@@ -13,6 +13,7 @@ import {
   paymentAccounts,
   profiles,
   supportTickets,
+  supportChatMessages,
   transactions,
   userPackages,
   users,
@@ -30,6 +31,7 @@ import {
 } from "./db";
 import { clientIpFromHeaders, createHumanChallenge, hashSecurityValue, matchesHumanChallenge } from "./security";
 import { sendTelegramAlert } from "./telegram";
+import { invokeLLM } from "./_core/llm";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { systemRouter } from "./_core/systemRouter";
 import { COOKIE_NAME } from "@shared/const";
@@ -70,6 +72,32 @@ import {
 function fail(message: string, code: TRPCError["code"] = "BAD_REQUEST"): never {
   throw new TRPCError({ code, message });
 }
+
+const SUPPORT_KNOWLEDGE_BASE = `You are AdEarn AI Support. Answer in the user's language, usually Urdu/Roman Urdu. Be concise, respectful, and never promise admin approval or guaranteed earnings. Knowledge base:
+- Withdrawal issue: Explain that the member should have an active package and eligible withdrawal limit; referral credits are handled by the platform according to its rules. Ask for username when account checking is needed.
+- Deposit issue: Ask for username and transaction ID. If sent through Easypaisa/JazzCash, advise waiting 5-10 minutes while the admin reviews it. Tell them to copy the transaction ID using the copy button.
+- Package help: Check wallet balance. If it covers the package price, use Buy directly; if short, deposit the displayed shortfall, then buy.
+- Ads help: Buy an active package first, open Ads/Tasks, watch the package-entitled five-second ads, and claim the reward after the timer.
+If the question needs account access or approval, say that an administrator can review it and ask for the username and relevant transaction ID. Do not invent account balances, approvals, or transaction status.`;
+
+const supportFallback = (message: string) => {
+  const text = message.toLowerCase();
+  if (text.includes("withdraw") || text.includes("ودڈرا") || text.includes("invite") || text.includes("انوا"))
+    return "اپنا یوزرنیم بھیج دیں۔ Withdrawal کے لیے active package اور eligible withdrawal limit ضروری ہے۔ اگر account check چاہیے تو اپنا username اور متعلقہ تفصیل بھیجیں۔";
+  if (text.includes("deposit") || text.includes("ڈیپازٹ") || text.includes("transaction") || text.includes("trx") || text.includes("tid"))
+    return "براہِ کرم اپنا username اور Transaction ID بھیجیں۔ Easypaisa/JazzCash سے payment کے بعد 5–10 منٹ انتظار کریں؛ Transaction ID copy button سے copy کر کے یہاں بھیج سکتے ہیں۔";
+  if (text.includes("package") || text.includes("پیکیج") || text.includes("buy") || text.includes("خرید"))
+    return "Wallet میں balance چیک کریں۔ اگر balance package price کے برابر ہو تو Buy پر click کریں۔ اگر کم ہو تو جتنا shortfall دکھایا جائے اتنا deposit کر کے package خریدیں۔";
+  if (text.includes("ad") || text.includes("ads") || text.includes("اشتہار") || text.includes("watch"))
+    return "پہلے active package خریدیں، پھر Ads/Tasks page کھولیں۔ آپ کے package کے مطابق ads دکھیں گے؛ ہر ad پانچ سیکنڈ دیکھ کر reward claim کریں۔";
+  return "میں آپ کی مدد کے لیے حاضر ہوں۔ اپنا سوال واضح لکھیں یا نیچے موجود quick reply منتخب کریں۔ Account check کے لیے اپنا username اور متعلقہ Transaction ID بھیج دیں۔";
+};
+
+const contentToText = (content: unknown) => {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) return content.filter((part: any) => part?.type === "text").map((part: any) => part.text).join(" ").trim();
+  return "";
+};
 
 const automaticAdPlacementSchema = z.enum([
   "signup",
@@ -1377,6 +1405,34 @@ export const appRouter = router({
         .where(eq(supportTickets.userId, user.id))
         .orderBy(desc(supportTickets.updatedAt));
     }),
+    chatHistory: protectedProcedure.query(async ({ ctx }) => {
+      const { user } = await getActor(ctx);
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      return db.select().from(supportChatMessages).where(eq(supportChatMessages.userId, user.id)).orderBy(asc(supportChatMessages.createdAt)).limit(50);
+    }),
+    ask: protectedProcedure
+      .input(z.object({ message: z.string().trim().min(2).max(2000) }))
+      .mutation(async ({ ctx, input }) => {
+        const { user } = await getActor(ctx);
+        const db = await getDb();
+        if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        await db.insert(supportChatMessages).values({ userId: user.id, role: "user", content: input.message, aiGenerated: false });
+        const recent = await db.select().from(supportChatMessages).where(eq(supportChatMessages.userId, user.id)).orderBy(desc(supportChatMessages.createdAt)).limit(20);
+        const conversation = recent.reverse().map(message => ({ role: message.role === "admin" ? "assistant" as const : message.role, content: message.content }));
+        let answer = supportFallback(input.message);
+        try {
+          const response = await invokeLLM({
+            messages: [{ role: "system", content: SUPPORT_KNOWLEDGE_BASE }, ...conversation],
+          });
+          const generated = contentToText(response.choices?.[0]?.message?.content);
+          if (generated) answer = generated.slice(0, 4000);
+        } catch (error) {
+          console.warn("[Support] AI response unavailable; using knowledge-base fallback.", error);
+        }
+        await db.insert(supportChatMessages).values({ userId: user.id, role: "assistant", content: answer, aiGenerated: true });
+        return { answer };
+      }),
   }),
   admin: router({
     dashboard: protectedProcedure.query(async ({ ctx }) => {
@@ -1875,6 +1931,26 @@ export const appRouter = router({
         .from(supportTickets)
         .orderBy(desc(supportTickets.updatedAt));
     }),
+    supportChats: protectedProcedure
+      .input(z.object({ search: z.string().trim().max(120).optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        await getAdmin(ctx);
+        const db = await getDb();
+        if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        const memberRows = await db.select({ userId: users.id, email: users.email, username: profiles.username, balancePkr: profiles.balancePkr, withdrawalLimitPkr: profiles.withdrawalLimitPkr }).from(users).innerJoin(profiles, eq(users.id, profiles.userId));
+        const filteredMembers = input?.search ? memberRows.filter(member => `${member.username ?? ""} ${member.email ?? ""}`.toLowerCase().includes(input.search!.toLowerCase())) : memberRows;
+        const rows = await Promise.all(filteredMembers.map(async member => ({ ...member, activePackage: (await getActivePackageForUser(member.userId))?.plan.name ?? null, messages: await db.select().from(supportChatMessages).where(eq(supportChatMessages.userId, member.userId)).orderBy(asc(supportChatMessages.createdAt)).limit(100) })));
+        return rows.filter(row => row.messages.length > 0);
+      }),
+    supportChatReply: protectedProcedure
+      .input(z.object({ userId: z.number().int().positive(), content: z.string().trim().min(2).max(4000) }))
+      .mutation(async ({ ctx, input }) => {
+        await getAdmin(ctx);
+        const db = await getDb();
+        if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+        await db.insert(supportChatMessages).values({ userId: input.userId, role: "admin", content: input.content, aiGenerated: false });
+        return { success: true };
+      }),
     respondTicket: protectedProcedure
       .input(
         z.object({

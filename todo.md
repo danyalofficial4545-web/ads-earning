@@ -338,3 +338,11 @@
 ### Current request: Audit and complete pasted rebuild prompt
 
 - [x] Audit all pasted package, rewarded-ad, wallet-first purchase, premium red design, copy controls, admin-room navigation, Adsterra head scripts, and validation requirements against the current implementation; fix only missing or inconsistent behavior, run tests/build/UI checks, and publish the same existing domain.
+
+### Current request: AI Support / Help System
+
+- [x] Add a red floating Help button and green floating WhatsApp support button with the configured direct wa.me destination on the authenticated website shell.
+- [x] Add persistent AI support conversations with the requested bilingual knowledge-base answers, quick replies, friendly fallback behavior, and server-side LLM integration.
+- [x] Add the `/support` AI chat experience while preserving the existing ticket/support history flow.
+- [x] Add protected `/admin/support` Support Chats room with username search, wallet/package context, AI responses, and administrator replies.
+- [x] Add schema migration, focused tests, type-check, production build, UI smoke checks, and publish the same existing domain without changing financial or ad logic.

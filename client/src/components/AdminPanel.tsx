@@ -10,6 +10,7 @@ import {
   CreditCard,
   FileText,
   Loader2,
+  LifeBuoy,
   Megaphone,
   Pencil,
   PlaySquare,
@@ -30,7 +31,8 @@ type Tab =
   | "broadcasts"
   | "users"
   | "settings"
-  | "tickets";
+  | "tickets"
+  | "supportChats";
 const tabItems: Array<{ id: Tab; label: string; icon: typeof ClipboardCheck }> =
   [
     { id: "depositHistory", label: "depositHistory", icon: CreditCard },
@@ -42,6 +44,7 @@ const tabItems: Array<{ id: Tab; label: string; icon: typeof ClipboardCheck }> =
     { id: "users", label: "users", icon: Users },
     { id: "settings", label: "settings", icon: Settings2 },
     { id: "tickets", label: "tickets", icon: TicketCheck },
+    { id: "supportChats", label: "supportChats", icon: LifeBuoy },
   ];
 const adminRoutes: Record<Tab, string> = {
   users: "/admin/users",
@@ -53,6 +56,7 @@ const adminRoutes: Record<Tab, string> = {
   broadcasts: "/admin/broadcasts",
   settings: "/admin/settings",
   tickets: "/admin/tickets",
+  supportChats: "/admin/support",
 };
 const routeTabs: Record<string, Tab> = {
   "/admin/users": "users",
@@ -65,6 +69,7 @@ const routeTabs: Record<string, Tab> = {
   "/admin/broadcasts": "broadcasts",
   "/admin/settings": "settings",
   "/admin/tickets": "tickets",
+  "/admin/support": "supportChats",
 };
 const money = (amount: number) => `PKR ${amount.toLocaleString()}`;
 const dateTime = (value: Date | string) =>
@@ -184,6 +189,7 @@ export function AdminPanel({ t }: { t: (key: any) => string }) {
           {activeTab === "users" && <UserManagement t={t} />}
           {activeTab === "settings" && <GlobalSettings t={t} />}
           {activeTab === "tickets" && <Tickets t={t} />}
+          {activeTab === "supportChats" && <SupportChats t={t} />}
         </section>
       </div>
     </>
@@ -1086,6 +1092,47 @@ function Tickets({ t }: any) {
             <Empty>{t("selectTicket")}</Empty>
           )}
         </div>
+      </div>
+    </>
+  );
+}
+
+function SupportChats({ t }: any) {
+  const [search, setSearch] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [reply, setReply] = useState("");
+  const queryInput = useMemo(() => ({ search: search.trim() || undefined }), [search]);
+  const list = trpc.admin.supportChats.useQuery(queryInput);
+  const send = trpc.admin.supportChatReply.useMutation({
+    onSuccess: () => {
+      toast.success(t("saved"));
+      setReply("");
+      list.refetch();
+    },
+    onError: () => toast.error(t("operationFailed")),
+  });
+  const selected = list.data?.find((chat: any) => chat.userId === selectedUserId) ?? list.data?.[0];
+  return (
+    <>
+      <Heading title={t("supportChats")} description={t("supportChatsText")} />
+      <div className="mb-4 flex gap-2">
+        <input className="field" value={search} onChange={e => setSearch(e.target.value)} placeholder={t("searchSupportChats")} aria-label={t("searchSupportChats")} />
+      </div>
+      <div className="grid gap-4 xl:grid-cols-[.75fr_1.25fr]">
+        <div className="panel space-y-2">
+          {list.isLoading ? <Loader2 className="size-5 animate-spin text-amber-300" /> : list.data?.length ? list.data.map((chat: any) => {
+            const last = chat.messages[chat.messages.length - 1];
+            return <button type="button" key={chat.userId} onClick={() => setSelectedUserId(chat.userId)} className={`w-full rounded-xl border p-3 text-left transition ${selected?.userId === chat.userId ? "border-red-400/60 bg-red-400/10" : "border-white/10 bg-white/5 hover:border-red-400/30"}`}>
+              <div className="flex items-center justify-between gap-2"><span className="font-bold">{chat.username ?? chat.email ?? `User ${chat.userId}`}</span><span className="text-[10px] text-slate-400">{chat.messages.length}</span></div>
+              <p className="mt-1 truncate text-xs text-slate-400">{last?.content}</p>
+            </button>;
+          }) : <Empty>{t("noSupportChats")}</Empty>}
+        </div>
+        {selected ? <div className="panel">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3"><div><p className="font-bold">{selected.username ?? selected.email}</p><p className="text-xs text-slate-400">{selected.email ?? ""}</p></div><div className="text-right text-xs text-slate-300"><p>{t("balance")}: {money(selected.balancePkr)}</p><p>{t("activePackage")}: {selected.activePackage ?? t("noPackage")}</p></div></div>
+          <div className="mt-4 max-h-[420px] space-y-3 overflow-y-auto pr-1">{selected.messages.map((message: any) => <div key={message.id} className={`rounded-xl p-3 text-sm ${message.role === "user" ? "ml-6 bg-red-600/20 text-red-50" : message.role === "admin" ? "mr-6 bg-amber-300/10 text-amber-50" : "mr-6 bg-white/10 text-slate-100"}`}><p className="mb-1 text-[10px] font-bold uppercase text-slate-400">{message.role === "user" ? t("member") : message.role === "admin" ? t("administrator") : "AI Support"}</p>{message.content}</div>)}</div>
+          <form className="mt-4 flex gap-2" onSubmit={e => { e.preventDefault(); if (reply.trim()) send.mutate({ userId: selected.userId, content: reply.trim() }); }}><input className="field" value={reply} onChange={e => setReply(e.target.value)} placeholder={t("adminSupportReply")} /><button type="submit" disabled={send.isPending || !reply.trim()} className="rounded-xl bg-red-600 px-4 text-sm font-bold text-white disabled:opacity-50">{t("sendReply")}</button></form>
+        </div> : <Empty>{t("selectSupportChat")}</Empty>}
       </div>
     </>
   );

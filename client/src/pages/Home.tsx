@@ -5,6 +5,7 @@ import { AdminPanel } from "@/components/AdminPanel";
 import { GoogleOnboarding, PublicAuth } from "@/components/PublicAuth";
 import { WorkspaceAccessGate } from "@/components/WorkspaceAccessGate";
 import { AdsTasks } from "@/components/AdsTasks";
+import { SupportChat } from "@/components/SupportChat";
 import { AdminAdGate, type AutomaticAdRequest } from "@/components/AdminAdGate";
 import { BrandLogo } from "@/components/BrandLogo";
 import { trpc } from "@/lib/trpc";
@@ -86,6 +87,7 @@ type Page =
   | "history"
   | "invite"
   | "support"
+  | "ticketSupport"
   | "admin";
 
 const nav: Array<{
@@ -180,8 +182,8 @@ export default function Home() {
     document.documentElement.dir = language === "ur" ? "rtl" : "ltr";
   }, [language]);
   useEffect(() => {
-    if (location === "/admin" || location.startsWith("/admin/"))
-      setPage("admin");
+    if (location === "/admin" || location.startsWith("/admin/")) setPage("admin");
+    else if (location === "/support") setPage("support");
   }, [location]);
 
   if (loading || (isAuthenticated && session.isLoading))
@@ -221,7 +223,8 @@ export default function Home() {
   const selectPage = (next: Page) => {
     setPage(next);
     if (next === "admin" && !location.startsWith("/admin")) navigate("/admin");
-    if (next !== "admin" && location.startsWith("/admin")) navigate("/");
+    else if (next === "support" && location !== "/support") navigate("/support");
+    else if (next !== "admin" && next !== "support" && (location.startsWith("/admin") || location === "/support")) navigate("/");
     setMobileNavOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -1204,7 +1207,8 @@ function Workspace({
     earn: <AdsTasks t={t} onDone={invalidateCore} onRequestAdminAd={input => requestAutomaticAd(input.placement, input.onComplete, input.sequence)} />,
     history: <TransactionHistory t={t} />,
     invite: <Referral t={t} />,
-    support: <Support t={t} />,
+    support: <SupportChat t={t} onOpenTickets={() => setPage("ticketSupport")} />,
+    ticketSupport: <Support t={t} />,
     admin: isAdmin ? <AdminPanel t={t} /> : <Empty text={language === "ur" ? "یہ صفحہ صرف ایڈمن کے لیے ہے۔" : "This page is restricted to administrators."} />,
   };
   return (
@@ -1223,6 +1227,10 @@ function Workspace({
         />
       )}
       <div className="mt-4">{content[page as Page]}</div>
+      <div className="pointer-events-none fixed bottom-20 right-4 z-40 flex flex-col items-end gap-2 lg:bottom-6 lg:right-6">
+        <button type="button" onClick={() => setPage("support")} className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-red-600 px-4 py-3 text-sm font-black text-white shadow-xl shadow-red-950/40 transition hover:bg-red-500 active:scale-95" aria-label={t("help")}><CircleHelp className="size-5" />{t("help")}</button>
+        <a href="https://wa.me/923269337570" target="_blank" rel="noreferrer" className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-emerald-500 px-4 py-3 text-sm font-black text-white shadow-xl shadow-emerald-950/40 transition hover:bg-emerald-400 active:scale-95" aria-label={t("whatsappSupport")}><MessageCircle className="size-5" />{t("whatsappSupport")}</a>
+      </div>
       <p className="mt-8 text-center text-[11px] text-slate-500">
         {t("brand")} ·{" "}
         {language === "ur" ? "محفوظ ورک اسپیس" : "Secure member workspace"}
