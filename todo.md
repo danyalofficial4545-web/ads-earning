@@ -349,4 +349,4 @@
 
 ### Current request: Redeploy current version to Vercel
 
-- [ ] Synchronize the current AI Support checkpoint with the linked GitHub main/Vercel project, redeploy it to the existing Vercel production domain, and verify that the current version—not the rollback version—is live.
+- [x] Synchronize the current AI Support checkpoint with the linked GitHub main/Vercel project, redeploy it to the existing Vercel production domain, and verify that the current version—not the rollback version—is live.
