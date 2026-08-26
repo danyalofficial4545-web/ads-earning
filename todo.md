@@ -346,3 +346,7 @@
 - [x] Add the `/support` AI chat experience while preserving the existing ticket/support history flow.
 - [x] Add protected `/admin/support` Support Chats room with username search, wallet/package context, AI responses, and administrator replies.
 - [x] Add schema migration, focused tests, type-check, production build, UI smoke checks, and publish the same existing domain without changing financial or ad logic.
+
+### Current request: Redeploy current version to Vercel
+
+- [ ] Synchronize the current AI Support checkpoint with the linked GitHub main/Vercel project, redeploy it to the existing Vercel production domain, and verify that the current version—not the rollback version—is live.
