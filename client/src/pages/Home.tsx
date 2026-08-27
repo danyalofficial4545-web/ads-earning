@@ -1755,8 +1755,6 @@ function GroupedFinancialHistory({ rows, t, kind }: { rows: any[]; t: (key: Tran
                       {kind === "deposit" && item.senderAccountName && <CopyValue value={item.senderAccountName} label={t("senderAccountName")} />}
                       {kind === "deposit" && item.senderAccountNumber && <CopyValue value={item.senderAccountNumber} label={t("senderAccountNumber")} />}
                       {kind === "deposit" && item.transactionId && <CopyValue value={item.transactionId} label={t("transactionId")} />}
-                      {kind === "withdrawal" && item.accountName && <CopyValue value={item.accountName} label={t("walletAccountName")} />}
-                      {kind === "withdrawal" && item.accountDetails && <CopyValue value={item.accountDetails} label={t("walletNumber")} />}
                     </div>
                   </div>
                   <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${statusClass(item.status)}`}>{t(statusLabels[item.status] ?? "status")}</span>

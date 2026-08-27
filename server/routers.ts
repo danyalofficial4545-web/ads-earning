@@ -890,7 +890,9 @@ export const appRouter = router({
         .from(adSessions)
         .where(and(eq(adSessions.userId, user.id), eq(adSessions.dayKey, dayKey)));
       const quota = activePackage ? getDailyAdQuota(activePackage.plan.pricePkr) : 0;
-      const claimedCount = sessions.filter(session => session.claimedAt).length;
+      const claimedSlotIds = new Set(
+        sessions.filter(session => session.claimedAt).map(session => session.adId)
+      );
       return {
         ads: Array.from({ length: quota }, (_, index) => {
           const slot = index + 1;
@@ -900,10 +902,10 @@ export const appRouter = router({
             contentType: "rewarded" as const,
             rewardPkr: getDailyAdRewardPkr(activePackage?.plan.pricePkr ?? 0),
             timerSeconds: REWARDED_AD_TIMER_SECONDS,
-            state: slot <= claimedCount ? "watched" as const : "unlocked" as const,
+            state: claimedSlotIds.has(slot) ? "watched" as const : "unlocked" as const,
           };
         }),
-        watched: claimedCount,
+        watched: claimedSlotIds.size,
         total: quota,
         resetAt: getNextPakistanMidnight(),
         activePackage: activePackage
@@ -932,9 +934,16 @@ export const appRouter = router({
           .from(adSessions)
           .where(and(eq(adSessions.userId, user.id), eq(adSessions.dayKey, dayKey)));
         const quota = getDailyAdQuota(active.plan.pricePkr);
-        const claimedCount = sessions.filter(session => session.claimedAt).length;
-        if (input.slot > quota || sessions.some(session => session.adId === input.slot && session.claimedAt))
+        const claimedSlotIds = new Set(
+          sessions.filter(session => session.claimedAt).map(session => session.adId)
+        );
+        const nextSlot = Array.from({ length: quota }, (_, index) => index + 1).find(
+          slot => !claimedSlotIds.has(slot)
+        );
+        if (!nextSlot || input.slot > quota || claimedSlotIds.has(input.slot))
           fail("This rewarded ad has already been watched today or is not available.", "FORBIDDEN");
+        if (input.slot !== nextSlot)
+          fail(`Please complete Ad ${nextSlot} before starting another ad.`, "FORBIDDEN");
         const abandonedSessions = sessions.filter(
           session => !session.claimedAt && !session.invalidatedAt
         );
@@ -1248,11 +1257,12 @@ export const appRouter = router({
       const db = await getDb();
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-      return db
+      const rows = await db
         .select()
         .from(withdrawals)
         .where(eq(withdrawals.userId, user.id))
         .orderBy(desc(withdrawals.createdAt));
+      return rows.map(({ accountName: _accountName, accountDetails: _accountDetails, ...row }) => row);
     }),
   }),
   referral: router({

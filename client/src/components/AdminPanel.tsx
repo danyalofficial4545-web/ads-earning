@@ -474,7 +474,11 @@ function Approvals({ t, onChange, mode }: any) {
                       </p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <CopyRecordValue label={t("walletAccountName")} value={row.accountName} />
-                        <CopyRecordValue label={t("walletNumber")} value={row.accountDetails} />
+                        <CopyRecordValue label={t("copyNumber")} value={row.accountDetails} />
+                        <CopyRecordValue
+                          label={t("copyDetails")}
+                          value={[row.walletType, row.accountName, row.accountDetails, `${row.amountPkr} ${row.currency}`].filter(Boolean).join("\n")}
+                        />
                       </div>
                     </div>
                     <Pill status={row.status}>{row.status}</Pill>

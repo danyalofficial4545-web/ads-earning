@@ -1,6 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { shouldAutoClaimAd } from "@/lib/adTimer";
 import { friendlyMessages } from "@/lib/formValidation";
+import { UNAUTHED_ERR_MSG } from "@shared/const";
 import { CheckCircle2, Clock3, Loader2, Play } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -28,6 +29,9 @@ export function AdsTasks({
   const retryMessage = language === "ur"
     ? "براہِ کرم پورا 5 سیکنڈ کا اشتہار دیکھیں، پھر دوبارہ کوشش کریں۔"
     : "Please watch full ad, Please try again";
+  const expiredSessionMessage = language === "ur"
+    ? "آپ کا سائن اِن سیشن ختم ہو گیا ہے۔ براہِ کرم دوبارہ سائن اِن کریں۔"
+    : "Your sign-in session has ended. Please sign in again.";
   const start = trpc.earning.startAd.useMutation({
     onSuccess: data => {
       setSession(data);
@@ -35,7 +39,13 @@ export function AdsTasks({
       setAutoClaimAttempted(false);
       if (data.restarted) toast.error(retryMessage);
     },
-    onError: () => toast.error(friendlyMessages.requestFailed),
+    onError: error => {
+      if (error.message === UNAUTHED_ERR_MSG) {
+        toast.error(expiredSessionMessage);
+        return;
+      }
+      toast.error(error.message || friendlyMessages.requestFailed);
+    },
   });
   const claim = trpc.earning.claimAd.useMutation({
     onSuccess: data => {
@@ -45,8 +55,8 @@ export function AdsTasks({
       ads.refetch();
       onDone();
     },
-    onError: () => {
-      toast.error(friendlyMessages.requestFailed);
+    onError: error => {
+      toast.error(error.message === UNAUTHED_ERR_MSG ? expiredSessionMessage : error.message || friendlyMessages.requestFailed);
       setAutoClaimAttempted(true);
     },
   });

@@ -21,6 +21,7 @@ describe("administrator route dashboards", () => {
     expect(source).toContain("const [statusFilter, setStatusFilter] = useState(\"all\")");
     expect(source).toContain("function CopyRecordValue");
     expect(source).toContain('label={t("transactionId")}');
-    expect(source).toContain('label={t("walletNumber")}');
+    expect(source).toContain('label={t("copyNumber")}');
+    expect(source).toContain('label={t("copyDetails")}');
   });
 });

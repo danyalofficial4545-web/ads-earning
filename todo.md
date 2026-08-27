@@ -384,3 +384,11 @@
 - [x] Make interrupted five-second rewarded ads show a retry message and remain available to replay, while granting a reward only after a completed server-valid session.
 - [x] Diagnose the requested direct Google OAuth migration and identify any provider credentials, callback configuration, or authorized-domain requirement before changing the existing secure login provider.
 - [x] Add focused tests, verify desktop/mobile public forms and ad behavior, build, redeploy ads-earning-kappa.vercel.app, and report any extra discovered defect before changing it.
+
+### Current request: Ad completion and withdrawal privacy
+
+- [x] Diagnose and correct the Ad 4/5 watch failure so all package-entitled five-second slots complete sequentially, award only after server-valid completion, and retain the Pakistan-midnight reset.
+- [x] Remove wallet account name and number from member-facing withdrawal history while retaining only amount, currency, status, and date; preserve full payment details in protected administrator records.
+- [x] Add administrator-only withdrawal copy controls for the wallet number and complete payment details without exposing those details to members.
+- [x] Re-audit that Sponsored Continuation has no user-facing route or caller and document the remaining provider-side Google redirect allowlist prerequisite without changing authentication infrastructure.
+- [ ] Add targeted tests, validate member/admin flows plus desktop/mobile UI, build, redeploy the exact ads-earning-kappa.vercel.app domain, and report only verified results.

@@ -154,4 +154,43 @@ describe("rewarded slot start access", () => {
     expect(inserts).toHaveLength(1);
     expect(inserts[0]?.values).toMatchObject({ adId: 1, rewardPkr: 30 });
   });
+
+  it("allows Ad 4 and Ad 5 for five-slot packages after prior slots are claimed", async () => {
+    mocks.getActivePackageForUser.mockResolvedValue({
+      plan: { pricePkr: 5000, name: "VIP" },
+      ownership: { id: 55 },
+    });
+
+    const priorThree = [1, 2, 3].map(adId => ({
+      id: 700 + adId,
+      userId: 91,
+      adId,
+      dayKey: "2026-08-15",
+      claimedAt: new Date(),
+      invalidatedAt: null,
+    }));
+    const fourthStart = createRetryAdsDatabase(priorThree);
+    mocks.getDb.mockResolvedValue(fourthStart.db);
+
+    const fourth = await appRouter.createCaller(callerContext()).earning.startAd({ slot: 4 });
+
+    expect(fourth.ad.id).toBe(4);
+    expect(fourthStart.inserts[0]?.values).toMatchObject({ adId: 4, rewardPkr: 200 });
+
+    const priorFour = [...priorThree, {
+      id: 704,
+      userId: 91,
+      adId: 4,
+      dayKey: "2026-08-15",
+      claimedAt: new Date(),
+      invalidatedAt: null,
+    }];
+    const fifthStart = createRetryAdsDatabase(priorFour);
+    mocks.getDb.mockResolvedValue(fifthStart.db);
+
+    const fifth = await appRouter.createCaller(callerContext()).earning.startAd({ slot: 5 });
+
+    expect(fifth.ad.id).toBe(5);
+    expect(fifthStart.inserts[0]?.values).toMatchObject({ adId: 5, rewardPkr: 200 });
+  });
 });

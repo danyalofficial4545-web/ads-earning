@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrpcContext } from "./_core/context";
-import { packages, profiles } from "../drizzle/schema";
+import { packages, profiles, withdrawals } from "../drizzle/schema";
 
 const mocks = vi.hoisted(() => ({
   ensureProfile: vi.fn(),
@@ -48,6 +48,33 @@ describe("router accounting flows", () => {
     expect(inserts[0]?.values).toMatchObject({ walletType: "JazzCash", accountName: "Test Account", accountDetails: "03001234567" });
     expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("💸 WITHDRAW REQUEST"));
     expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("03001234567"));
+  });
+
+  it("does not return wallet account details in a member withdrawal-history response", async () => {
+    const row = {
+      id: 81,
+      userId: 20,
+      currency: "PKR" as const,
+      amountPkr: 70,
+      walletType: "JazzCash",
+      accountName: "Member Account",
+      accountDetails: "03001234567",
+      status: "pending" as const,
+      createdAt: new Date(),
+    };
+    mocks.getDb.mockResolvedValue({
+      select: vi.fn(() => ({
+        from: (table: unknown) => table === withdrawals
+          ? { where: () => ({ orderBy: async () => [row] }) }
+          : { where: () => ({ limit: async () => [] }) },
+      })),
+    });
+
+    const result = await appRouter.createCaller(context()).withdrawal.list();
+
+    expect(result).toEqual([expect.objectContaining({ id: 81, amountPkr: 70, status: "pending" })]);
+    expect(result[0]).not.toHaveProperty("accountName");
+    expect(result[0]).not.toHaveProperty("accountDetails");
   });
 
   it("alerts the administrator after a pending deposit has been recorded", async () => {
