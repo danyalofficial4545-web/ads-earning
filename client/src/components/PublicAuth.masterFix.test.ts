@@ -8,4 +8,11 @@ describe("attached signup validation requirements", () => {
     expect(source).toContain("<FieldError>{signUpErrors.confirmPassword}</FieldError>");
     expect(source).not.toContain('toast.error(friendlyMessages.requestFailed);');
   });
+
+  it("uses the custom validation path instead of browser highlighted-field blocking", () => {
+    const source = readFileSync(new URL("./PublicAuth.tsx", import.meta.url), "utf8");
+    expect(source).toContain('<form noValidate className="mt-6 space-y-4" onSubmit={submitSignIn}>');
+    expect(source).toContain('<form noValidate className="mt-6 space-y-4" onSubmit={submitSignUp}>');
+    expect(source).not.toContain("<input required");
+  });
 });

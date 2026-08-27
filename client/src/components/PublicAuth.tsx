@@ -11,6 +11,7 @@ import {
   validateEmail,
   validatePassword,
   validatePasswordConfirmation,
+  validateUsername,
 } from "@/lib/formValidation";
 import type { Language, TranslationKey } from "@/lib/i18n";
 import { FieldError } from "@/components/ui/field";
@@ -53,7 +54,7 @@ function GoogleMark({ compact = false }: { compact?: boolean }) {
 }
 
 function VisualCodeCheck({ t, imageData, answer, onAnswer, onRefresh }: { t: Translate; imageData?: string; answer: string; onAnswer: (value: string) => void; onRefresh: () => void }) {
-  return <div className="rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-3"><div className="flex items-center justify-between gap-3"><p className="text-xs font-bold text-emerald-100">{t("humanVerification")}</p><button type="button" onClick={onRefresh} className="text-xs font-bold text-amber-300">{t("refreshCheck")}</button></div><p className="mt-2 text-xs leading-5 text-slate-200">{t("captchaCodeHelp")}</p>{imageData ? <img src={imageData} alt={t("humanVerification")} className="mt-3 h-[70px] w-full rounded-xl border border-white/10 object-cover" /> : <div className="mt-3 grid h-[70px] place-items-center rounded-xl border border-white/10 bg-slate-950/25"><Loader2 className="size-4 animate-spin text-amber-300" /></div>}<label className="mt-3 block"><span className="field-label">{t("captchaCodeLabel")}</span><input required value={answer} autoComplete="off" autoCapitalize="characters" maxLength={8} className="field tracking-[0.24em] uppercase" onChange={event => onAnswer(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} /></label></div>;
+  return <div className="rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-3"><div className="flex items-center justify-between gap-3"><p className="text-xs font-bold text-emerald-100">{t("humanVerification")}</p><button type="button" onClick={onRefresh} className="text-xs font-bold text-amber-300">{t("refreshCheck")}</button></div><p className="mt-2 text-xs leading-5 text-slate-200">{t("captchaCodeHelp")}</p>{imageData ? <img src={imageData} alt={t("humanVerification")} className="mt-3 h-[70px] w-full rounded-xl border border-white/10 object-cover" /> : <div className="mt-3 grid h-[70px] place-items-center rounded-xl border border-white/10 bg-slate-950/25"><Loader2 className="size-4 animate-spin text-amber-300" /></div>}<label className="mt-3 block"><span className="field-label">{t("captchaCodeLabel")}</span><input value={answer} autoComplete="off" autoCapitalize="characters" maxLength={8} className="field tracking-[0.24em] uppercase" onChange={event => onAnswer(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} /></label></div>;
 }
 
 export function PublicAuth({
@@ -127,13 +128,14 @@ export function PublicAuth({
     event.preventDefault();
     const errors: FormErrors = {
       email: validateEmail(signUp.email),
+      username: validateUsername(signUp.username),
       password: validatePassword(signUp.password),
       confirmPassword: validatePasswordConfirmation(
         signUp.password,
         signUp.confirmPassword
       ),
     };
-    if (errors.email || errors.password || errors.confirmPassword)
+    if (errors.email || errors.username || errors.password || errors.confirmPassword)
       return setSignUpErrors(errors);
     if (!signUpCaptcha.data || !signUpChallengeAnswer.trim())
       return setSignUpErrors({ general: t("verificationRequired") });
@@ -160,12 +162,11 @@ export function PublicAuth({
             <button type="button" onClick={() => setMode("signIn")} className={`flex-1 rounded-lg py-2 text-sm font-bold ${mode === "signIn" ? "bg-amber-300 text-slate-950" : "text-slate-300"}`}>{t("signIn")}</button>
             <button type="button" onClick={() => setMode("signUp")} className={`flex-1 rounded-lg py-2 text-sm font-bold ${mode === "signUp" ? "bg-amber-300 text-slate-950" : "text-slate-300"}`}>{t("signUp")}</button>
           </div>
-          {mode === "signIn" ? <form className="mt-6 space-y-4" onSubmit={submitSignIn}>
+          {mode === "signIn" ? <form noValidate className="mt-6 space-y-4" onSubmit={submitSignIn}>
               <p className="eyebrow">{t("signIn")}</p>
               <label>
                 <span className="field-label">{t("email")}</span>
                 <input
-                  required
                   type="email"
                   autoComplete="email"
                   className="field"
@@ -181,7 +182,6 @@ export function PublicAuth({
               <label>
                 <span className="field-label">{t("password")}</span>
                 <input
-                  required
                   type="password"
                   autoComplete="current-password"
                   className="field"
@@ -207,12 +207,12 @@ export function PublicAuth({
                   t("signIn")
                 )}
               </button>
-          </form> : <form className="mt-6 space-y-4" onSubmit={submitSignUp}>
+          </form> : <form noValidate className="mt-6 space-y-4" onSubmit={submitSignUp}>
             <p className="eyebrow">{t("signUp")}</p>
-            <label><span className="field-label">{t("email")}</span><input required type="email" autoComplete="email" className="field" aria-invalid={Boolean(signUpErrors.email)} value={signUp.email} onChange={event => { setSignUp({ ...signUp, email: event.target.value }); setSignUpErrors(errors => ({ ...errors, email: undefined })); }} /><FieldError>{signUpErrors.email}</FieldError></label>
-            <label><span className="field-label">{t("username")}</span><input required minLength={3} autoComplete="username" className="field" aria-invalid={Boolean(signUpErrors.username)} value={signUp.username} onChange={event => { setSignUp({ ...signUp, username: event.target.value }); setSignUpErrors(errors => ({ ...errors, username: undefined })); }} /><FieldError>{signUpErrors.username}</FieldError></label>
-            <label><span className="field-label">{t("password")}</span><input required minLength={8} type="password" autoComplete="new-password" className="field" aria-invalid={Boolean(signUpErrors.password)} value={signUp.password} onChange={event => { setSignUp({ ...signUp, password: event.target.value }); setSignUpErrors(errors => ({ ...errors, password: undefined })); }} /><FieldError>{signUpErrors.password}</FieldError></label>
-            <label><span className="field-label">{t("confirmPassword")}</span><input required minLength={8} type="password" autoComplete="new-password" className="field" aria-invalid={Boolean(signUpErrors.confirmPassword)} value={signUp.confirmPassword} onChange={event => { setSignUp({ ...signUp, confirmPassword: event.target.value }); setSignUpErrors(errors => ({ ...errors, confirmPassword: undefined })); }} /><FieldError>{signUpErrors.confirmPassword}</FieldError></label>
+            <label><span className="field-label">{t("email")}</span><input type="email" autoComplete="email" className="field" aria-invalid={Boolean(signUpErrors.email)} value={signUp.email} onChange={event => { setSignUp({ ...signUp, email: event.target.value }); setSignUpErrors(errors => ({ ...errors, email: undefined })); }} /><FieldError>{signUpErrors.email}</FieldError></label>
+            <label><span className="field-label">{t("username")}</span><input autoComplete="username" className="field" aria-invalid={Boolean(signUpErrors.username)} value={signUp.username} onChange={event => { setSignUp({ ...signUp, username: event.target.value }); setSignUpErrors(errors => ({ ...errors, username: undefined })); }} /><FieldError>{signUpErrors.username}</FieldError></label>
+            <label><span className="field-label">{t("password")}</span><input type="password" autoComplete="new-password" className="field" aria-invalid={Boolean(signUpErrors.password)} value={signUp.password} onChange={event => { setSignUp({ ...signUp, password: event.target.value }); setSignUpErrors(errors => ({ ...errors, password: undefined })); }} /><FieldError>{signUpErrors.password}</FieldError></label>
+            <label><span className="field-label">{t("confirmPassword")}</span><input type="password" autoComplete="new-password" className="field" aria-invalid={Boolean(signUpErrors.confirmPassword)} value={signUp.confirmPassword} onChange={event => { setSignUp({ ...signUp, confirmPassword: event.target.value }); setSignUpErrors(errors => ({ ...errors, confirmPassword: undefined })); }} /><FieldError>{signUpErrors.confirmPassword}</FieldError></label>
             <label><span className="field-label">{t("referralInvite")}</span><input className="field" value={signUp.referralCode} onChange={event => setSignUp({ ...signUp, referralCode: event.target.value.toUpperCase() })} /></label>
             <VisualCodeCheck t={t} imageData={signUpCaptcha.data?.imageData} answer={signUpChallengeAnswer} onAnswer={setSignUpChallengeAnswer} onRefresh={() => { setSignUpChallengeAnswer(""); signUpCaptcha.refetch(); }} />
             <FieldError>{signUpErrors.general}</FieldError>

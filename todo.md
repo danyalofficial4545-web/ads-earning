@@ -364,3 +364,9 @@
 - [x] Show the withdrawal limit only to members with an active package, using a clear Withdrawal section label.
 - [x] Replace every user-facing WhatsApp support control with a Telegram support control targeting https://t.me/EADSEARNPRO.
 - [x] Add regression tests, mobile/desktop checks, production build validation, and redeploy the fixed current release to ads-earning-kappa.vercel.app.
+
+### Current request: Urgent cross-device authentication failure
+
+- [x] Remove native browser required-field blocking from manual Sign In and Sign Up so no highlighted-field browser message can prevent the custom bilingual validation flow.
+- [x] Preserve server-side validation, captcha and secure origin-aware OAuth while making manual authentication and browser feedback compatible across desktop and mobile browsers with cookies enabled.
+- [ ] Add focused regressions, verify public desktop/mobile authentication form submission behavior, build, deploy to ads-earning-kappa.vercel.app, and report any cookie-blocking browser limitation clearly.

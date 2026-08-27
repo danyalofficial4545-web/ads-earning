@@ -31,7 +31,7 @@ export const friendlyMessages = {
   walletName: "Please enter account holder name (wallet name)",
   paymentNumber: "Your wallet number is wrong/incomplete, please enter correct JazzCash/Easypaisa number",
   proofRequired: "Please upload payment proof screenshot",
-  requestFailed: "Please correct the highlighted field and try again.",
+  requestFailed: "Please review your information and try again.",
 } as const;
 
 export function normalizePhoneNumber(value: string) {
@@ -53,6 +53,12 @@ export function validateEmail(value: string) {
 
 export function validatePassword(value: string) {
   return value.trim().length >= 8 ? undefined : friendlyMessages.password;
+}
+
+export function validateUsername(value: string) {
+  return /^[A-Za-z0-9_]{3,32}$/.test(value.trim())
+    ? undefined
+    : "Please enter a username with 3–32 letters, numbers, or underscores.";
 }
 
 export function validatePasswordConfirmation(password: string, confirmation: string) {
