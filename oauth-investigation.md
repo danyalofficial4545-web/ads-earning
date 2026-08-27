@@ -35,3 +35,7 @@ Task connector/project configuration was inspected for an OAuth or Google provid
 ## 2026-08-27 post-release browser verification
 
 The exact production alias rendered the public Sign In / Sign Up form with its usable email, password, visual verification and Google controls, and no `Sponsored Continuation` overlay was present. Clicking the visible Google control launched `https://manus.im/app-auth` with the exact callback URL `https://ads-earning-kappa.vercel.app/api/oauth/callback` and a fresh encoded nonce/state value. The verification intentionally stopped before Google account selection or consent.
+
+## 2026-08-27 follow-up production verification
+
+After the ad-sequence and withdrawal-privacy release, the exact production alias again rendered the public authentication form without any `Sponsored Continuation` screen. The current Google control launched `https://manus.im/app-auth` using `https://ads-earning-kappa.vercel.app/api/oauth/callback` and a fresh one-time nonce/state value. This confirms the client-side redirect construction has remained correct; OAuth account selection and provider consent were intentionally not automated.

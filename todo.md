@@ -391,4 +391,4 @@
 - [x] Remove wallet account name and number from member-facing withdrawal history while retaining only amount, currency, status, and date; preserve full payment details in protected administrator records.
 - [x] Add administrator-only withdrawal copy controls for the wallet number and complete payment details without exposing those details to members.
 - [x] Re-audit that Sponsored Continuation has no user-facing route or caller and document the remaining provider-side Google redirect allowlist prerequisite without changing authentication infrastructure.
-- [ ] Add targeted tests, validate member/admin flows plus desktop/mobile UI, build, redeploy the exact ads-earning-kappa.vercel.app domain, and report only verified results.
+- [x] Add targeted tests, validate member/admin flows plus desktop/mobile UI, build, redeploy the exact ads-earning-kappa.vercel.app domain, and report only verified results.
