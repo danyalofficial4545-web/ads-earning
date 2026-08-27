@@ -12,4 +12,11 @@ describe("dual Google and Gmail account entry", () => {
     expect(publicEntry).toContain('mode === "signUp"');
     expect(publicEntry).toContain("VisualCodeCheck");
   });
+
+  it("uses a safe Manus OAuth portal fallback when Vercel omits the portal env variable", () => {
+    const launcher = readFileSync(new URL("../const.ts", import.meta.url), "utf8");
+
+    expect(launcher).toContain('import.meta.env.VITE_OAUTH_PORTAL_URL || "https://manus.im"');
+    expect(launcher).toContain('new URL("/app-auth", oauthPortalUrl)');
+  });
 });

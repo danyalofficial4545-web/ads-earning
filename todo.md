@@ -373,6 +373,6 @@
 
 ### Current request: Google direct sign-in failure
 
-- [ ] Inspect the live Google login launch and OAuth callback from ads-earning-kappa.vercel.app, including generated redirect origin, state cookie and provider response.
-- [ ] Fix any discovered client or server OAuth issue without bypassing state/nonce validation or changing manual Sign In/Sign Up behavior.
+- [x] Inspect the live Google login launch and OAuth callback from ads-earning-kappa.vercel.app, including generated redirect origin, state cookie and provider response.
+- [x] Fix any discovered client or server OAuth issue without bypassing state/nonce validation or changing manual Sign In/Sign Up behavior.
 - [ ] Add focused OAuth regression coverage, build, deploy the current release to ads-earning-kappa.vercel.app, and document any remaining Google-provider console configuration requirement.
