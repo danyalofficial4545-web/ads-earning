@@ -6,7 +6,6 @@ import { GoogleOnboarding, PublicAuth } from "@/components/PublicAuth";
 import { WorkspaceAccessGate } from "@/components/WorkspaceAccessGate";
 import { AdsTasks } from "@/components/AdsTasks";
 import { SupportChat } from "@/components/SupportChat";
-import { AdminAdGate, type AutomaticAdRequest } from "@/components/AdminAdGate";
 import { BrandLogo } from "@/components/BrandLogo";
 import { trpc } from "@/lib/trpc";
 import { resolveWorkspaceGate } from "@/lib/authOnboarding";
@@ -444,7 +443,6 @@ function Landing({
   };
   const register = trpc.auth.register.useMutation({
     onSuccess: () => {
-      sessionStorage.setItem("pep-signup-automatic-ad", "1");
       void complete(t("accountCreated"));
     },
     onError: error => {
@@ -1070,59 +1068,28 @@ function Workspace({
   wallet,
   invalidateCore,
 }: any) {
-  const [automaticAdRequest, setAutomaticAdRequest] = useState<AutomaticAdRequest | null>(null);
   const [depositPackageId, setDepositPackageId] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
   const [showChannelPrompt, setShowChannelPrompt] = useState(false);
-  const [signupGatePending, setSignupGatePending] = useState(
-    () => sessionStorage.getItem("pep-signup-automatic-ad") === "1"
-  );
-  const [signupGateStarted, setSignupGateStarted] = useState(false);
   const [rewardWithdrawalSubmittedLocally, setRewardWithdrawalSubmittedLocally] = useState(false);
   useEffect(() => {
     const loadTimer = window.setTimeout(loadAuthenticatedAdsterraScripts, 750);
     return () => window.clearTimeout(loadTimer);
   }, []);
-  const requestAutomaticAd = (
-    placement: AutomaticAdRequest["placement"],
-    onComplete: () => void,
-    sequence = 0
-  ) => {
-    setAutomaticAdRequest({
-      id: Date.now() + Math.floor(Math.random() * 1000),
-      placement,
-      sequence,
-      onComplete,
-    });
-  };
-  useEffect(() => {
-    if (!overview || !signupGatePending || signupGateStarted) return;
-    setSignupGateStarted(true);
-    sessionStorage.removeItem("pep-signup-automatic-ad");
-    requestAutomaticAd("signup", () => {
-      if (profile.whatsappRewardEligible && !profile.whatsappJoined)
-        setShowChannelPrompt(true);
-      setSignupGatePending(false);
-      invalidateCore();
-    });
-  }, [overview, signupGatePending, signupGateStarted]);
   useEffect(() => {
     if (
       overview &&
-      !signupGatePending &&
       profile.whatsappRewardEligible &&
       !profile.whatsappJoined
     )
       setShowChannelPrompt(true);
-  }, [overview, signupGatePending, profile.whatsappRewardEligible, profile.whatsappJoined]);
+  }, [overview, profile.whatsappRewardEligible, profile.whatsappJoined]);
   const joinWhatsApp = trpc.platform.joinWhatsApp.useMutation({
     onSuccess: data => {
       if (data.bonusPkr) {
         toast.success(t("whatsappRewardClaimed"));
-        requestAutomaticAd("whatsapp_reward", () => {
-          setPage("withdrawal");
-          invalidateCore();
-        });
+        setPage("withdrawal");
+        invalidateCore();
       } else {
         invalidateCore();
       }
@@ -1153,8 +1120,7 @@ function Workspace({
     memberProfile.whatsappRewardEligible &&
     memberProfile.whatsappBonusClaimed &&
       !rewardWithdrawalRequested;
-  const openWithdrawal = () =>
-    requestAutomaticAd("withdrawal_entry", () => setPage("withdrawal"));
+  const openWithdrawal = () => setPage("withdrawal");
   const purchasePackage = trpc.package.buy.useMutation({
     onSuccess: () => {
       toast.success(language === "ur" ? "پیکیج کامیابی سے فعال ہو گیا ہے۔" : "Package activated successfully.");
@@ -1164,12 +1130,11 @@ function Workspace({
     onError: error =>
       toast.error(friendlyServerError(error, "amount").amount || friendlyMessages.requestFailed),
   });
-  const openPackagePayment = (packageId: number, requiredAmount: number) =>
-    requestAutomaticAd("package_entry", () => {
-      setDepositPackageId(String(packageId));
-      setDepositAmount(String(requiredAmount));
-      setPage("deposit");
-    });
+  const openPackagePayment = (packageId: number, requiredAmount: number) => {
+    setDepositPackageId(String(packageId));
+    setDepositAmount(String(requiredAmount));
+    setPage("deposit");
+  };
   const content: Record<Page, ReactNode> = {
     dashboard: (
       <Dashboard
@@ -1188,11 +1153,7 @@ function Workspace({
         balance={profile.balancePkr}
         active={overview.activePackage}
         onDone={invalidateCore}
-        onPurchase={(plan: any) =>
-          requestAutomaticAd("package_entry", () =>
-            purchasePackage.mutate({ packageId: plan.id })
-          )
-        }
+        onPurchase={(plan: any) => purchasePackage.mutate({ packageId: plan.id })}
         onRequestDeposit={(plan: any, shortfall: number) =>
           openPackagePayment(plan.id, Math.max(100, shortfall))
         }
@@ -1207,6 +1168,7 @@ function Workspace({
         profile={profile}
         activePackage={overview.activePackage}
         totalEarnedPkr={overview.totalEarnedPkr}
+        totalDepositsPkr={overview.totalDepositsPkr}
         onRequestWithdrawal={openWithdrawal}
       />
     ),
@@ -1225,7 +1187,7 @@ function Workspace({
         onDone={invalidateCore}
       />
     ),
-    earn: <AdsTasks t={t} onDone={invalidateCore} onRequestAdminAd={input => requestAutomaticAd(input.placement, input.onComplete, input.sequence)} />,
+    earn: <AdsTasks t={t} onDone={invalidateCore} language={language} />,
     history: <TransactionHistory t={t} />,
     invite: <Referral t={t} />,
     support: <SupportChat t={t} onOpenTickets={() => setPage("ticketSupport")} />,
@@ -1234,11 +1196,6 @@ function Workspace({
   };
   return (
     <>
-      <AdminAdGate
-        request={automaticAdRequest}
-        t={t}
-        onFinished={() => setAutomaticAdRequest(null)}
-      />
       {showChannelPrompt && (
         <WhatsAppJoinPrompt
           t={t}
@@ -1607,6 +1564,7 @@ function ProfileWallet({
   profile,
   activePackage,
   totalEarnedPkr,
+  totalDepositsPkr,
   onRequestWithdrawal,
 }: any) {
   if (!wallet) return <LoadingScreen text={t("loading")} />;
@@ -1640,12 +1598,18 @@ function ProfileWallet({
           </div>
         }
       />
-      <div className="mt-5 grid gap-4 md:grid-cols-2">
+      <div className="mt-5 grid gap-4 md:grid-cols-3">
         <StatCard
           icon={WalletCards}
-          label={t("balance")}
+          label={t("depositWallet")}
           value={money(wallet.profile.balancePkr)}
           accent="emerald"
+        />
+        <StatCard
+          icon={Landmark}
+          label={t("totalDeposits")}
+          value={money(totalDepositsPkr)}
+          accent="amber"
         />
         <StatCard
           icon={Landmark}
@@ -1654,7 +1618,7 @@ function ProfileWallet({
           accent="blue"
         />
       </div>
-      {!canWithdraw && <p className="mt-4 rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm font-semibold text-amber-50">{t("noPackageBalanceMessage")}</p>}
+      {!canWithdraw && wallet.profile.balancePkr <= 0 && <p className="mt-4 rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm font-semibold text-amber-50">{t("noPackageBalanceMessage")}</p>}
       <div className="mt-5 grid gap-5 xl:grid-cols-[1.05fr_.95fr]">
         <div className="panel space-y-4">
           <div className="flex items-center justify-between gap-3">

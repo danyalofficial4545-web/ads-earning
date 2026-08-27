@@ -1,18 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-describe("automatic sponsor continuation", () => {
-  it("uses a server-authorized five-second overlay and never synthesizes browser clicks", () => {
-    const source = readFileSync(new URL("./AdminAdGate.tsx", import.meta.url), "utf8");
-
-    expect(source).toContain("trpc.earning.startAdminAd.useMutation");
-    expect(source).toContain("trpc.earning.completeAdminAd.useMutation");
-    expect(source).toContain("setSeconds(5)");
-    expect(source).toContain("placement: request.placement");
-    expect(source).not.toContain("dispatchEvent");
-    expect(source).not.toContain("element.click");
-  });
-
+describe("public OAuth ad-script isolation", () => {
   it("loads supplied Adsterra scripts only after authentication so public OAuth clicks are not intercepted", () => {
     const html = readFileSync(new URL("../../index.html", import.meta.url), "utf8");
     const workspace = readFileSync(new URL("../pages/Home.tsx", import.meta.url), "utf8");

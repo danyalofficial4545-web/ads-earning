@@ -376,3 +376,11 @@
 - [x] Inspect the live Google login launch and OAuth callback from ads-earning-kappa.vercel.app, including generated redirect origin, state cookie and provider response.
 - [x] Fix any discovered client or server OAuth issue without bypassing state/nonce validation or changing manual Sign In/Sign Up behavior.
 - [x] Add focused OAuth regression coverage, build, deploy the current release to ads-earning-kappa.vercel.app, and document any remaining Google-provider console configuration requirement.
+
+### Current request: Sponsored gate, deposits, and retryable ads
+
+- [x] Remove the user-facing Sponsored Continuation / five-second sponsor overlay and every automatic sponsor-gate entry point without changing the rewarded-ad earning flow.
+- [x] Verify and fix approved deposit accounting so the correct user balance, Total Deposit value, deposit transaction, and member deposit history update together.
+- [x] Make interrupted five-second rewarded ads show a retry message and remain available to replay, while granting a reward only after a completed server-valid session.
+- [x] Diagnose the requested direct Google OAuth migration and identify any provider credentials, callback configuration, or authorized-domain requirement before changing the existing secure login provider.
+- [ ] Add focused tests, verify desktop/mobile public forms and ad behavior, build, redeploy ads-earning-kappa.vercel.app, and report any extra discovered defect before changing it.

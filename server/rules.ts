@@ -4,6 +4,7 @@ export const WITHDRAWAL_NO_PACKAGE_MESSAGE =
   "Your balance is zero, please purchase a package and start earning";
 export const REWARDED_AD_TIMER_SECONDS = 5;
 export const AD_TIMER_MESSAGE = "Please wait for the 5-second timer before claiming this reward.";
+export const AD_RETRY_MESSAGE = "Please watch full ad, Please try again";
 export const WHATSAPP_JOIN_REWARD_PKR = 10;
 export const WHATSAPP_REWARD_NEW_USER_STARTS_AT = new Date("2026-08-23T16:00:00.000Z");
 
@@ -107,6 +108,7 @@ export function getAdClaimStatus(input: {
   now: Date;
   timerSeconds: number;
 }) {
+  if (input.invalidatedAt) return "invalidated" as const;
   return canClaimAd(input.startedAt, input.now, input.timerSeconds)
     ? ("claimable" as const)
     : ("early" as const);

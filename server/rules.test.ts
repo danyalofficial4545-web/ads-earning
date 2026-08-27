@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AD_TIMER_MESSAGE,
+  AD_RETRY_MESSAGE,
   applyWithdrawalRequest,
   canUseMemberWorkspace,
   canClaimAd,
@@ -128,7 +129,7 @@ describe("Package Earn Pro server rules", () => {
     expect(REWARDED_AD_TIMER_SECONDS).toBe(5);
   });
 
-  it("permits a completed custom ad even when the external tab was closed before the timer completed", () => {
+  it("rejects a previously interrupted ad session and keeps the fresh timer authoritative", () => {
     const startedAt = new Date("2026-08-14T12:00:00.000Z");
     expect(
       getAdClaimStatus({
@@ -156,7 +157,8 @@ describe("Package Earn Pro server rules", () => {
         now: new Date("2026-08-14T12:00:10.000Z"),
         timerSeconds: 10,
       })
-    ).toBe("claimable");
+    ).toBe("invalidated");
+    expect(AD_RETRY_MESSAGE).toBe("Please watch full ad, Please try again");
   });
 
   it("grants administrator capability only to the exact designated identity and denies blocked members", () => {

@@ -12,34 +12,28 @@ function formatCountdown(totalSeconds: number) {
   return `${hours}h ${String(minutes).padStart(2, "0")}m ${String(seconds % 60).padStart(2, "0")}s`;
 }
 
-type Continuation = { placement: "rewarded_break"; sequence: number };
-
 export function AdsTasks({
   t,
   onDone,
-  onRequestAdminAd,
+  language,
 }: {
   t: (key: any) => string;
   onDone: () => void;
-  onRequestAdminAd: (input: Continuation & { onComplete: () => void }) => void;
+  language: "en" | "ur";
 }) {
   const ads = trpc.earning.ads.useQuery();
   const [session, setSession] = useState<any>(null);
   const [seconds, setSeconds] = useState(0);
   const [autoClaimAttempted, setAutoClaimAttempted] = useState(false);
-  const [handledContinuation, setHandledContinuation] = useState("");
-  const requestContinuation = (continuation: Continuation | null | undefined) => {
-    if (!continuation) return;
-    const key = `${continuation.placement}:${continuation.sequence}`;
-    if (handledContinuation === key) return;
-    setHandledContinuation(key);
-    onRequestAdminAd({ ...continuation, onComplete: () => ads.refetch() });
-  };
+  const retryMessage = language === "ur"
+    ? "براہِ کرم پورا 5 سیکنڈ کا اشتہار دیکھیں، پھر دوبارہ کوشش کریں۔"
+    : "Please watch full ad, Please try again";
   const start = trpc.earning.startAd.useMutation({
     onSuccess: data => {
       setSession(data);
       setSeconds(data.timerSeconds);
       setAutoClaimAttempted(false);
+      if (data.restarted) toast.error(retryMessage);
     },
     onError: () => toast.error(friendlyMessages.requestFailed),
   });
@@ -50,7 +44,6 @@ export function AdsTasks({
       setAutoClaimAttempted(false);
       ads.refetch();
       onDone();
-      requestContinuation(data.continuation);
     },
     onError: () => {
       toast.error(friendlyMessages.requestFailed);
@@ -82,10 +75,6 @@ export function AdsTasks({
       claim.mutate({ sessionId: session.sessionId });
     }
   }, [session, seconds, autoClaimAttempted, claim.isPending]);
-
-  useEffect(() => {
-    if (!session) requestContinuation(ads.data?.continuation);
-  }, [ads.data?.continuation, session]);
 
   if (ads.isLoading || !ads.data) return <div className="panel"><Loader2 className="size-5 animate-spin text-amber-300" /></div>;
   return <>

@@ -25,3 +25,9 @@ The production bundle contains the OAuth launcher with `new URL("undefined/app-a
 ## 2026-08-27 final production verification
 
 The deployed Vercel production Google button now opens `https://manus.im/app-auth` and carries `https://ads-earning-kappa.vercel.app/api/oauth/callback` as its redirect URI, plus a fresh nonce in the encoded OAuth state. The public login page no longer sends Google users to the advertising redirect or the old `undefined/app-auth` in-app route.
+
+## 2026-08-27 provider allowlist diagnosis
+
+The reported `invalid redirect_uri` response occurs after the browser reaches the OAuth provider and confirms that the deployed client is requesting the intended callback: `https://ads-earning-kappa.vercel.app/api/oauth/callback`. The app-owned callback route validates its one-time nonce/state and exchanges the authorization code through the configured Manus OAuth application (`2eS9vxiE6sqzgpWYMX6qhd`); it does not contain Firebase or Supabase authentication handlers.
+
+Task connector/project configuration was inspected for an OAuth or Google provider control and no such configurable integration was available. Therefore, the remaining correction is an OAuth provider/application allowlist update that permits the exact Vercel callback URL for this application. It cannot be safely solved by adding Firebase/Supabase callback paths, bypassing state/nonce validation, or implementing direct Google OAuth without a user-owned Google OAuth client, secret, authorized origins, server callback handling, and an explicit infrastructure migration approval.

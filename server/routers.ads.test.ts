@@ -68,6 +68,31 @@ function createAdsDatabase() {
   return { db, inserts };
 }
 
+function createRetryAdsDatabase(existingSessions: any[]) {
+  const inserts: Array<{ table: unknown; values: unknown }> = [];
+  const updates: Array<{ table: unknown; values: unknown }> = [];
+  const db = {
+    select: vi.fn(() => ({
+      from: (table: unknown) =>
+        table === adSessions
+          ? { where: async () => existingSessions }
+          : { where: async () => [] },
+    })),
+    insert: vi.fn((table: unknown) => ({
+      values: async (values: unknown) => {
+        inserts.push({ table, values });
+        return [{ insertId: 701 }];
+      },
+    })),
+    update: vi.fn((table: unknown) => ({
+      set: (values: unknown) => ({
+        where: () => updates.push({ table, values }),
+      }),
+    })),
+  };
+  return { db, inserts, updates };
+}
+
 describe("rewarded slot start access", () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -107,5 +132,26 @@ describe("rewarded slot start access", () => {
       appRouter.createCaller(callerContext()).earning.startAd({ slot: 3 })
     ).rejects.toThrow("not available");
     expect(inserts).toHaveLength(0);
+  });
+
+  it("invalidates an unclaimed interrupted session before starting a fresh retry", async () => {
+    const { db, inserts, updates } = createRetryAdsDatabase([
+      {
+        id: 650,
+        userId: 91,
+        adId: 1,
+        dayKey: "2026-08-15",
+        claimedAt: null,
+        invalidatedAt: null,
+      },
+    ]);
+    mocks.getDb.mockResolvedValue(db);
+
+    const result = await appRouter.createCaller(callerContext()).earning.startAd({ slot: 1 });
+
+    expect(result.restarted).toBe(true);
+    expect(updates).toEqual([{ table: adSessions, values: { invalidatedAt: expect.any(Date) } }]);
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0]?.values).toMatchObject({ adId: 1, rewardPkr: 30 });
   });
 });

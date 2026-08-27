@@ -51,6 +51,23 @@ describe("admin financial review procedures", () => {
     expect(matchedTransactionReferences).toEqual([55]);
   });
 
+  it("credits an approved deposit to the member wallet and marks only its history transaction approved", async () => {
+    const { db, updates, matchedTransactionReferences } = reviewDatabase(
+      { id: 57, userId: 22, amountPkr: 500, status: "pending" },
+      [57, 58],
+      { userId: 22, balancePkr: 400, withdrawalLimitPkr: 0 }
+    );
+    mocks.getDb.mockResolvedValue(db);
+
+    await appRouter.createCaller(adminContext()).admin.reviewDeposit({ id: 57, approved: true });
+
+    const profileUpdate = updates.find(update => update.table === profiles);
+    expect(profileUpdate?.values).toEqual({ balancePkr: 900 });
+    const transactionUpdate = updates.find(update => update.table === transactions);
+    expect(transactionUpdate?.values).toMatchObject({ status: "approved" });
+    expect(matchedTransactionReferences).toEqual([57]);
+  });
+
   it("refunds a rejected withdrawal and restores its reserved limit", async () => {
     const { db, updates, matchedTransactionReferences } = reviewDatabase({ id: 88, userId: 22, amountPkr: 500, status: "pending" }, [88, 89], { userId: 22, balancePkr: 700, withdrawalLimitPkr: 0 });
     mocks.getDb.mockResolvedValue(db);

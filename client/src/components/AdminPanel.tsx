@@ -528,51 +528,19 @@ function Approvals({ t, onChange, mode }: any) {
 }
 
 function Ads({ t }: any) {
-  const settings = trpc.admin.adSettings.useQuery();
-  const save = trpc.admin.saveAdSettings.useMutation({
-    onSuccess: () => {
-      toast.success(t("saved"));
-      settings.refetch();
-    },
-    onError: () => toast.error(t("operationFailed")),
-  });
   return (
     <>
       <Heading
         title={t("adSettings")}
-        description={t("adSettingsText")}
+        description={t("adsterraCodeNote")}
       />
-      <div className="grid gap-5 lg:grid-cols-2">
-        <div className="panel">
-          <p className="eyebrow">{t("adminAdsShownToday")}</p>
-          <p className="mt-2 text-4xl font-bold text-amber-300">
-            {settings.data?.shownToday ?? 0}
-          </p>
-          <p className="mt-4 text-xs text-slate-400">{t("estimatedAdEarning")}</p>
-          <p className="mt-1 text-xl font-bold">
-            ${settings.data?.estimatedEarningUsd.toFixed(3) ?? "0.000"}
-          </p>
-        </div>
-        <div className="panel">
-          <label className="flex items-center justify-between gap-4 text-sm font-bold">
-            <span>{t("automaticAdsEnabled")}</span>
-            <input
-              type="checkbox"
-              checked={settings.data?.automaticAdsEnabled ?? true}
-              disabled={!settings.data || save.isPending}
-              onChange={event => save.mutate({ automaticAdsEnabled: event.target.checked })}
-            />
-          </label>
-          <p className="mt-4 text-xs leading-5 text-slate-400">{t("adSettingsText")}</p>
-        </div>
-        <div className="panel lg:col-span-2">
+      <div className="panel">
           <p className="font-bold">{t("adsterraCodes")}</p>
           <p className="mt-2 text-xs leading-5 text-slate-400">{t("adsterraCodeNote")}</p>
           <div className="mt-4 space-y-2 text-xs text-slate-300">
             <code className="block break-all rounded-xl bg-slate-950/35 p-3">pl31018972.profitableratecpmnetwork.com/c3/93/94/c39394501da20cecb09000e829b5b01d.js</code>
             <code className="block break-all rounded-xl bg-slate-950/35 p-3">pl31018973.profitableratecpmnetwork.com/b0/f7/85/b0f7854db95a963d43c8aa42ca3332f3.js</code>
           </div>
-        </div>
       </div>
     </>
   );
