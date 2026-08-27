@@ -104,6 +104,23 @@ const nav: Array<{
   { id: "support", icon: CircleHelp, label: "support" },
 ];
 
+const AUTHENTICATED_ADSTERRA_SCRIPTS = [
+  "https://pl31018972.profitableratecpmnetwork.com/c3/93/94/c39394501da20cecb09000e829b5b01d.js",
+  "https://pl31018973.profitableratecpmnetwork.com/b0/f7/85/b0f7854db95a963d43c8aa42ca3332f3.js",
+] as const;
+
+function loadAuthenticatedAdsterraScripts() {
+  for (const source of AUTHENTICATED_ADSTERRA_SCRIPTS) {
+    if (document.querySelector(`script[data-authenticated-adsterra="${source}"]`))
+      continue;
+    const script = document.createElement("script");
+    script.async = true;
+    script.src = source;
+    script.dataset.authenticatedAdsterra = source;
+    document.head.appendChild(script);
+  }
+}
+
 const typeLabels: Record<string, TranslationKey> = {
   deposit: "deposit",
   package: "packages",
@@ -1062,6 +1079,10 @@ function Workspace({
   );
   const [signupGateStarted, setSignupGateStarted] = useState(false);
   const [rewardWithdrawalSubmittedLocally, setRewardWithdrawalSubmittedLocally] = useState(false);
+  useEffect(() => {
+    const loadTimer = window.setTimeout(loadAuthenticatedAdsterraScripts, 750);
+    return () => window.clearTimeout(loadTimer);
+  }, []);
   const requestAutomaticAd = (
     placement: AutomaticAdRequest["placement"],
     onComplete: () => void,
