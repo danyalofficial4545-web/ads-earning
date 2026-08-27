@@ -21,3 +21,7 @@ The production Google button was found, enabled, type `button`, and had `pointer
 ## 2026-08-27 production bundle root cause
 
 The production bundle contains the OAuth launcher with `new URL("undefined/app-auth")`, proving `VITE_OAUTH_PORTAL_URL` was not supplied to the Vercel build. That malformed relative target routes back through the website SPA instead of opening the Manus OAuth portal. The application needs a safe `https://manus.im` default portal fallback in the client launcher, while retaining the required origin-specific callback and nonce/state validation.
+
+## 2026-08-27 final production verification
+
+The deployed Vercel production Google button now opens `https://manus.im/app-auth` and carries `https://ads-earning-kappa.vercel.app/api/oauth/callback` as its redirect URI, plus a fresh nonce in the encoded OAuth state. The public login page no longer sends Google users to the advertising redirect or the old `undefined/app-auth` in-app route.
