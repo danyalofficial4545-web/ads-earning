@@ -251,3 +251,24 @@ export const appSettings = mysqlTable("appSettings", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Profile = typeof profiles.$inferSelect;
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  isRead: boolean("is_read").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const broadcasts = pgTable("broadcasts", {
+  id: serial("id").primaryKey(),
+  message: text("message").notNull(),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const supportAutoReplies = pgTable("support_auto_replies", {
+  id: serial("id").primaryKey(),
+  keyword: text("keyword").notNull(),
+  reply: text("reply").notNull(),
+});
