@@ -1933,3 +1933,20 @@ export const appRouter = router({
 });
 
 export type AppRouter = typeof appRouter;
+// Notification bhejne ka function
+sendNotification: publicProcedure
+  .input(z.object({ userId: z.number(), title: z.string(), message: z.string() }))
+  .mutation(async ({ input }) => {
+    await db.insert(notifications).values({
+      userId: input.userId,
+      title: input.title,
+      message: input.message,
+    });
+    return { success: true };
+  }),
+
+getMyNotifications: publicProcedure
+  .query(async ({ ctx }) => {
+    const userId = ctx.user.id;
+    return await db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt));
+  }),
