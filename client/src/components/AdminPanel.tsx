@@ -1,3 +1,4 @@
+
 import { trpc } from "@/lib/trpc";
 import { translate, type Language, type TranslationKey } from "@/lib/i18n";
 import { toast } from "sonner";
@@ -13,7 +14,8 @@ import {
   LifeBuoy,
   Megaphone,
   Pencil,
-  PlaySquare,
+  P
+laySquare,
   Settings2,
   ShieldCheck,
   TicketCheck,
@@ -1124,3 +1126,27 @@ function Field({
     </label>
   );
 }
+const [showNotifModal, setShowNotifModal] = useState(false);
+const [selectedUser, setSelectedUser] = useState(null);
+const [notifTitle, setNotifTitle] = useState("");
+const [notifMsg, setNotifMsg] = useState("");
+
+// User list me button:
+<button onClick={() => { setSelectedUser(user); setShowNotifModal(true); }}>
+  Send Message 🔔
+</button>
+
+// Modal neeche add karo:
+{showNotifModal && (
+  <div style={{position: 'fixed', top: '50%', left: '50%', background: 'white', padding: '20px', borderRadius: '10px', zIndex: 999}}>
+    <h3>Send to {selectedUser?.name}</h3>
+    <input placeholder="Title jaise: Withdrawal Rejected" value={notifTitle} onChange={e => setNotifTitle(e.target.value)} style={{width: '100%', margin: '10px 0', padding: '8px'}} />
+    <textarea placeholder="Message likho..." value={notifMsg} onChange={e => setNotifMsg(e.target.value)} style={{width: '100%', padding: '8px'}}></textarea>
+    <button onClick={async () => {
+      await fetch('/api/trpc/sendNotification', {method: 'POST', body: JSON.stringify({userId: selectedUser.id, title: notifTitle, message: notifMsg})});
+      setShowNotifModal(false);
+      alert('Sent to user bell!');
+    }}>Send Now</button>
+    <button onClick={() => setShowNotifModal(false)}>Cancel</button>
+  </div>
+)}
