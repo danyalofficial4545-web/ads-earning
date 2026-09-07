@@ -7,6 +7,8 @@ import {
   appSettings,
   authChallenges,
   broadcasts,
+  notifications,
+  supportReplyRules,
   deposits,
   packages,
   paymentAccounts,
@@ -71,6 +73,11 @@ import {
 
 function fail(message: string, code: TRPCError["code"] = "BAD_REQUEST"): never {
   throw new TRPCError({ code, message });
+}
+
+async function notifyUser(db: any, userId: number, title: string, message: string) {
+  if (typeof db?.insert !== "function") return;
+  await db.insert(notifications).values({ userId, title, message, isRead: false });
 }
 
 const SUPPORT_KNOWLEDGE_BASE = `You are AdEarn AI Support. Answer in the user's language, usually Urdu/Roman Urdu. Be concise, respectful, and never promise admin approval or guaranteed earnings. Knowledge base:
@@ -693,8 +700,29 @@ export const appRouter = router({
       return db
         .select()
         .from(broadcasts)
+        .where(eq(broadcasts.isActive, true))
         .orderBy(desc(broadcasts.createdAt))
         .limit(10);
+    }),
+    notifications: protectedProcedure.query(async ({ ctx }) => {
+      const { user } = await getActor(ctx);
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      return db.select().from(notifications).where(eq(notifications.userId, user.id)).orderBy(desc(notifications.createdAt)).limit(50);
+    }),
+    unreadNotifications: protectedProcedure.query(async ({ ctx }) => {
+      const { user } = await getActor(ctx);
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const rows = await db.select().from(notifications).where(and(eq(notifications.userId, user.id), eq(notifications.isRead, false))).orderBy(desc(notifications.createdAt));
+      return { count: rows.length, rows };
+    }),
+    markNotificationRead: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const { user } = await getActor(ctx);
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      await db.update(notifications).set({ isRead: true }).where(and(eq(notifications.id, input.id), eq(notifications.userId, user.id)));
+      return { success: true };
     }),
     joinWhatsApp: protectedProcedure.mutation(async ({ ctx }) => {
       const { user, profile } = await getActor(ctx);
@@ -1367,8 +1395,14 @@ export const appRouter = router({
         await db.insert(supportChatMessages).values({ userId: user.id, role: "user", content: input.message, aiGenerated: false });
         const recent = await db.select().from(supportChatMessages).where(eq(supportChatMessages.userId, user.id)).orderBy(desc(supportChatMessages.createdAt)).limit(20);
         const conversation = recent.reverse().map(message => ({ role: message.role === "admin" ? "assistant" as const : message.role, content: message.content }));
-        let answer = supportFallback(input.message);
+        const customRules = await db.select().from(supportReplyRules).orderBy(desc(supportReplyRules.updatedAt));
+        const matchedRule = customRules.find(rule => input.message.toLowerCase().includes(rule.keyword.toLowerCase()));
+        let answer = matchedRule?.message ?? supportFallback(input.message);
         try {
+          if (matchedRule) {
+            await db.insert(supportChatMessages).values({ userId: user.id, role: "assistant", content: answer, aiGenerated: false });
+            return { answer };
+          }
           const response = await invokeLLM({
             messages: [{ role: "system", content: SUPPORT_KNOWLEDGE_BASE }, ...conversation],
           });
@@ -1485,10 +1519,13 @@ export const appRouter = router({
           id: z.number().int().positive(),
           approved: z.boolean(),
           note: z.string().trim().max(512).optional(),
+          rejectionReason: z.string().trim().min(3).max(512).optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
         await getAdmin(ctx);
+        if (!input.approved && !input.rejectionReason)
+          fail("Reason for rejection is required.");
         const db = await getDb();
         if (!db)
           fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
@@ -1508,6 +1545,7 @@ export const appRouter = router({
           .set({
             status,
             adminNote: input.note ?? null,
+            rejectionReason: input.approved ? null : input.rejectionReason,
             reviewedAt: new Date(),
           })
           .where(eq(deposits.id, deposit.id));
@@ -1535,6 +1573,14 @@ export const appRouter = router({
               .set({ balancePkr: profile.balancePkr + deposit.amountPkr })
               .where(eq(profiles.userId, deposit.userId));
         }
+        await notifyUser(
+          db,
+          deposit.userId,
+          input.approved ? "Deposit approved" : "Deposit rejected",
+          input.approved
+            ? `Your deposit of PKR ${deposit.amountPkr} was approved.`
+            : `Your deposit was rejected. Reason: ${input.rejectionReason}`
+        );
         return { success: true };
       }),
     reviewWithdrawal: protectedProcedure
@@ -1543,10 +1589,13 @@ export const appRouter = router({
           id: z.number().int().positive(),
           approved: z.boolean(),
           note: z.string().trim().max(512).optional(),
+          rejectionReason: z.string().trim().min(3).max(512).optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
         await getAdmin(ctx);
+        if (!input.approved && !input.rejectionReason)
+          fail("Reason for rejection is required.");
         const db = await getDb();
         if (!db)
           fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
@@ -1587,6 +1636,7 @@ export const appRouter = router({
           .set({
             status: input.approved ? "approved" : "rejected",
             adminNote: input.note ?? null,
+            rejectionReason: input.approved ? null : input.rejectionReason,
             reviewedAt: new Date(),
           })
           .where(eq(withdrawals.id, request.id));
@@ -1615,6 +1665,14 @@ export const appRouter = router({
               eq(transactions.status, "pending")
             )
           );
+        await notifyUser(
+          db,
+          request.userId,
+          input.approved ? "Withdrawal approved" : "Withdrawal rejected",
+          input.approved
+            ? `Your withdrawal of PKR ${request.amountPkr} was approved.`
+            : `Your withdrawal was rejected. Reason: ${input.rejectionReason}`
+        );
         return { success: true };
       }),
     deleteDepositHistory: protectedProcedure
@@ -1819,6 +1877,7 @@ export const appRouter = router({
           title: z.string().trim().min(3).max(140),
           body: z.string().trim().min(3).max(5000),
           mediaUrl: z.string().url().optional(),
+          type: z.enum(["info", "warning"]).default("info"),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -1831,6 +1890,41 @@ export const appRouter = router({
           .values({ ...input, mediaUrl: input.mediaUrl ?? null });
         return { success: true };
       }),
+    deleteBroadcast: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      await getAdmin(ctx);
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      await db.update(broadcasts).set({ isActive: false }).where(eq(broadcasts.id, input.id));
+      return { success: true };
+    }),
+    supportReplyRules: protectedProcedure.query(async ({ ctx }) => {
+      await getAdmin(ctx);
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      return db.select().from(supportReplyRules).orderBy(desc(supportReplyRules.updatedAt));
+    }),
+    saveSupportReplyRule: protectedProcedure.input(z.object({ id: z.number().int().positive().optional(), keyword: z.string().trim().min(2).max(120), message: z.string().trim().min(2).max(5000) })).mutation(async ({ ctx, input }) => {
+      await getAdmin(ctx);
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      if (input.id) await db.update(supportReplyRules).set({ keyword: input.keyword, message: input.message }).where(eq(supportReplyRules.id, input.id));
+      else await db.insert(supportReplyRules).values({ keyword: input.keyword, message: input.message });
+      return { success: true };
+    }),
+    deleteSupportReplyRule: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      await getAdmin(ctx);
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      await db.delete(supportReplyRules).where(eq(supportReplyRules.id, input.id));
+      return { success: true };
+    }),
+    sendNotification: protectedProcedure.input(z.object({ userId: z.number().int().positive(), title: z.string().trim().min(2).max(140), message: z.string().trim().min(2).max(5000) })).mutation(async ({ ctx, input }) => {
+      await getAdmin(ctx);
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      await notifyUser(db, input.userId, input.title, input.message);
+      return { success: true };
+    }),
     tickets: protectedProcedure.query(async ({ ctx }) => {
       await getAdmin(ctx);
       const db = await getDb();
@@ -1933,20 +2027,3 @@ export const appRouter = router({
 });
 
 export type AppRouter = typeof appRouter;
-// Notification bhejne ka function
-sendNotification: publicProcedure
-  .input(z.object({ userId: z.number(), title: z.string(), message: z.string() }))
-  .mutation(async ({ input }) => {
-    await db.insert(notifications).values({
-      userId: input.userId,
-      title: input.title,
-      message: input.message,
-    });
-    return { success: true };
-  }),
-
-getMyNotifications: publicProcedure
-  .query(async ({ ctx }) => {
-    const userId = ctx.user.id;
-    return await db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt));
-  }),

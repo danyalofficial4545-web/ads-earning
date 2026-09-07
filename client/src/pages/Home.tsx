@@ -275,6 +275,7 @@ export default function Home() {
           </button>
           <div className="flex items-center gap-2">
             <LanguageToggle language={language} onChange={setLanguage} />
+            <NotificationBell />
             <button
               aria-label={t("profile")}
               onClick={() => selectPage("profile")}
@@ -1217,6 +1218,14 @@ function Workspace({
   );
 }
 
+function NotificationBell() {
+  const [open, setOpen] = useState(false);
+  const notifications = trpc.platform.notifications.useQuery(undefined, { refetchInterval: 30000 });
+  const markRead = trpc.platform.markNotificationRead.useMutation({ onSuccess: () => notifications.refetch() });
+  const rows = notifications.data ?? [];
+  const unread = rows.filter((item: any) => !item.isRead).length;
+  return <div className="relative"><button type="button" className="relative grid size-9 place-items-center rounded-xl border border-white/10 bg-white/5 text-amber-300" aria-label="Notifications" onClick={() => setOpen(value => !value)}><Bell className="size-4" />{unread > 0 && <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-red-500 px-1 text-center text-[10px] font-black text-white">{unread}</span>}</button>{open && <div className="absolute right-0 top-11 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/10 bg-[#17342d] p-3 shadow-2xl"><p className="px-2 text-sm font-bold text-white">Notifications</p><div className="mt-2 max-h-80 space-y-2 overflow-auto">{rows.length ? rows.map((item: any) => <button type="button" key={item.id} onClick={() => !item.isRead && markRead.mutate({ id: item.id })} className={`w-full rounded-xl p-3 text-left text-sm ${item.isRead ? "bg-white/5 text-slate-400" : "bg-red-600/15 text-white"}`}><p className="font-bold">{item.title}</p><p className="mt-1">{item.message}</p></button>) : <p className="p-2 text-xs text-slate-400">No notifications</p>}</div></div>}</div>;
+}
 function PageHeading({
   eyebrow,
   title,
@@ -1247,6 +1256,8 @@ function PageHeading({
 }
 
 function Dashboard({ t, overview, announcements, setPage, onRequestWithdrawal }: any) {
+  const [dismissed, setDismissed] = useState<number[]>([]);
+  const visibleAnnouncements = announcements.filter((item: any) => !dismissed.includes(item.id));
   const active = overview.activePackage;
   const canWithdraw = Boolean(active) ||
     (overview.profile.whatsappRewardEligible &&
@@ -1382,19 +1393,19 @@ function Dashboard({ t, overview, announcements, setPage, onRequestWithdrawal }:
           </div>
         </div>
       </div>
-      {announcements.length > 0 && (
+      {visibleAnnouncements.length > 0 && (
         <div className="panel mt-5">
           <div className="flex items-center gap-2">
             <Bell className="size-4 text-amber-300" />
             <p className="font-bold">{t("announcements")}</p>
           </div>
           <div className="mt-4 space-y-3">
-            {announcements.map((item: any) => (
+            {visibleAnnouncements.map((item: any) => (
               <div
                 key={item.id}
-                className="rounded-xl border border-white/10 bg-slate-950/15 p-4"
+                className={`rounded-xl border p-4 ${item.type === "warning" ? "border-red-400/30 bg-red-500/10" : "border-white/10 bg-slate-950/15"}`}
               >
-                <p className="text-sm font-bold">{item.title}</p>
+                <div className="flex items-start justify-between gap-3"><p className="text-sm font-bold">{item.title}</p><button type="button" onClick={() => setDismissed(current => [...current, item.id])} className="text-xs text-slate-400">Dismiss</button></div>
                 <p className="mt-1 text-sm leading-6 text-slate-300">
                   {item.body}
                 </p>
@@ -1751,6 +1762,8 @@ function GroupedFinancialHistory({ rows, t, kind }: { rows: any[]; t: (key: Tran
                   <div className="min-w-0">
                     <p className="font-bold">{money(item.amountPkr)} {t(kind)}</p>
                     <p className="mt-1 text-xs text-slate-500">{kind === "deposit" ? `${item.method} · ` : ""}{dateTime(item.createdAt)}</p>
+                    {item.status === "pending" && <p className="mt-2 text-xs font-semibold text-amber-200">{kind === "deposit" ? "Deposit Processing in 24 hours - Can be approved anytime within 24h" : "Withdrawal Processing in 24 hours - Can be approved anytime within 24h"}</p>}
+                    {item.status === "rejected" && (item.rejectionReason || item.adminNote) && <p className="mt-2 text-xs font-semibold text-red-300">Admin Message: {item.rejectionReason || item.adminNote}</p>}
                     <div className="mt-2 flex flex-wrap gap-2">
                       {kind === "deposit" && item.senderAccountName && <CopyValue value={item.senderAccountName} label={t("senderAccountName")} />}
                       {kind === "deposit" && item.senderAccountNumber && <CopyValue value={item.senderAccountNumber} label={t("senderAccountNumber")} />}

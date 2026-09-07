@@ -170,6 +170,7 @@ export const deposits = mysqlTable("deposits", {
   proofData: mediumtext("proofData"),
   status: mysqlEnum("status", ["pending", "approved", "rejected"]).notNull().default("pending"),
   adminNote: varchar("adminNote", { length: 512 }),
+  rejectionReason: varchar("rejectionReason", { length: 512 }),
   reviewedAt: timestamp("reviewedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => [index("deposits_user_status_idx").on(table.userId, table.status)]);
@@ -195,6 +196,7 @@ export const withdrawals = mysqlTable("withdrawals", {
   accountDetails: varchar("accountDetails", { length: 512 }).notNull(),
   status: mysqlEnum("status", ["pending", "approved", "rejected"]).notNull().default("pending"),
   adminNote: varchar("adminNote", { length: 512 }),
+  rejectionReason: varchar("rejectionReason", { length: 512 }),
   reviewedAt: timestamp("reviewedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => [index("withdrawals_user_status_idx").on(table.userId, table.status)]);
@@ -228,8 +230,27 @@ export const broadcasts = mysqlTable("broadcasts", {
   title: varchar("title", { length: 140 }).notNull(),
   body: text("body").notNull(),
   mediaUrl: varchar("mediaUrl", { length: 1024 }),
+  type: mysqlEnum("type", ["info", "warning"]).notNull().default("info"),
+  isActive: boolean("isActive").notNull().default(true),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
+
+export const supportReplyRules = mysqlTable("supportReplyRules", {
+  id: int("id").autoincrement().primaryKey(),
+  keyword: varchar("keyword", { length: 120 }).notNull(),
+  message: text("message").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const notifications = mysqlTable("notifications", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  title: varchar("title", { length: 140 }).notNull(),
+  message: text("message").notNull(),
+  isRead: boolean("isRead").notNull().default(false),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [index("notifications_user_read_idx").on(table.userId, table.isRead, table.createdAt)]);
 
 export const appSettings = mysqlTable("appSettings", {
   id: int("id").primaryKey(),
@@ -251,24 +272,3 @@ export const appSettings = mysqlTable("appSettings", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Profile = typeof profiles.$inferSelect;
-export const notifications = pgTable("notifications", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
-  title: text("title").notNull(),
-  message: text("message").notNull(),
-  isRead: boolean("is_read").default(false),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const broadcasts = pgTable("broadcasts", {
-  id: serial("id").primaryKey(),
-  message: text("message").notNull(),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const supportAutoReplies = pgTable("support_auto_replies", {
-  id: serial("id").primaryKey(),
-  keyword: text("keyword").notNull(),
-  reply: text("reply").notNull(),
-});

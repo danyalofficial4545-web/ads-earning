@@ -1,4 +1,3 @@
-
 import { trpc } from "@/lib/trpc";
 import { translate, type Language, type TranslationKey } from "@/lib/i18n";
 import { toast } from "sonner";
@@ -14,8 +13,7 @@ import {
   LifeBuoy,
   Megaphone,
   Pencil,
-  P
-laySquare,
+  PlaySquare,
   Settings2,
   ShieldCheck,
   TicketCheck,
@@ -34,7 +32,8 @@ type Tab =
   | "users"
   | "settings"
   | "tickets"
-  | "supportChats";
+  | "supportChats"
+  | "supportRules";
 const tabItems: Array<{ id: Tab; label: string; icon: typeof ClipboardCheck }> =
   [
     { id: "depositHistory", label: "depositHistory", icon: CreditCard },
@@ -47,6 +46,7 @@ const tabItems: Array<{ id: Tab; label: string; icon: typeof ClipboardCheck }> =
     { id: "settings", label: "settings", icon: Settings2 },
     { id: "tickets", label: "tickets", icon: TicketCheck },
     { id: "supportChats", label: "supportChats", icon: LifeBuoy },
+    { id: "supportRules", label: "supportReplyRules", icon: Settings2 },
   ];
 const adminRoutes: Record<Tab, string> = {
   users: "/admin/users",
@@ -59,6 +59,7 @@ const adminRoutes: Record<Tab, string> = {
   settings: "/admin/settings",
   tickets: "/admin/tickets",
   supportChats: "/admin/support",
+  supportRules: "/admin/support-rules",
 };
 const routeTabs: Record<string, Tab> = {
   "/admin/users": "users",
@@ -72,6 +73,7 @@ const routeTabs: Record<string, Tab> = {
   "/admin/settings": "settings",
   "/admin/tickets": "tickets",
   "/admin/support": "supportChats",
+  "/admin/support-rules": "supportRules",
 };
 const money = (amount: number) => `PKR ${amount.toLocaleString()}`;
 const dateTime = (value: Date | string) =>
@@ -192,6 +194,7 @@ export function AdminPanel({ t }: { t: (key: any) => string }) {
           {activeTab === "settings" && <GlobalSettings t={t} />}
           {activeTab === "tickets" && <Tickets t={t} />}
           {activeTab === "supportChats" && <SupportChats t={t} />}
+          {activeTab === "supportRules" && <SupportRules t={t} />}
         </section>
       </div>
     </>
@@ -423,7 +426,7 @@ function Approvals({ t, onChange, mode }: any) {
                         <Button
                           danger
                           onClick={() =>
-                            deposit.mutate({ id: row.id, approved: false })
+                            deposit.mutate({ id: row.id, approved: false, rejectionReason: window.prompt("Reason for rejection") || undefined })
                           }
                         >
                           <X className="size-3.5" />
@@ -498,7 +501,7 @@ function Approvals({ t, onChange, mode }: any) {
                       <Button
                         danger
                         onClick={() =>
-                          withdrawal.mutate({ id: row.id, approved: false })
+                          withdrawal.mutate({ id: row.id, approved: false, rejectionReason: window.prompt("Reason for rejection") || undefined })
                         }
                       >
                         <X className="size-3.5" />
@@ -701,6 +704,7 @@ function Payments({ t }: any) {
 
 function Broadcasts({ t }: any) {
   const list = trpc.admin.broadcasts.useQuery();
+  const remove = trpc.admin.deleteBroadcast.useMutation({ onSuccess: () => list.refetch(), onError: e => toast.error(e.message) });
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [mediaUrl, setMediaUrl] = useState("");
@@ -722,7 +726,7 @@ function Broadcasts({ t }: any) {
           className="panel space-y-3"
           onSubmit={e => {
             e.preventDefault();
-            send.mutate({ title, body, mediaUrl: mediaUrl || undefined });
+            send.mutate({ title, body, mediaUrl: mediaUrl || undefined, type: "info" });
           }}
         >
           <Field label={t("title")}>
@@ -769,6 +773,7 @@ function Broadcasts({ t }: any) {
                   <p className="mt-3 text-xs text-slate-500">
                     {dateTime(row.createdAt)}
                   </p>
+                  <div className="mt-3"><Button danger onClick={() => remove.mutate({ id: row.id })}>{t("delete")}</Button></div>
                 </div>
               ))}
             </div>
@@ -793,6 +798,14 @@ function UserManagement({ t }: any) {
     onSuccess: () => list.refetch(),
     onError: e => toast.error(e.message),
   });
+  const sendNotification = trpc.admin.sendNotification.useMutation({ onSuccess: () => toast.success(t("saved")), onError: e => toast.error(e.message) });
+  const promptNotification = (userId: number) => {
+    const title = window.prompt("Notification title");
+    if (!title?.trim()) return;
+    const message = window.prompt("Notification message");
+    if (!message?.trim()) return;
+    sendNotification.mutate({ userId, title: title.trim(), message: message.trim() });
+  };
   const filteredUsers = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return list.data ?? [];
@@ -851,6 +864,7 @@ function UserManagement({ t }: any) {
                 <td className="text-right">
                   <div className="flex justify-end gap-2">
                     <Button onClick={() => setSelectedUserId(row.id)}>{t("viewDetails")}</Button>
+                    <Button onClick={() => promptNotification(row.id)}>{t("sendNotification")}</Button>
                     <Button danger={!row.profile.isBlocked} onClick={() => block.mutate({ userId: row.id, blocked: !row.profile.isBlocked })}>
                       {row.profile.isBlocked ? t("unblock") : t("block")}
                     </Button>
@@ -1071,6 +1085,15 @@ function Tickets({ t }: any) {
   );
 }
 
+function SupportRules({ t }: any) {
+  const list = trpc.admin.supportReplyRules.useQuery();
+  const [keyword, setKeyword] = useState("");
+  const [message, setMessage] = useState("");
+  const [editing, setEditing] = useState<any>(null);
+  const save = trpc.admin.saveSupportReplyRule.useMutation({ onSuccess: () => { toast.success(t("saved")); list.refetch(); setKeyword(""); setMessage(""); setEditing(null); }, onError: e => toast.error(e.message) });
+  const remove = trpc.admin.deleteSupportReplyRule.useMutation({ onSuccess: () => list.refetch(), onError: e => toast.error(e.message) });
+  return <><Heading title={t("supportReplyRules")} description={t("supportReplyRulesText")} /><div className="grid gap-5 xl:grid-cols-[.75fr_1.25fr]"><form className="panel space-y-3" onSubmit={e => { e.preventDefault(); save.mutate({ ...(editing ? { id: editing.id } : {}), keyword, message }); }}><Field label={t("questionKeyword")}><input className="field" value={keyword} onChange={e => setKeyword(e.target.value)} required /></Field><Field label={t("autoReplyMessage")}><textarea className="field min-h-36 py-3" value={message} onChange={e => setMessage(e.target.value)} required /></Field><button className="h-9 rounded-lg bg-amber-300 px-3 text-xs font-bold text-slate-950" disabled={save.isPending}>{editing ? t("update") : t("save")}</button></form><div className="panel space-y-3">{list.data?.length ? list.data.map(rule => <div key={rule.id} className="rounded-xl border border-white/10 bg-white/5 p-3"><p className="font-bold">{rule.keyword}</p><p className="mt-1 text-sm text-slate-300">{rule.message}</p><div className="mt-3 flex gap-2"><Button onClick={() => { setEditing(rule); setKeyword(rule.keyword); setMessage(rule.message); }}>{t("edit")}</Button><Button danger onClick={() => remove.mutate({ id: rule.id })}>{t("delete")}</Button></div></div>) : <Empty>{t("noSupportReplyRules")}</Empty>}</div></div></>;
+}
 function SupportChats({ t }: any) {
   const [search, setSearch] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
@@ -1126,27 +1149,3 @@ function Field({
     </label>
   );
 }
-const [showNotifModal, setShowNotifModal] = useState(false);
-const [selectedUser, setSelectedUser] = useState(null);
-const [notifTitle, setNotifTitle] = useState("");
-const [notifMsg, setNotifMsg] = useState("");
-
-// User list me button:
-<button onClick={() => { setSelectedUser(user); setShowNotifModal(true); }}>
-  Send Message 🔔
-</button>
-
-// Modal neeche add karo:
-{showNotifModal && (
-  <div style={{position: 'fixed', top: '50%', left: '50%', background: 'white', padding: '20px', borderRadius: '10px', zIndex: 999}}>
-    <h3>Send to {selectedUser?.name}</h3>
-    <input placeholder="Title jaise: Withdrawal Rejected" value={notifTitle} onChange={e => setNotifTitle(e.target.value)} style={{width: '100%', margin: '10px 0', padding: '8px'}} />
-    <textarea placeholder="Message likho..." value={notifMsg} onChange={e => setNotifMsg(e.target.value)} style={{width: '100%', padding: '8px'}}></textarea>
-    <button onClick={async () => {
-      await fetch('/api/trpc/sendNotification', {method: 'POST', body: JSON.stringify({userId: selectedUser.id, title: notifTitle, message: notifMsg})});
-      setShowNotifModal(false);
-      alert('Sent to user bell!');
-    }}>Send Now</button>
-    <button onClick={() => setShowNotifModal(false)}>Cancel</button>
-  </div>
-)}

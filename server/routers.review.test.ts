@@ -43,7 +43,7 @@ describe("admin financial review procedures", () => {
   it("scopes a rejected deposit transaction update to that deposit reference", async () => {
     const { db, updates, matchedTransactionReferences } = reviewDatabase({ id: 55, userId: 22, amountPkr: 500, status: "pending" }, [55, 56]);
     mocks.getDb.mockResolvedValue(db);
-    await appRouter.createCaller(adminContext()).admin.reviewDeposit({ id: 55, approved: false });
+    await appRouter.createCaller(adminContext()).admin.reviewDeposit({ id: 55, approved: false, rejectionReason: "Wrong transaction details" });
     const transactionUpdate = updates.find((update) => update.table === transactions);
     expect(transactionUpdate?.values).toMatchObject({ status: "rejected" });
     expect(inspect(transactionUpdate?.condition, { depth: 8 })).toContain("referenceId");
@@ -71,7 +71,7 @@ describe("admin financial review procedures", () => {
   it("refunds a rejected withdrawal and restores its reserved limit", async () => {
     const { db, updates, matchedTransactionReferences } = reviewDatabase({ id: 88, userId: 22, amountPkr: 500, status: "pending" }, [88, 89], { userId: 22, balancePkr: 700, withdrawalLimitPkr: 0 });
     mocks.getDb.mockResolvedValue(db);
-    await appRouter.createCaller(adminContext()).admin.reviewWithdrawal({ id: 88, approved: false });
+    await appRouter.createCaller(adminContext()).admin.reviewWithdrawal({ id: 88, approved: false, rejectionReason: "Wrong wallet number" });
     const profileUpdate = updates.find((update) => update.table === profiles);
     expect(profileUpdate?.values).toEqual({ balancePkr: 1200, withdrawalLimitPkr: 500 });
     const transactionUpdate = updates.find((update) => update.table === transactions);
