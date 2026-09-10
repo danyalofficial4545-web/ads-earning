@@ -1533,6 +1533,11 @@ export const appRouter = router({
             )
           );
         if (input.approved) {
+          console.log("DEPOSIT APPROVAL DEBUG:", {
+            depositId: deposit.id,
+            userId: deposit.userId,
+            amountPkr: deposit.amountPkr,
+          });
           const profile = (
             await db
               .select()
@@ -1540,6 +1545,7 @@ export const appRouter = router({
               .where(eq(profiles.userId, deposit.userId))
               .limit(1)
           )[0];
+          console.log("Invited user referredBy:", profile?.referredByUserId);
           if (profile)
             await db
               .update(profiles)
@@ -1586,8 +1592,21 @@ export const appRouter = router({
                   referenceType: "deposit",
                   referenceId: deposit.id,
                 });
+                await notifyUser(
+                  db,
+                  inviter.userId,
+                  "Referral reward credited",
+                  `Your referral deposited PKR ${deposit.amountPkr}. PKR ${commission} (50%) was credited to your account.`
+                );
+                console.log(
+                  `REFERRAL SUCCESS: ${commission} credited to ${inviter.userId} for deposit ${deposit.id}`
+                );
               }
+            } else {
+              console.log("Referral already given for this deposit", deposit.id);
             }
+          } else {
+            console.log("No referrer found for user", deposit.userId);
           }
         }
         await notifyUser(
