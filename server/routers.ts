@@ -13,6 +13,7 @@ import {
   packages,
   paymentAccounts,
   profiles,
+  referralRewards,
   supportTickets,
   supportChatMessages,
   transactions,
@@ -51,7 +52,6 @@ import {
   fromPkr,
   getAdClaimStatus,
   isValidPakistanMobileNumber,
-  referralLimitCredit,
   refundRejectedWithdrawal,
   toPkr,
   validateDepositAmountPkr,
@@ -813,34 +813,7 @@ export const appRouter = router({
           status: "completed",
           note: `${plan.name} package purchased`,
         });
-        if (profile.referredByUserId) {
-          const settings = await getSettings();
-          const credit = referralLimitCredit(
-            plan.pricePkr,
-            settings.referralCommissionPercent
-          );
-          const referrer = (
-            await db
-              .select()
-              .from(profiles)
-              .where(eq(profiles.userId, profile.referredByUserId))
-              .limit(1)
-          )[0];
-          if (referrer) {
-            await db
-              .update(profiles)
-              .set({ withdrawalLimitPkr: referrer.withdrawalLimitPkr + credit })
-              .where(eq(profiles.userId, referrer.userId));
-            await db.insert(transactions).values({
-              userId: referrer.userId,
-              type: "referral_limit",
-              direction: "neutral",
-              amountPkr: credit,
-              status: "completed",
-              note: `Referral withdrawal limit unlocked by ${plan.name} purchase`,
-            });
-          }
-        }
+        // Wallet purchase - no referral commission - company loss fix
         return { success: true, expiresAt };
       }),
   }),
@@ -1572,6 +1545,50 @@ export const appRouter = router({
               .update(profiles)
               .set({ balancePkr: profile.balancePkr + deposit.amountPkr })
               .where(eq(profiles.userId, deposit.userId));
+          if (profile?.referredByUserId) {
+            const existing = (
+              await db
+                .select()
+                .from(referralRewards)
+                .where(eq(referralRewards.depositId, deposit.id))
+                .limit(1)
+            )[0];
+            if (!existing) {
+              const commission = Math.floor(deposit.amountPkr * 0.5);
+              const inviter = (
+                await db
+                  .select()
+                  .from(profiles)
+                  .where(eq(profiles.userId, profile.referredByUserId))
+                  .limit(1)
+              )[0];
+              if (inviter) {
+                await db
+                  .update(profiles)
+                  .set({
+                    balancePkr: inviter.balancePkr + commission,
+                    withdrawalLimitPkr: inviter.withdrawalLimitPkr + commission,
+                  })
+                  .where(eq(profiles.userId, inviter.userId));
+                await db.insert(referralRewards).values({
+                  depositId: deposit.id,
+                  inviterId: inviter.userId,
+                  invitedUserId: deposit.userId,
+                  amountPkr: commission,
+                });
+                await db.insert(transactions).values({
+                  userId: inviter.userId,
+                  type: "referral_limit",
+                  direction: "credit",
+                  amountPkr: commission,
+                  status: "completed",
+                  note: "Referral commission for approved deposit",
+                  referenceType: "deposit",
+                  referenceId: deposit.id,
+                });
+              }
+            }
+          }
         }
         await notifyUser(
           db,

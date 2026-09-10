@@ -175,6 +175,15 @@ export const deposits = mysqlTable("deposits", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => [index("deposits_user_status_idx").on(table.userId, table.status)]);
 
+export const referralRewards = mysqlTable("referralRewards", {
+  id: int("id").autoincrement().primaryKey(),
+  depositId: int("depositId").notNull().unique(),
+  inviterId: int("inviterId").notNull(),
+  invitedUserId: int("invitedUserId").notNull(),
+  amountPkr: int("amountPkr").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 export const authChallenges = mysqlTable("authChallenges", {
   id: varchar("id", { length: 64 }).primaryKey(),
   purpose: mysqlEnum("purpose", ["sign_in", "sign_up"]).notNull(),
