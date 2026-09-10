@@ -148,6 +148,13 @@
       "when": 1788483986703,
       "tag": "0020_steep_boomerang",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "5",
+      "when": 1789063219000,
+      "tag": "0021_referral_rewards",
+      "breakpoints": true
     }
   ]
 }
