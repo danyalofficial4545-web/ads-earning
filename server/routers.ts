@@ -1588,7 +1588,7 @@ export const appRouter = router({
                   direction: "credit",
                   amountPkr: commission,
                   status: "completed",
-                  note: "Referral commission for approved deposit",
+                  note: "Referral Bonus",
                   referenceType: "deposit",
                   referenceId: deposit.id,
                 });
