@@ -1595,8 +1595,8 @@ export const appRouter = router({
                 await notifyUser(
                   db,
                   inviter.userId,
-                  "Referral reward credited",
-                  `Your referral deposited PKR ${deposit.amountPkr}. PKR ${commission} (50%) was credited to your account.`
+                  "🎉 Mubarak Ho! Referral Reward Mil Gaya!",
+                  `Wah! Aap ne jis dost ko invite kiya tha us ne Rs ${deposit.amountPkr} ka deposit kiya hai. Aap ko Rs ${commission} (50%) ka inaam mil gaya hai! Shukriya!`
                 );
                 console.log(
                   `REFERRAL SUCCESS: ${commission} credited to ${inviter.userId} for deposit ${deposit.id}`
