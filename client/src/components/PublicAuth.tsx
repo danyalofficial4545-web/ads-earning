@@ -53,10 +53,6 @@ function GoogleMark({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function VisualCodeCheck({ t, imageData, answer, onAnswer, onRefresh }: { t: Translate; imageData?: string; answer: string; onAnswer: (value: string) => void; onRefresh: () => void }) {
-  return <div className="rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-3"><div className="flex items-center justify-between gap-3"><p className="text-xs font-bold text-emerald-100">{t("humanVerification")}</p><button type="button" onClick={onRefresh} className="text-xs font-bold text-amber-300">{t("refreshCheck")}</button></div><p className="mt-2 text-xs leading-5 text-slate-200">{t("captchaCodeHelp")}</p>{imageData ? <img src={imageData} alt={t("humanVerification")} className="mt-3 h-[70px] w-full rounded-xl border border-white/10 object-cover" /> : <div className="mt-3 grid h-[70px] place-items-center rounded-xl border border-white/10 bg-slate-950/25"><Loader2 className="size-4 animate-spin text-amber-300" /></div>}<label className="mt-3 block"><span className="field-label">{t("captchaCodeLabel")}</span><input value={answer} autoComplete="off" autoCapitalize="characters" maxLength={8} className="field tracking-[0.24em] uppercase" onChange={event => onAnswer(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} /></label></div>;
-}
-
 export function PublicAuth({
   language,
   setLanguage,
@@ -71,20 +67,10 @@ export function PublicAuth({
   const [signUp, setSignUp] = useState(() => ({ username: "", email: "", password: "", confirmPassword: "", referralCode: new URLSearchParams(window.location.search).get("ref") ?? "" }));
   const [signInErrors, setSignInErrors] = useState<FormErrors>({});
   const [signUpErrors, setSignUpErrors] = useState<FormErrors>({});
-  const [challengeAnswer, setChallengeAnswer] = useState("");
-  const [signUpChallengeAnswer, setSignUpChallengeAnswer] = useState("");
   const [deviceId] = useState(() => getDeviceMarker());
   const branding = trpc.platform.publicData.useQuery();
   const brandSettings = resolvePublicBranding(branding.data?.branding);
   const utils = trpc.useUtils();
-  const signInCaptcha = trpc.auth.captcha.useQuery(
-    { purpose: "sign_in", deviceId },
-    { staleTime: 0, refetchOnWindowFocus: false, enabled: mode === "signIn" }
-  );
-  const signUpCaptcha = trpc.auth.captcha.useQuery(
-    { purpose: "sign_up", deviceId },
-    { staleTime: 0, refetchOnWindowFocus: false, enabled: mode === "signUp" }
-  );
   const complete = async (message: string) => {
     toast.success(message);
     await utils.auth.me.invalidate();
@@ -94,16 +80,12 @@ export function PublicAuth({
     onSuccess: () => complete(t("signedIn")),
     onError: error => {
       setSignInErrors(friendlyServerError(error, "password"));
-      setChallengeAnswer("");
-      signInCaptcha.refetch();
     },
   });
   const register = trpc.auth.register.useMutation({
     onSuccess: () => complete(t("accountCreated")),
     onError: error => {
       setSignUpErrors(friendlyServerError(error, "password"));
-      setSignUpChallengeAnswer("");
-      signUpCaptcha.refetch();
     },
   });
   const busy = login.isPending || register.isPending;
@@ -114,15 +96,8 @@ export function PublicAuth({
       password: validatePassword(signIn.password),
     };
     if (errors.email || errors.password) return setSignInErrors(errors);
-    if (!signInCaptcha.data || !challengeAnswer.trim())
-      return setSignInErrors({ general: t("verificationRequired") });
     setSignInErrors({});
-    login.mutate({
-      ...signIn,
-      challengeId: signInCaptcha.data.id,
-      challengeAnswer,
-      deviceId,
-    });
+    login.mutate(signIn);
   };
   const submitSignUp = (event: React.FormEvent) => {
     event.preventDefault();
@@ -137,10 +112,8 @@ export function PublicAuth({
     };
     if (errors.email || errors.username || errors.password || errors.confirmPassword)
       return setSignUpErrors(errors);
-    if (!signUpCaptcha.data || !signUpChallengeAnswer.trim())
-      return setSignUpErrors({ general: t("verificationRequired") });
     setSignUpErrors({});
-    register.mutate({ username: signUp.username, email: signUp.email, password: signUp.password, referralCode: signUp.referralCode || undefined, challengeId: signUpCaptcha.data.id, challengeAnswer: signUpChallengeAnswer, deviceId });
+    register.mutate({ username: signUp.username, email: signUp.email, password: signUp.password, referralCode: signUp.referralCode || undefined, deviceId });
   };
 
   return (
@@ -194,7 +167,6 @@ export function PublicAuth({
                 />
                 <FieldError>{signInErrors.password}</FieldError>
               </label>
-              <VisualCodeCheck t={t} imageData={signInCaptcha.data?.imageData} answer={challengeAnswer} onAnswer={setChallengeAnswer} onRefresh={() => { setChallengeAnswer(""); signInCaptcha.refetch(); }} />
               <FieldError>{signInErrors.general}</FieldError>
               <button
                 type="submit"
@@ -214,7 +186,6 @@ export function PublicAuth({
             <label><span className="field-label">{t("password")}</span><input type="password" autoComplete="new-password" className="field" aria-invalid={Boolean(signUpErrors.password)} value={signUp.password} onChange={event => { setSignUp({ ...signUp, password: event.target.value }); setSignUpErrors(errors => ({ ...errors, password: undefined })); }} /><FieldError>{signUpErrors.password}</FieldError></label>
             <label><span className="field-label">{t("confirmPassword")}</span><input type="password" autoComplete="new-password" className="field" aria-invalid={Boolean(signUpErrors.confirmPassword)} value={signUp.confirmPassword} onChange={event => { setSignUp({ ...signUp, confirmPassword: event.target.value }); setSignUpErrors(errors => ({ ...errors, confirmPassword: undefined })); }} /><FieldError>{signUpErrors.confirmPassword}</FieldError></label>
             <label><span className="field-label">{t("referralInvite")}</span><input className="field" value={signUp.referralCode} onChange={event => setSignUp({ ...signUp, referralCode: event.target.value.toUpperCase() })} /></label>
-            <VisualCodeCheck t={t} imageData={signUpCaptcha.data?.imageData} answer={signUpChallengeAnswer} onAnswer={setSignUpChallengeAnswer} onRefresh={() => { setSignUpChallengeAnswer(""); signUpCaptcha.refetch(); }} />
             <FieldError>{signUpErrors.general}</FieldError>
             <button type="submit" disabled={busy} className="flex min-h-12 w-full items-center justify-center rounded-xl bg-gradient-to-r from-red-600 to-red-500 px-5 py-3 text-base font-black tracking-wide text-white shadow-lg shadow-red-950/40 transition duration-200 hover:-translate-y-0.5 hover:from-red-500 hover:to-red-400 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#17342d] active:translate-y-0 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-60">{busy ? <Loader2 className="size-4 animate-spin" /> : t("createAccount")}</button>
           </form>}

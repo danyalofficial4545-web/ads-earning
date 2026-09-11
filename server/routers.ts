@@ -5,7 +5,6 @@ import { z } from "zod";
 import {
   adSessions,
   appSettings,
-  authChallenges,
   broadcasts,
   notifications,
   supportReplyRules,
@@ -31,7 +30,7 @@ import {
   getSettings,
   isDesignatedAdmin,
 } from "./db";
-import { clientIpFromHeaders, createHumanChallenge, hashSecurityValue, matchesHumanChallenge } from "./security";
+import { clientIpFromHeaders, hashSecurityValue } from "./security";
 import { sendTelegramAlert } from "./telegram";
 import { invokeLLM } from "./_core/llm";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
@@ -178,42 +177,6 @@ function saveAdMedia(
   });
 }
 
-async function consumeHumanChallenge(
-  db: any,
-  input: {
-    challengeId: string;
-    challengeAnswer: string;
-    deviceId: string;
-    purpose: "sign_in" | "sign_up";
-  }
-) {
-  const deviceFingerprintHash = hashSecurityValue(input.deviceId);
-  const challenge = (
-    await db
-      .select()
-      .from(authChallenges)
-      .where(eq(authChallenges.id, input.challengeId))
-      .limit(1)
-  )[0];
-  if (
-    !challenge ||
-    challenge.purpose !== input.purpose ||
-    challenge.deviceFingerprintHash !== deviceFingerprintHash ||
-    challenge.consumedAt ||
-    challenge.expiresAt.getTime() < Date.now() ||
-    !matchesHumanChallenge(input.challengeAnswer, challenge.answerHash)
-  )
-    fail(
-      "Human verification failed. Please solve the new check and try again.",
-      "FORBIDDEN"
-    );
-  await db
-    .update(authChallenges)
-    .set({ consumedAt: new Date() })
-    .where(eq(authChallenges.id, challenge.id));
-  return deviceFingerprintHash;
-}
-
 async function buildOverview(userId: number) {
   const db = await getDb();
   if (!db)
@@ -317,33 +280,6 @@ export const appRouter = router({
     me: publicProcedure.query(opts =>
       opts.ctx.user ? publicUser(opts.ctx.user) : null
     ),
-    captcha: publicProcedure
-      .input(
-        z.object({
-          purpose: z.enum(["sign_in", "sign_up"]),
-          deviceId: z.string().trim().min(16).max(256),
-        })
-      )
-      .query(async ({ input }) => {
-        const db = await getDb();
-        if (!db)
-          fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-        const challenge = createHumanChallenge();
-        await db.insert(authChallenges).values({
-          id: challenge.id,
-          purpose: input.purpose,
-          prompt: challenge.prompt,
-          answerHash: challenge.answerHash,
-          deviceFingerprintHash: hashSecurityValue(input.deviceId),
-          expiresAt: challenge.expiresAt,
-        });
-        return {
-          id: challenge.id,
-          prompt: challenge.prompt,
-          imageData: challenge.imageData,
-          expiresAt: challenge.expiresAt,
-        };
-      }),
     register: publicProcedure
       .input(
         z.object({
@@ -366,8 +302,6 @@ export const appRouter = router({
             .min(8, "Your password is incorrect/weak, please enter strong password")
             .max(128),
           referralCode: z.string().trim().max(32).optional(),
-          challengeId: z.string().uuid(),
-          challengeAnswer: z.string().trim().min(1).max(32),
           deviceId: z.string().trim().min(16).max(256),
         })
       )
@@ -377,12 +311,7 @@ export const appRouter = router({
           fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
         const email = input.email.toLowerCase();
         const username = input.username.toLowerCase();
-        const deviceFingerprintHash = await consumeHumanChallenge(db, {
-          challengeId: input.challengeId,
-          challengeAnswer: input.challengeAnswer,
-          deviceId: input.deviceId,
-          purpose: "sign_up",
-        });
+        const deviceFingerprintHash = hashSecurityValue(input.deviceId);
         const registrationIpHash = hashSecurityValue(
           clientIpFromHeaders(
             ctx.req.headers as Record<string, string | string[] | undefined>
@@ -495,21 +424,12 @@ export const appRouter = router({
             .email("You entered wrong Gmail/Email, please correct your Gmail")
             .max(320),
           password: z.string().min(8, "Your password is incorrect/weak, please enter strong password"),
-          challengeId: z.string().uuid(),
-          challengeAnswer: z.string().trim().min(1).max(32),
-          deviceId: z.string().trim().min(16).max(256),
         })
       )
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
         if (!db)
           fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-        await consumeHumanChallenge(db, {
-          challengeId: input.challengeId,
-          challengeAnswer: input.challengeAnswer,
-          deviceId: input.deviceId,
-          purpose: "sign_in",
-        });
         const user = (
           await db
             .select()
