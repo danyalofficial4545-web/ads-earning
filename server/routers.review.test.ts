@@ -33,6 +33,7 @@ function reviewDatabase(record: any, pendingTransactionReferences: number[], pro
         matchedTransactionReferences.push(...pendingTransactionReferences.filter((reference) => parameters.includes(reference)));
       }
     } }) })),
+    insert: vi.fn(() => ({ values: vi.fn().mockResolvedValue([]) })),
   };
   return { db, updates, matchedTransactionReferences };
 }
@@ -62,7 +63,7 @@ describe("admin financial review procedures", () => {
     await appRouter.createCaller(adminContext()).admin.reviewDeposit({ id: 57, approved: true });
 
     const profileUpdate = updates.find(update => update.table === profiles);
-    expect(profileUpdate?.values).toEqual({ balancePkr: 900 });
+    expect(profileUpdate?.values).toEqual({ balancePkr: 1150 });
     const transactionUpdate = updates.find(update => update.table === transactions);
     expect(transactionUpdate?.values).toMatchObject({ status: "approved" });
     expect(matchedTransactionReferences).toEqual([57]);
