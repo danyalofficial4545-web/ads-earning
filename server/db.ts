@@ -1,5 +1,6 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import { createPool } from "mysql2/promise";
 import {
   appSettings,
   InsertUser,
@@ -70,7 +71,16 @@ export async function getDb() {
       return null;
     }
     try {
-      _db = drizzle(databaseUrl);
+      const parsed = new URL(databaseUrl);
+      const client = createPool({
+        host: parsed.hostname,
+        port: Number(parsed.port || 3306),
+        user: decodeURIComponent(parsed.username),
+        password: decodeURIComponent(parsed.password),
+        database: parsed.pathname.replace(/^\//, ""),
+        ssl: { rejectUnauthorized: true },
+      });
+      _db = drizzle({ client }) as unknown as ReturnType<typeof drizzle>;
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
@@ -132,7 +142,7 @@ export async function linkOAuthUser(
     await db.select().from(users).where(eq(users.openId, user.openId)).limit(1)
   )[0];
   const existingByEmail = email
-    ? (await db.select().from(users).where(eq(users.email, email)).limit(1))[0]
+    ? (await db.select().from(users).where(sql`LOWER(${users.email}) = ${email}`).limit(1))[0]
     : undefined;
   const existing = existingByOpenId ?? existingByEmail;
   if (existing) {

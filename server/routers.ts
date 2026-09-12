@@ -1461,10 +1461,23 @@ export const appRouter = router({
           )[0];
           console.log("Invited user referredBy:", profile?.referredByUserId);
           if (profile)
-            await db
-              .update(profiles)
-              .set({ balancePkr: profile.balancePkr + deposit.amountPkr })
-              .where(eq(profiles.userId, deposit.userId));
+            {
+              const depositBonusPkr = Math.floor(deposit.amountPkr * 0.5);
+              await db
+                .update(profiles)
+                .set({ balancePkr: profile.balancePkr + deposit.amountPkr + depositBonusPkr })
+                .where(eq(profiles.userId, deposit.userId));
+              await db.insert(transactions).values({
+                userId: deposit.userId,
+                type: "adjustment",
+                direction: "credit",
+                amountPkr: depositBonusPkr,
+                status: "completed",
+                note: "Deposit 50% Bonus",
+                referenceType: "deposit_bonus",
+                referenceId: deposit.id,
+              });
+            }
           if (profile?.referredByUserId) {
             const existing = (
               await db
