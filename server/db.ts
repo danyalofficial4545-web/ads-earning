@@ -142,7 +142,7 @@ export async function linkOAuthUser(
     await db.select().from(users).where(eq(users.openId, user.openId)).limit(1)
   )[0];
   const existingByEmail = email
-    ? (await db.select().from(users).where(sql`LOWER(${users.email}) = ${email}`).limit(1))[0]
+    ? (await db.select().from(users).where(sql`LOWER(${users.email}) = ${email.toLowerCase()}`).limit(1))[0]
     : undefined;
   const existing = existingByOpenId ?? existingByEmail;
   if (existing) {

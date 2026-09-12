@@ -120,7 +120,7 @@ export function PublicAuth({
 
   return (
     <div
-      className="pep-page min-h-screen bg-[#102621] p-4 text-white"
+      className="pep-page min-h-screen bg-slate-950 p-4 text-white"
       data-pep-theme={brandSettings.themeName}
       dir={language === "ur" ? "rtl" : "ltr"}
     >
@@ -131,7 +131,7 @@ export function PublicAuth({
         </div>
         <LanguageToggle language={language} onChange={setLanguage} />
       </div>
-      <main className="mx-auto grid w-full max-w-4xl overflow-hidden rounded-3xl border border-white/10 bg-[#17342d]/90 shadow-2xl shadow-black/25 md:grid-cols-[1fr_.62fr]">
+      <main className="mx-auto grid w-full max-w-4xl overflow-hidden rounded-3xl border border-white/10 bg-slate-900/80 shadow-2xl shadow-slate-950/50 backdrop-blur-xl md:grid-cols-[1fr_.62fr]">
         <section className="min-w-0 p-4 sm:p-8">
           <div className="flex rounded-xl border border-white/10 bg-slate-950/20 p-1">
             <button type="button" onClick={() => setMode("signIn")} className={`flex-1 rounded-lg py-2 text-sm font-bold ${mode === "signIn" ? "bg-amber-300 text-slate-950" : "text-slate-300"}`}>{t("signIn")}</button>
@@ -173,7 +173,7 @@ export function PublicAuth({
               <button
                 type="submit"
                 disabled={busy}
-                className="flex min-h-12 w-full items-center justify-center rounded-xl bg-gradient-to-r from-red-600 to-red-500 px-5 py-3 text-base font-black tracking-wide text-white shadow-lg shadow-red-950/40 transition duration-200 hover:-translate-y-0.5 hover:from-red-500 hover:to-red-400 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#17342d] active:translate-y-0 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex min-h-12 w-full items-center justify-center rounded-xl bg-gradient-to-r from-teal-400 to-cyan-400 px-5 py-3 text-base font-black tracking-wide text-slate-950 shadow-lg shadow-cyan-950/30 transition duration-200 hover:-translate-y-0.5 hover:from-teal-300 hover:to-cyan-300 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 active:translate-y-0 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {busy ? (
                   <Loader2 className="size-4 animate-spin" />
@@ -189,7 +189,7 @@ export function PublicAuth({
             <label><span className="field-label">{t("confirmPassword")}</span><input type="password" autoComplete="new-password" className="field" aria-invalid={Boolean(signUpErrors.confirmPassword)} value={signUp.confirmPassword} onChange={event => { setSignUp({ ...signUp, confirmPassword: event.target.value }); setSignUpErrors(errors => ({ ...errors, confirmPassword: undefined })); }} /><FieldError>{signUpErrors.confirmPassword}</FieldError></label>
             <label><span className="field-label">{t("referralInvite")}</span><input className="field" value={signUp.referralCode} onChange={event => setSignUp({ ...signUp, referralCode: event.target.value.toUpperCase() })} /></label>
             <FieldError>{signUpErrors.general}</FieldError>
-            <button type="submit" disabled={busy} className="flex min-h-12 w-full items-center justify-center rounded-xl bg-gradient-to-r from-red-600 to-red-500 px-5 py-3 text-base font-black tracking-wide text-white shadow-lg shadow-red-950/40 transition duration-200 hover:-translate-y-0.5 hover:from-red-500 hover:to-red-400 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#17342d] active:translate-y-0 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-60">{busy ? <Loader2 className="size-4 animate-spin" /> : t("createAccount")}</button>
+            <button type="submit" disabled={busy} className="flex min-h-12 w-full items-center justify-center rounded-xl bg-gradient-to-r from-teal-400 to-cyan-400 px-5 py-3 text-base font-black tracking-wide text-slate-950 shadow-lg shadow-cyan-950/30 transition duration-200 hover:-translate-y-0.5 hover:from-teal-300 hover:to-cyan-300 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 active:translate-y-0 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-60">{busy ? <Loader2 className="size-4 animate-spin" /> : t("createAccount")}</button>
           </form>}
         </section>
         <aside className="flex min-w-0 flex-col items-center justify-center border-t border-white/10 bg-slate-950/20 p-5 text-center sm:p-7 md:border-l md:border-t-0">
@@ -255,7 +255,7 @@ export function GoogleOnboarding({
   };
   return (
     <div
-      className="grid min-h-screen place-items-center bg-[#102621] p-5 text-white"
+      className="grid min-h-screen place-items-center bg-slate-950 p-5 text-white"
       dir={language === "ur" ? "rtl" : "ltr"}
     >
       <div className="panel w-full max-w-md p-6 md:p-8">

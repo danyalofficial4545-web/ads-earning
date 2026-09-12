@@ -1462,7 +1462,7 @@ export const appRouter = router({
           console.log("Invited user referredBy:", profile?.referredByUserId);
           if (profile)
             {
-              const depositBonusPkr = Math.floor(deposit.amountPkr * 0.5);
+              const depositBonusPkr = Math.floor(deposit.amountPkr * 0.1);
               await db
                 .update(profiles)
                 .set({ balancePkr: profile.balancePkr + deposit.amountPkr + depositBonusPkr })
@@ -1473,7 +1473,7 @@ export const appRouter = router({
                 direction: "credit",
                 amountPkr: depositBonusPkr,
                 status: "completed",
-                note: "Deposit 50% Bonus",
+                note: "Deposit Bonus 10%",
                 referenceType: "deposit_bonus",
                 referenceId: deposit.id,
               });

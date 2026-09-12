@@ -254,7 +254,7 @@ export default function Home() {
 
   return (
     <div
-      className="pep-page min-h-screen bg-[#102621] text-white"
+      className="pep-page min-h-screen bg-slate-950 text-white"
       data-pep-theme={branding.themeName}
       dir={language === "ur" ? "rtl" : "ltr"}
     >
@@ -262,7 +262,7 @@ export default function Home() {
         <div className="absolute -top-40 right-[-6rem] size-[30rem] rounded-full bg-amber-300/10 blur-3xl" />
         <div className="absolute bottom-0 left-[-12rem] size-[30rem] rounded-full bg-emerald-400/10 blur-3xl" />
       </div>
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-[#102621]/85 backdrop-blur-xl">
+      <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/75 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between gap-3 px-4 md:px-6">
           <button
             onClick={() => selectPage("dashboard")}
@@ -1209,10 +1209,10 @@ function Workspace({
         />
       )}
       <div className="mt-4">{content[page as Page]}</div>
-      <div className="pointer-events-none fixed bottom-20 right-4 z-40 flex flex-col items-end gap-2 lg:bottom-6 lg:right-6">
+      {!isAdmin && <div className="pointer-events-none fixed bottom-20 right-4 z-40 flex flex-col items-end gap-2 lg:bottom-6 lg:right-6">
         <button type="button" onClick={() => setPage("support")} className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-red-600 px-4 py-3 text-sm font-black text-white shadow-xl shadow-red-950/40 transition hover:bg-red-500 active:scale-95" aria-label={t("help")}><CircleHelp className="size-5" />{t("help")}</button>
         <a href="https://t.me/EADSEARNPRO" target="_blank" rel="noreferrer" className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-sky-500 px-4 py-3 text-sm font-black text-white shadow-xl shadow-sky-950/40 transition hover:bg-sky-400 active:scale-95" aria-label={t("telegramSupport")}><Send className="size-5" />{t("telegramSupport")}</a>
-      </div>
+      </div>}
       <p className="mt-8 text-center text-[11px] text-slate-500">
         {t("brand")} ·{" "}
         {language === "ur" ? "محفوظ ورک اسپیس" : "Secure member workspace"}
@@ -1227,7 +1227,7 @@ function NotificationBell() {
   const markRead = trpc.platform.markNotificationRead.useMutation({ onSuccess: () => notifications.refetch() });
   const rows = notifications.data ?? [];
   const unread = rows.filter((item: any) => !item.isRead).length;
-  return <div className="relative"><button type="button" className="relative grid size-9 place-items-center rounded-xl border border-white/10 bg-white/5 text-amber-300" aria-label="Notifications" onClick={() => setOpen(value => !value)}><Bell className="size-4" />{unread > 0 && <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-red-500 px-1 text-center text-[10px] font-black text-white">{unread}</span>}</button>{open && <div className="absolute right-0 top-11 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/10 bg-[#17342d] p-3 shadow-2xl"><p className="px-2 text-sm font-bold text-white">Notifications</p><div className="mt-2 max-h-80 space-y-2 overflow-auto">{rows.length ? rows.map((item: any) => <button type="button" key={item.id} onClick={() => !item.isRead && markRead.mutate({ id: item.id })} className={`w-full rounded-xl p-3 text-left text-sm ${item.isRead ? "bg-white/5 text-slate-400" : "bg-red-600/15 text-white"}`}><p className="font-bold">{item.title}</p><p className="mt-1">{item.message}</p></button>) : <p className="p-2 text-xs text-slate-400">No notifications</p>}</div></div>}</div>;
+  return <div className="relative"><button type="button" className="relative grid size-9 place-items-center rounded-xl border border-white/10 bg-white/5 text-amber-300" aria-label="Notifications" onClick={() => setOpen(value => !value)}><Bell className="size-4" />{unread > 0 && <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-red-500 px-1 text-center text-[10px] font-black text-white">{unread}</span>}</button>{open && <div className="absolute left-1/2 top-11 z-[70] w-[min(20rem,calc(100vw-1.5rem))] -translate-x-1/2 rounded-2xl border border-white/10 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-xl"><p className="px-2 text-sm font-bold text-white">Notifications</p><div className="mt-2 max-h-80 space-y-2 overflow-auto">{rows.length ? rows.map((item: any) => <button type="button" key={item.id} onClick={() => !item.isRead && markRead.mutate({ id: item.id })} className={`w-full rounded-xl p-3 text-left text-sm ${item.isRead ? "bg-white/5 text-slate-400" : "bg-red-600/15 text-white"}`}><p className="font-bold">{item.title}</p><p className="mt-1">{item.message}</p></button>) : <p className="p-2 text-xs text-slate-400">No notifications</p>}</div></div>}</div>;
 }
 function PageHeading({
   eyebrow,
@@ -1714,7 +1714,9 @@ function TransactionRow({ row }: { row: any }) {
         </div>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">
-            {translate(language, typeLabels[row.type] ?? "type")}
+            {row.note === "Deposit Bonus 10%"
+              ? row.note
+              : translate(language, typeLabels[row.type] ?? "type")}
           </p>
           <p className="mt-0.5 text-xs text-slate-500">
             {dateTime(row.createdAt)}

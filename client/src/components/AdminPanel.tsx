@@ -158,8 +158,8 @@ export function AdminPanel({ t }: { t: (key: any) => string }) {
       </div>
       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {tabItems.map(({ id, label, icon: Icon }) => (
-          <button key={id} onClick={() => selectTab(id)} className="panel flex items-center gap-3 p-4 text-left transition hover:-translate-y-0.5 hover:border-red-400/40">
-            <span className="grid size-10 place-items-center rounded-xl bg-red-600 text-white"><Icon className="size-5" /></span>
+          <button key={id} onClick={() => selectTab(id)} className="panel flex items-center gap-3 p-4 text-left transition hover:-translate-y-0.5 hover:border-cyan-300/40">
+            <span className="grid size-10 place-items-center rounded-xl bg-gradient-to-br from-emerald-400 to-cyan-400 text-slate-950 shadow-lg shadow-cyan-950/20"><Icon className="size-5" /></span>
             <span className="font-bold">{t(label)}</span>
           </button>
         ))}
@@ -209,9 +209,9 @@ function PackageCatalog({ t }: any) {
       <Heading title={t("packages")} description={t("packageSubtitle")} />
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {packages.map(plan => (
-          <div key={plan.id} className="panel border-t-4 border-red-600 p-4">
+          <div key={plan.id} className="panel border-t-4 border-cyan-400 p-4">
             <p className="text-sm font-bold">{plan.name}</p>
-            <p className="mt-2 text-2xl font-black text-red-600">{money(plan.pricePkr)}</p>
+            <p className="mt-2 text-2xl font-black text-cyan-200">{money(plan.pricePkr)}</p>
             <p className="mt-3 text-sm font-bold">
               {plan.dailyAds} {plan.dailyAds === 1 ? t("ad") : t("ads")} · {money(plan.adRewardPkr)} / {t("ad")}
             </p>
@@ -259,7 +259,7 @@ function CopyRecordValue({ label, value }: { label: string; value?: string | nul
           toast.error("Copy failed");
         }
       }}
-      className="inline-flex h-10 items-center gap-2 rounded-lg border border-red-400/25 bg-red-50 px-3 text-xs font-bold text-red-700 transition hover:bg-red-100"
+      className="inline-flex h-10 items-center gap-2 rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-3 text-xs font-bold text-cyan-100 transition hover:bg-cyan-300/20"
     >
       <Copy className="size-4" />
       {label}
