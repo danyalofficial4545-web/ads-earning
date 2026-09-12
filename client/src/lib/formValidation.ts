@@ -46,13 +46,15 @@ export function isValidPakistanMobileNumber(value: string) {
 }
 
 export function validateEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
+  const normalized = value.trim();
+  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(normalized);
+  return valid
     ? undefined
     : friendlyMessages.email;
 }
 
 export function validatePassword(value: string) {
-  return value.trim().length >= 8 ? undefined : friendlyMessages.password;
+  return value.length >= 6 ? undefined : friendlyMessages.password;
 }
 
 export function validateUsername(value: string) {
@@ -150,6 +152,8 @@ export function friendlyServerError(
   const message = error instanceof Error ? error.message : "";
   const normalized = message.toLowerCase();
 
+  if (normalized.includes("database") || normalized.includes("not connected") || normalized.includes("temporarily unavailable"))
+    return { general: message || "Database not connected. Please try again later." };
   if (normalized.includes("email") && normalized.includes("password"))
     return { email: friendlyMessages.email, password: friendlyMessages.password };
   if (

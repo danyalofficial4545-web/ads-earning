@@ -95,6 +95,7 @@ export function PublicAuth({
       email: validateEmail(signIn.email),
       password: validatePassword(signIn.password),
     };
+    console.debug("Auth validation result", { mode: "signIn", email: signIn.email, errors });
     if (errors.email || errors.password) return setSignInErrors(errors);
     setSignInErrors({});
     login.mutate(signIn);
@@ -110,6 +111,7 @@ export function PublicAuth({
         signUp.confirmPassword
       ),
     };
+    console.debug("Auth validation result", { mode: "signUp", email: signUp.email, errors });
     if (errors.email || errors.username || errors.password || errors.confirmPassword)
       return setSignUpErrors(errors);
     setSignUpErrors({});

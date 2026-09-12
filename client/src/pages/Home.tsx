@@ -8,6 +8,7 @@ import { AdsTasks } from "@/components/AdsTasks";
 import { SupportChat } from "@/components/SupportChat";
 import { BrandLogo } from "@/components/BrandLogo";
 import { trpc } from "@/lib/trpc";
+import { getDeviceMarker } from "@/lib/deviceMarker";
 import { resolveWorkspaceGate } from "@/lib/authOnboarding";
 import { resolvePublicBranding } from "@/lib/publicBranding";
 import { groupHistoryRows, historyDateLabel } from "@/lib/groupedHistory";
@@ -436,6 +437,7 @@ function Landing({
     confirmPassword: "",
     referralCode: new URLSearchParams(window.location.search).get("ref") ?? "",
   }));
+  const [deviceId] = useState(() => getDeviceMarker());
   const utils = trpc.useUtils();
   const complete = async (message: string) => {
     toast.success(message);
@@ -471,11 +473,12 @@ function Landing({
       email: signUp.email,
       password: signUp.password,
       referralCode: signUp.referralCode || undefined,
-    } as never);
+      deviceId,
+    });
   };
   const submitSignIn = (event: React.FormEvent) => {
     event.preventDefault();
-    login.mutate(signIn as never);
+    login.mutate(signIn);
   };
   const busy = register.isPending || login.isPending;
   return (

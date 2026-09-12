@@ -63,9 +63,14 @@ const defaultAccounts = [
 ];
 
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
+  const databaseUrl = process.env.DATABASE_URL?.trim();
+  if (!_db && databaseUrl) {
+    if (/db\.example\.com/i.test(databaseUrl) || !/^mysql(?:\+[^:]+)?:\/\//i.test(databaseUrl)) {
+      console.warn("[Database] Database not connected: DATABASE_URL is missing, fake, or not a MySQL URL.");
+      return null;
+    }
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      _db = drizzle(databaseUrl);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;

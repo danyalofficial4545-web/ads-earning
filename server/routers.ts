@@ -74,6 +74,18 @@ function fail(message: string, code: TRPCError["code"] = "BAD_REQUEST"): never {
   throw new TRPCError({ code, message });
 }
 
+const credentialInput = z.object({
+  email: z.string().trim().max(320).optional(),
+  gmail: z.string().trim().optional(),
+  password: z.string().min(6, "Password must be at least 6 characters.").max(128),
+}).transform(({ email, gmail, ...rest }) => ({
+  ...rest,
+  email: (email ?? gmail ?? "").trim(),
+})).refine(input => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(input.email), {
+  path: ["email"],
+  message: "Please enter a valid email address.",
+});
+
 async function notifyUser(db: any, userId: number, title: string, message: string) {
   if (typeof db?.insert !== "function") return;
   await db.insert(notifications).values({ userId, title, message, isRead: false });
@@ -282,7 +294,7 @@ export const appRouter = router({
     ),
     register: publicProcedure
       .input(
-        z.object({
+        credentialInput.and(z.object({
           username: z
             .string()
             .trim()
@@ -292,18 +304,9 @@ export const appRouter = router({
               /^[a-zA-Z0-9_]+$/,
               "Use letters, numbers, and underscores only."
             ),
-          email: z
-            .string()
-            .trim()
-            .email("You entered wrong Gmail/Email, please correct your Gmail")
-            .max(320),
-          password: z
-            .string()
-            .min(8, "Your password is incorrect/weak, please enter strong password")
-            .max(128),
           referralCode: z.string().trim().max(32).optional(),
           deviceId: z.string().trim().min(16).max(256),
-        })
+        }))
       )
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
@@ -416,16 +419,7 @@ export const appRouter = router({
         return { user: publicUser(user) };
       }),
     signIn: publicProcedure
-      .input(
-        z.object({
-          email: z
-            .string()
-            .trim()
-            .email("You entered wrong Gmail/Email, please correct your Gmail")
-            .max(320),
-          password: z.string().min(8, "Your password is incorrect/weak, please enter strong password"),
-        })
-      )
+      .input(credentialInput)
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
         if (!db)
@@ -464,7 +458,7 @@ export const appRouter = router({
         z.object({
           password: z
             .string()
-            .min(8, "Password must be at least 8 characters.")
+            .min(6, "Password must be at least 6 characters.")
             .max(128),
         })
       )
