@@ -249,6 +249,24 @@ async function buildOverview(userId: number) {
         eq(deposits.status, "approved")
       )
     );
+  const totalWithdrawals = await db
+    .select({ total: sql<number>`coalesce(sum(${withdrawals.amountPkr}), 0)` })
+    .from(withdrawals)
+    .where(
+      and(
+        eq(withdrawals.userId, userId),
+        eq(withdrawals.status, "approved")
+      )
+    );
+  const totalAdsWatched = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(adSessions)
+    .where(
+      and(
+        eq(adSessions.userId, userId),
+        sql`${adSessions.claimedAt} IS NOT NULL`
+      )
+    );
   const daysRemaining = activePackage
     ? Math.max(
         0,
@@ -283,6 +301,8 @@ async function buildOverview(userId: number) {
     },
     totalEarnedPkr: Number(totalEarned[0]?.total ?? 0),
     totalDepositsPkr: Number(totalDeposits[0]?.total ?? 0),
+    totalWithdrawalsPkr: Number(totalWithdrawals[0]?.total ?? 0),
+    totalAdsWatched: Number(totalAdsWatched[0]?.count ?? 0),
   };
 }
 
@@ -1275,12 +1295,22 @@ export const appRouter = router({
       return db.select().from(supportChatMessages).where(eq(supportChatMessages.userId, user.id)).orderBy(asc(supportChatMessages.createdAt)).limit(50);
     }),
     ask: protectedProcedure
-      .input(z.object({ message: z.string().trim().min(2).max(2000) }))
+      .input(z.object({ message: z.string().trim().min(2).max(2000), imageData: z.string().max(2_000_000).optional() }))
       .mutation(async ({ ctx, input }) => {
         const { user } = await getActor(ctx);
         const db = await getDb();
         if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-        await db.insert(supportChatMessages).values({ userId: user.id, role: "user", content: input.message, aiGenerated: false });
+        const imageData = input.imageData
+          ? validateInlineUpload(input.imageData, {
+              label: "screenshot",
+              maxBytes: 1 * 1024 * 1024,
+              acceptedType: contentType => contentType.startsWith("image/"),
+            })
+          : null;
+        const storedMessage = imageData
+          ? `${input.message}\n\n[Image attached for analysis]`
+          : input.message;
+        await db.insert(supportChatMessages).values({ userId: user.id, role: "user", content: storedMessage, aiGenerated: false });
         const recent = await db.select().from(supportChatMessages).where(eq(supportChatMessages.userId, user.id)).orderBy(desc(supportChatMessages.createdAt)).limit(20);
         const conversation = recent.reverse().map(message => ({ role: message.role === "admin" ? "assistant" as const : message.role, content: message.content }));
         const customRules = await db.select().from(supportReplyRules).orderBy(desc(supportReplyRules.updatedAt));
@@ -1291,8 +1321,17 @@ export const appRouter = router({
             await db.insert(supportChatMessages).values({ userId: user.id, role: "assistant", content: answer, aiGenerated: false });
             return { answer };
           }
+          const llmConversation = imageData
+            ? conversation.map((message, index) => index === conversation.length - 1
+              ? { ...message, content: [
+                  { type: "text" as const, text: `${input.message}\nAnalyze this support screenshot. Identify the visible error or status, quote any readable transaction ID, and give clear next steps. If an exact visual highlight is not possible, describe the precise area to inspect.` },
+                  { type: "image_url" as const, image_url: { url: imageData, detail: "auto" as const } },
+                ] }
+              : message)
+            : conversation;
           const response = await invokeLLM({
-            messages: [{ role: "system", content: SUPPORT_KNOWLEDGE_BASE }, ...conversation],
+            model: imageData ? "gemini-3-flash-preview" : undefined,
+            messages: [{ role: "system", content: SUPPORT_KNOWLEDGE_BASE }, ...llmConversation],
           });
           const generated = contentToText(response.choices?.[0]?.message?.content);
           if (generated) answer = generated.slice(0, 4000);

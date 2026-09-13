@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { Loader2, Send, User, Sparkles } from "lucide-react";
+import { ImagePlus, Loader2, Send, User, Sparkles, X } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Streamdown } from "streamdown";
 
@@ -25,7 +25,7 @@ export type AIChatBoxProps = {
    * Callback when user sends a message.
    * Typically you'll call a tRPC mutation here to invoke the LLM.
    */
-  onSendMessage: (content: string) => void;
+  onSendMessage: (content: string, imageData?: string) => void;
 
   /**
    * Whether the AI is currently generating a response
@@ -57,6 +57,9 @@ export type AIChatBoxProps = {
    * Click to send directly
    */
   suggestedPrompts?: string[];
+
+  /** Allow members to attach a screenshot for vision-based troubleshooting. */
+  allowImageUpload?: boolean;
 };
 
 /**
@@ -119,8 +122,11 @@ export function AIChatBox({
   height = "600px",
   emptyStateMessage = "Start a conversation with AI",
   suggestedPrompts,
+  allowImageUpload = false,
 }: AIChatBoxProps) {
   const [input, setInput] = useState("");
+  const [imageData, setImageData] = useState<string | null>(null);
+  const [imageName, setImageName] = useState("");
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputAreaRef = useRef<HTMLFormElement>(null);
@@ -168,10 +174,12 @@ export function AIChatBox({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedInput = input.trim();
-    if (!trimmedInput || isLoading) return;
+    if ((!trimmedInput && !imageData) || isLoading) return;
 
-    onSendMessage(trimmedInput);
+    onSendMessage(trimmedInput || "Please analyze this screenshot.", imageData ?? undefined);
     setInput("");
+    setImageData(null);
+    setImageName("");
 
     // Scroll immediately after sending
     scrollToBottom();
@@ -306,22 +314,29 @@ export function AIChatBox({
       <form
         ref={inputAreaRef}
         onSubmit={handleSubmit}
-        className="flex gap-2 p-4 border-t bg-background/50 items-end"
+        className="flex flex-wrap gap-2 border-t bg-background/50 p-4 items-end"
       >
+        {allowImageUpload && imageData && (
+          <div className="order-1 flex w-full items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+            <ImagePlus className="size-4 text-primary" />
+            <span className="min-w-0 flex-1 truncate">{imageName}</span>
+            <button type="button" onClick={() => { setImageData(null); setImageName(""); }} aria-label="Remove image" className="rounded p-1 hover:bg-background"><X className="size-3" /></button>
+          </div>
+        )}
         <Textarea
           ref={textareaRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="flex-1 max-h-32 resize-none min-h-9"
+          className="order-2 min-h-9 max-h-32 flex-1 resize-none"
           rows={1}
         />
         <Button
           type="submit"
           size="icon"
           disabled={!input.trim() || isLoading}
-          className="shrink-0 h-[38px] w-[38px]"
+          className="order-4 h-[38px] w-[38px] shrink-0"
         >
           {isLoading ? (
             <Loader2 className="size-4 animate-spin" />
@@ -329,6 +344,32 @@ export function AIChatBox({
             <Send className="size-4" />
           )}
         </Button>
+        {allowImageUpload && (
+          <label className="order-3 inline-flex h-[38px] w-[38px] cursor-pointer items-center justify-center rounded-md border border-input bg-background text-muted-foreground transition hover:bg-accent hover:text-foreground" title="Upload picture">
+            <ImagePlus className="size-4" />
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="sr-only"
+              onChange={event => {
+                const file = event.target.files?.[0];
+                if (!file) return;
+                if (file.size > 1024 * 1024) {
+                  event.target.value = "";
+                  return;
+                }
+                const reader = new FileReader();
+                reader.onload = () => {
+                  if (typeof reader.result === "string") {
+                    setImageData(reader.result);
+                    setImageName(file.name);
+                  }
+                };
+                reader.readAsDataURL(file);
+              }}
+            />
+          </label>
+        )}
       </form>
     </div>
   );

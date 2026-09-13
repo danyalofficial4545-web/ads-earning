@@ -20,8 +20,8 @@ export function SupportChat({ t, onOpenTickets }: { t: (key: any) => string; onO
     role: message.role === "admin" ? "assistant" : message.role,
     content: message.content,
   })), [history.data]);
-  const askQuestion = (message: string) => {
-    if (!ask.isPending && message.trim()) ask.mutate({ message });
+  const askQuestion = (message: string, imageData?: string) => {
+    if (!ask.isPending && (message.trim() || imageData)) ask.mutate({ message, imageData });
   };
   return (
     <section className="mx-auto max-w-4xl">
@@ -43,6 +43,7 @@ export function SupportChat({ t, onOpenTickets }: { t: (key: any) => string; onO
         placeholder={t("aiSupportPlaceholder")}
         emptyStateMessage={t("aiSupportWelcome")}
         suggestedPrompts={[]}
+        allowImageUpload
         height="min(68vh, 620px)"
         className="border-red-500/20 bg-[#160b0d] shadow-2xl shadow-red-950/30 [&_form]:border-red-500/20 [&_form]:bg-black/20 [&_button]:bg-red-600 [&_button]:text-white [&_textarea]:border-red-500/20"
       />

@@ -1292,6 +1292,30 @@ function Dashboard({ t, overview, announcements, setPage, onRequestWithdrawal }:
         accent="violet"
       />
     ),
+    totalWithdrawals: (
+      <StatCard
+        icon={ArrowUpRight}
+        label={t("totalWithdrawals")}
+        value={money(overview.totalWithdrawalsPkr)}
+        accent="amber"
+      />
+    ),
+    totalDeposits: (
+      <StatCard
+        icon={CreditCard}
+        label={t("totalDeposits")}
+        value={money(overview.totalDepositsPkr)}
+        accent="blue"
+      />
+    ),
+    totalAdsWatched: (
+      <StatCard
+        icon={Eye}
+        label={t("watched")}
+        value={overview.totalAdsWatched}
+        accent="emerald"
+      />
+    ),
   };
   return (
     <>
@@ -1312,7 +1336,7 @@ function Dashboard({ t, overview, announcements, setPage, onRequestWithdrawal }:
           </button>
         }
       />
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         {dashboardMetricKeys.map(key => (
           <div key={key}>{dashboardCards[key]}</div>
         ))}
@@ -1490,29 +1514,29 @@ function Packages({ t, language, plans, balance, active, onPurchase, onRequestDe
         title={t("packageTitle")}
         description={t("packageSubtitle")}
       />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4">
         {orderedPlans.map((plan: any) => {
           const isActive = active?.id === plan.id;
           return (
             <div
               key={plan.id}
-              className={`panel premium-package-card relative overflow-hidden ${isActive ? "border-red-600/45" : ""}`}
+              className={`panel premium-package-card relative overflow-hidden p-4 ${isActive ? "border-red-600/45" : ""}`}
             >
-              <div className="absolute right-4 top-4 text-3xl opacity-70">
+              <div className="absolute right-3 top-3 text-2xl opacity-70">
                 {plan.icon}
               </div>
               <p className="eyebrow">{plan.tier}</p>
-              <h2 className="mt-1 text-2xl font-bold">{plan.name}</h2>
-              <p className="mt-5 text-3xl font-bold text-amber-300">
+              <h2 className="mt-1 pr-8 text-lg font-bold sm:text-xl">{plan.name}</h2>
+              <p className="mt-4 text-xl font-bold text-amber-300 sm:text-2xl">
                 {money(plan.pricePkr)}
               </p>
-              <p className="mt-3 text-lg font-extrabold text-emerald-200">
+              <p className="mt-2 text-xs font-extrabold text-emerald-200 sm:text-sm">
                 {plan.dailyAds} {plan.dailyAds === 1 ? t("ad") : t("ads")} - {plan.adRewardPkr} PKR / {t("ad")}
               </p>
-              <p className="mt-1 text-sm font-semibold text-amber-100">
+              <p className="mt-1 text-xs font-semibold text-amber-100">
                 {t("totalDailyEarning")}: {money(plan.dailyAds * plan.adRewardPkr)}
               </p>
-              <div className="mt-5 space-y-2 text-sm text-slate-300">
+              <div className="mt-4 space-y-2 text-xs text-slate-300 sm:text-sm">
                 <p className="flex items-center gap-2">
                   <Play className="size-4 text-emerald-300" />
                   {plan.dailyAds} {t("dailyAds")}
@@ -1525,7 +1549,7 @@ function Packages({ t, language, plans, balance, active, onPurchase, onRequestDe
               <button
                 disabled={isActive}
                 onClick={() => handlePurchase(plan)}
-                className={`mt-6 h-11 w-full rounded-xl text-sm font-bold transition active:scale-[.97] disabled:opacity-60 ${isActive ? "bg-emerald-400/15 text-emerald-200" : "bg-amber-300 text-slate-950"}`}
+                className={`mt-5 h-10 w-full rounded-xl text-xs font-bold transition active:scale-[.97] disabled:opacity-60 sm:text-sm ${isActive ? "bg-emerald-400/15 text-emerald-200" : "bg-amber-300 text-slate-950"}`}
               >
                 {isActive ? t("currentPackage") : t("buyPackage")}
               </button>
