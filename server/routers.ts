@@ -769,6 +769,7 @@ export const appRouter = router({
               "withdrawal",
               "referral_limit",
               "adjustment",
+              "bonus",
             ])
             .default("all"),
           status: z
@@ -1469,7 +1470,7 @@ export const appRouter = router({
                 .where(eq(profiles.userId, deposit.userId));
               await db.insert(transactions).values({
                 userId: deposit.userId,
-                type: "adjustment",
+                type: "bonus",
                 direction: "credit",
                 amountPkr: depositBonusPkr,
                 status: "completed",

@@ -156,14 +156,6 @@ export function AdminPanel({ t }: { t: (key: any) => string }) {
           </div>
         ))}
       </div>
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {tabItems.map(({ id, label, icon: Icon }) => (
-          <button key={id} onClick={() => selectTab(id)} className="panel flex items-center gap-3 p-4 text-left transition hover:-translate-y-0.5 hover:border-cyan-300/40">
-            <span className="grid size-10 place-items-center rounded-xl bg-gradient-to-br from-emerald-400 to-cyan-400 text-slate-950 shadow-lg shadow-cyan-950/20"><Icon className="size-5" /></span>
-            <span className="font-bold">{t(label)}</span>
-          </button>
-        ))}
-      </div>
       <div className="mt-5 grid gap-5 xl:grid-cols-[210px_1fr]">
         <aside className="panel h-fit p-2">
           <nav>

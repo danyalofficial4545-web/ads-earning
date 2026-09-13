@@ -128,6 +128,7 @@ const typeLabels: Record<string, TranslationKey> = {
   withdrawal: "withdrawal",
   referral_limit: "withdrawalLimit",
   adjustment: "settings",
+  bonus: "settings",
 };
 const statusLabels: Record<string, TranslationKey> = {
   pending: "pending",
@@ -1209,10 +1210,10 @@ function Workspace({
         />
       )}
       <div className="mt-4">{content[page as Page]}</div>
-      {!isAdmin && <div className="pointer-events-none fixed bottom-20 right-4 z-40 flex flex-col items-end gap-2 lg:bottom-6 lg:right-6">
+      <div className="pointer-events-none fixed bottom-20 right-4 z-50 flex flex-col items-end gap-2 lg:bottom-6 lg:right-6">
         <button type="button" onClick={() => setPage("support")} className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-red-600 px-4 py-3 text-sm font-black text-white shadow-xl shadow-red-950/40 transition hover:bg-red-500 active:scale-95" aria-label={t("help")}><CircleHelp className="size-5" />{t("help")}</button>
         <a href="https://t.me/EADSEARNPRO" target="_blank" rel="noreferrer" className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-sky-500 px-4 py-3 text-sm font-black text-white shadow-xl shadow-sky-950/40 transition hover:bg-sky-400 active:scale-95" aria-label={t("telegramSupport")}><Send className="size-5" />{t("telegramSupport")}</a>
-      </div>}
+      </div>
       <p className="mt-8 text-center text-[11px] text-slate-500">
         {t("brand")} ·{" "}
         {language === "ur" ? "محفوظ ورک اسپیس" : "Secure member workspace"}
@@ -1714,8 +1715,8 @@ function TransactionRow({ row }: { row: any }) {
         </div>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">
-            {row.note === "Deposit Bonus 10%"
-              ? row.note
+            {row.type === "bonus"
+              ? row.note || "Bonus"
               : translate(language, typeLabels[row.type] ?? "type")}
           </p>
           <p className="mt-0.5 text-xs text-slate-500">

@@ -155,6 +155,13 @@
       "when": 1789063219000,
       "tag": "0021_referral_rewards",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "5",
+      "when": 1789065000000,
+      "tag": "0022_bonus_transaction_type",
+      "breakpoints": true
     }
   ]
 }

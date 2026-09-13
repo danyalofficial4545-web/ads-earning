@@ -145,7 +145,7 @@ export const adminAdImpressions = mysqlTable("adminAdImpressions", {
 export const transactions = mysqlTable("transactions", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  type: mysqlEnum("type", ["deposit", "package", "ad_reward", "withdrawal", "referral_limit", "adjustment"]).notNull(),
+  type: mysqlEnum("type", ["deposit", "package", "ad_reward", "withdrawal", "referral_limit", "adjustment", "bonus"]).notNull(),
   direction: mysqlEnum("direction", ["credit", "debit", "neutral"]).notNull(),
   amountPkr: int("amountPkr").notNull(),
   status: mysqlEnum("status", ["pending", "approved", "rejected", "completed"]).notNull().default("completed"),
