@@ -25,12 +25,12 @@ function reviewDatabase(record: any, pendingTransactionReferences: number[], pro
   const updates: Array<{ table: unknown; values: unknown; condition: unknown }> = [];
   const matchedTransactionReferences: number[] = [];
   const db = {
-    select: vi.fn(() => ({ from: (table: unknown) => ({ where: () => ({ limit: async () => [table === profiles ? profileRecord : record] }) }) })),
+    select: vi.fn(() => ({ from: (table: unknown) => ({ where: () => ({ limit: async () => table === profiles ? [profileRecord] : table === transactions ? [] : [record] }) }) })),
     update: vi.fn((table) => ({ set: (values: unknown) => ({ where: (condition: unknown) => {
       updates.push({ table, values, condition });
       if (table === transactions) {
         const parameters = new MySqlDialect().sqlToQuery(condition as any).params;
-        matchedTransactionReferences.push(...pendingTransactionReferences.filter((reference) => parameters.includes(reference)));
+        matchedTransactionReferences.push(...pendingTransactionReferences.filter((reference) => parameters.includes(String(reference))));
       }
     } }) })),
     insert: vi.fn(() => ({ values: vi.fn().mockResolvedValue([]) })),

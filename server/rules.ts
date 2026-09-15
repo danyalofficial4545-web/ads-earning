@@ -130,11 +130,11 @@ export function canUseMemberWorkspace(isBlocked: boolean) {
 
 export function matchesRequestTransaction(
   referenceType: string | null,
-  referenceId: number | null,
+  referenceId: string | number | null,
   expectedType: string,
   expectedId: number
 ) {
-  return referenceType === expectedType && referenceId === expectedId;
+  return referenceType === expectedType && String(referenceId) === String(expectedId);
 }
 
 export const DEPOSIT_MIN_PKR = 100;

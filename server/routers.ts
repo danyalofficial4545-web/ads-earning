@@ -96,6 +96,10 @@ async function notifyUser(db: any, userId: number, title: string, message: strin
   await db.insert(notifications).values({ userId, title, message, isRead: false });
 }
 
+async function withDbTransaction<T>(db: any, work: (tx: any) => Promise<T>) {
+  return typeof db?.transaction === "function" ? db.transaction(work) : work(db);
+}
+
 const SUPPORT_KNOWLEDGE_BASE = `You are AdEarn AI Support. Answer in the user's language, usually Urdu/Roman Urdu. Be concise, respectful, and never promise admin approval or guaranteed earnings. Knowledge base:
 - Withdrawal issue: Explain that the member should have an active package and eligible withdrawal limit; referral credits are handled by the platform according to its rules. Ask for username when account checking is needed.
 - Deposit issue: Ask for username and transaction ID. If sent through Easypaisa/JazzCash, advise waiting 5-10 minutes while the admin reviews it. Tell them to copy the transaction ID using the copy button.
@@ -690,7 +694,7 @@ export const appRouter = router({
         status: "completed",
         note: "WhatsApp Channel join bonus",
         referenceType: "whatsapp_bonus",
-        referenceId: user.id,
+        referenceId: String(user.id),
       });
       return {
         success: true,
@@ -1065,7 +1069,7 @@ export const appRouter = router({
           status: "pending",
           note: `${input.method} deposit (${input.transactionId}) awaiting approval`,
           referenceType: "deposit",
-          referenceId: depositId,
+          referenceId: String(depositId),
         });
         void sendTelegramAlert(
           [
@@ -1144,42 +1148,44 @@ export const appRouter = router({
         const db = await getDb();
         if (!db)
           fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-        const result = await db.insert(withdrawals).values({
-          userId: user.id,
-          currency: input.currency,
-          amountPkr,
-          walletType: input.walletType,
-          accountName: input.accountName,
-          accountDetails: input.accountDetails,
-          status: "pending",
-        });
-        const withdrawalId = Number(result[0].insertId);
-        const reserved = applyWithdrawalRequest(
-          profile.balancePkr,
-          profile.withdrawalLimitPkr,
-          amountPkr
-        );
         const completedChannelRewardWithdrawal =
           hasPendingChannelReward && amountPkr === WHATSAPP_JOIN_REWARD_PKR;
-        await db
-          .update(profiles)
-          .set({
-            balancePkr: reserved.balancePkr,
-            withdrawalLimitPkr: reserved.withdrawalLimitPkr,
-            ...(completedChannelRewardWithdrawal
-              ? { whatsappRewardWithdrawn: true }
-              : {}),
-          })
-          .where(eq(profiles.userId, user.id));
-        await db.insert(transactions).values({
-          userId: user.id,
-          type: "withdrawal",
-          direction: "debit",
-          amountPkr,
-          status: "pending",
-          note: "Withdrawal request awaiting approval; wallet amount reserved",
-          referenceType: "withdrawal",
-          referenceId: withdrawalId,
+        await withDbTransaction(db, async (tx) => {
+          const result = await tx.insert(withdrawals).values({
+            userId: user.id,
+            currency: input.currency,
+            amountPkr,
+            walletType: input.walletType,
+            accountName: input.accountName,
+            accountDetails: input.accountDetails,
+            status: "pending",
+          });
+          const withdrawalId = Number(result[0].insertId);
+          const reserved = applyWithdrawalRequest(
+            profile.balancePkr,
+            profile.withdrawalLimitPkr,
+            amountPkr
+          );
+          await tx
+            .update(profiles)
+            .set({
+              balancePkr: reserved.balancePkr,
+              withdrawalLimitPkr: reserved.withdrawalLimitPkr,
+              ...(completedChannelRewardWithdrawal
+                ? { whatsappRewardWithdrawn: true }
+                : {}),
+            })
+            .where(eq(profiles.userId, user.id));
+          await tx.insert(transactions).values({
+            userId: user.id,
+            type: "withdrawal",
+            direction: "debit",
+            amountPkr,
+            status: "pending",
+            note: "Withdrawal request awaiting approval; wallet amount reserved",
+            referenceType: "withdrawal",
+            referenceId: String(withdrawalId),
+          });
         });
         void sendTelegramAlert(
           [
@@ -1487,129 +1493,175 @@ export const appRouter = router({
         if (!deposit) fail("Deposit request was not found.", "NOT_FOUND");
         if (deposit.status !== "pending")
           fail("This deposit request has already been reviewed.");
-        const status = input.approved ? "approved" : "rejected";
         if (input.approved) {
-          console.log("DEPOSIT APPROVAL DEBUG:", {
-            depositId: deposit.id,
-            userId: deposit.userId,
-            amountPkr: deposit.amountPkr,
-          });
-          const profile = (
-            await db
+          let referralNotification: { userId: number; commission: number } | null = null;
+          await withDbTransaction(db, async (tx) => {
+            const depositSelection = tx
               .select()
-              .from(profiles)
-              .where(eq(profiles.userId, deposit.userId))
-              .limit(1)
-          )[0];
-          console.log("Invited user referredBy:", profile?.referredByUserId);
-          if (profile) {
+              .from(deposits)
+              .where(eq(deposits.id, input.id))
+              .limit(1);
+            const lockedDeposit = (
+              await (typeof depositSelection.for === "function"
+                ? depositSelection.for("update")
+                : depositSelection)
+            )[0];
+            if (!lockedDeposit) fail("Deposit request was not found.", "NOT_FOUND");
+            if (lockedDeposit.status !== "pending")
+              fail("This deposit request has already been reviewed.");
+
+            const profile = (
+              await tx
+                .select()
+                .from(profiles)
+                .where(eq(profiles.userId, lockedDeposit.userId))
+                .limit(1)
+            )[0];
+            if (!profile) fail("The user's profile was not found.", "NOT_FOUND");
+
+            const depositReferenceId = String(lockedDeposit.id);
             const existingDepositBonus = (
-              await db
+              await tx
                 .select({ id: transactions.id })
                 .from(transactions)
                 .where(
                   and(
-                    eq(transactions.userId, deposit.userId),
+                    eq(transactions.userId, lockedDeposit.userId),
                     eq(transactions.referenceType, "deposit_bonus"),
-                    eq(transactions.referenceId, deposit.id)
+                    eq(transactions.referenceId, depositReferenceId)
                   )
                 )
                 .limit(1)
             )[0];
-            const depositBonusPkr = calculateDepositorBonus(deposit.amountPkr);
+            const depositBonusPkr = calculateDepositorBonus(lockedDeposit.amountPkr);
             if (!existingDepositBonus) {
-              await db
+              await tx
                 .update(profiles)
-                .set({ balancePkr: profile.balancePkr + deposit.amountPkr + depositBonusPkr })
-                .where(eq(profiles.userId, deposit.userId));
-              await db.insert(transactions).values({
-                userId: deposit.userId,
-                type: "bonus",
+                .set({ balancePkr: profile.balancePkr + lockedDeposit.amountPkr + depositBonusPkr })
+                .where(eq(profiles.userId, lockedDeposit.userId));
+              await tx.insert(transactions).values({
+                userId: lockedDeposit.userId,
+                type: "deposit_bonus",
                 direction: "credit",
                 amountPkr: depositBonusPkr,
                 status: "completed",
                 note: `Deposit Bonus 10% +PKR ${depositBonusPkr}`,
                 referenceType: "deposit_bonus",
-                referenceId: deposit.id,
+                referenceId: depositReferenceId,
               });
             }
-          }
-          if (profile?.referredByUserId) {
-            const existing = (
-              await db
-                .select()
-                .from(referralRewards)
-                .where(eq(referralRewards.depositId, deposit.id))
-                .limit(1)
-            )[0];
-            if (!existing) {
-              const commission = calculateInviterReward(deposit.amountPkr);
-              const inviter = (
-                await db
-                  .select()
-                  .from(profiles)
-                  .where(eq(profiles.userId, profile.referredByUserId))
+
+            if (profile.referredByUserId) {
+              const existingReferralTransaction = (
+                await tx
+                  .select({ id: transactions.id })
+                  .from(transactions)
+                  .where(
+                    and(
+                      eq(transactions.userId, profile.referredByUserId),
+                      eq(transactions.referenceType, "referral_reward"),
+                      eq(transactions.referenceId, depositReferenceId)
+                    )
+                  )
                   .limit(1)
               )[0];
-              if (inviter) {
-                await db
-                  .update(profiles)
-                  .set({
-                    withdrawalLimitPkr: inviter.withdrawalLimitPkr + commission,
-                  })
-                  .where(eq(profiles.userId, inviter.userId));
-                await db.insert(referralRewards).values({
-                  depositId: deposit.id,
-                  inviterId: inviter.userId,
-                  invitedUserId: deposit.userId,
-                  amountPkr: commission,
-                });
-                await db.insert(transactions).values({
-                  userId: inviter.userId,
-                  type: "referral_limit",
-                  direction: "credit",
-                  amountPkr: commission,
-                  status: "completed",
-                  note: `Referral Reward 40% +PKR ${commission} from Player ${profile.username}`,
-                  referenceType: "deposit",
-                  referenceId: deposit.id,
-                });
-                await notifyUser(
-                  db,
-                  inviter.userId,
-                  "🎉 Mubarak Ho! Referral Reward Mil Gaya!",
-                  `Wah! Aap ne jis dost ko invite kiya tha us ne Rs ${deposit.amountPkr} ka deposit kiya hai. Aap ko Rs ${commission} (40%) ka withdrawal reward mil gaya hai! Shukriya!`
-                );
-                console.log(
-                  `REFERRAL SUCCESS: ${commission} credited to ${inviter.userId} for deposit ${deposit.id}`
-                );
+              const existingReward = (
+                await tx
+                  .select({ id: referralRewards.id })
+                  .from(referralRewards)
+                  .where(eq(referralRewards.depositId, lockedDeposit.id))
+                  .limit(1)
+              )[0];
+              if (!existingReferralTransaction && !existingReward) {
+                const commission = calculateInviterReward(lockedDeposit.amountPkr);
+                const inviter = (
+                  await tx
+                    .select()
+                    .from(profiles)
+                    .where(eq(profiles.userId, profile.referredByUserId))
+                    .limit(1)
+                )[0];
+                if (inviter) {
+                  await tx
+                    .update(profiles)
+                    .set({ withdrawalLimitPkr: inviter.withdrawalLimitPkr + commission })
+                    .where(eq(profiles.userId, inviter.userId));
+                  await tx.insert(referralRewards).values({
+                    depositId: lockedDeposit.id,
+                    inviterId: inviter.userId,
+                    invitedUserId: lockedDeposit.userId,
+                    amountPkr: commission,
+                  });
+                  await tx.insert(transactions).values({
+                    userId: inviter.userId,
+                    type: "referral_reward",
+                    direction: "credit",
+                    amountPkr: commission,
+                    status: "completed",
+                    note: `Referral Reward 40% +PKR ${commission} from Player ${profile.username}`,
+                    referenceType: "referral_reward",
+                    referenceId: depositReferenceId,
+                  });
+                  referralNotification = { userId: inviter.userId, commission };
+                }
               }
-            } else {
-              console.log("Referral already given for this deposit", deposit.id);
             }
-          } else {
-            console.log("No referrer found for user", deposit.userId);
+
+            await tx
+              .update(deposits)
+              .set({
+                status: "approved",
+                adminNote: input.note ?? null,
+                rejectionReason: null,
+                reviewedAt: new Date(),
+              })
+              .where(eq(deposits.id, lockedDeposit.id));
+            await tx
+              .update(transactions)
+              .set({ status: "approved" })
+              .where(
+                and(
+                  eq(transactions.referenceType, "deposit"),
+                  eq(transactions.referenceId, depositReferenceId),
+                  eq(transactions.status, "pending")
+                )
+              );
+          });
+          const committedReferralNotification = referralNotification as {
+            userId: number;
+            commission: number;
+          } | null;
+          if (committedReferralNotification) {
+            await notifyUser(
+              db,
+              committedReferralNotification.userId,
+              "🎉 Mubarak Ho! Referral Reward Mil Gaya!",
+              `Wah! Aap ne jis dost ko invite kiya tha us ne Rs ${deposit.amountPkr} ka deposit kiya hai. Aap ko Rs ${committedReferralNotification.commission} (40%) ka withdrawal reward mil gaya hai! Shukriya!`
+            );
           }
+        } else {
+          await withDbTransaction(db, async (tx) => {
+            await tx
+              .update(deposits)
+              .set({
+                status: "rejected",
+                adminNote: input.note ?? null,
+                rejectionReason: input.rejectionReason,
+                reviewedAt: new Date(),
+              })
+              .where(eq(deposits.id, deposit.id));
+            await tx
+              .update(transactions)
+              .set({ status: "rejected" })
+              .where(
+                and(
+                  eq(transactions.referenceType, "deposit"),
+                  eq(transactions.referenceId, String(deposit.id)),
+                  eq(transactions.status, "pending")
+                )
+              );
+          });
         }
-        await db
-          .update(deposits)
-          .set({
-            status,
-            adminNote: input.note ?? null,
-            rejectionReason: input.approved ? null : input.rejectionReason,
-            reviewedAt: new Date(),
-          })
-          .where(eq(deposits.id, deposit.id));
-        await db
-          .update(transactions)
-          .set({ status: input.approved ? "approved" : "rejected" })
-          .where(
-            and(
-              eq(transactions.referenceType, "deposit"),
-              eq(transactions.referenceId, deposit.id),
-              eq(transactions.status, "pending")
-            )
-          );
         await notifyUser(
           db,
           deposit.userId,
@@ -1654,54 +1706,68 @@ export const appRouter = router({
             .limit(1)
         )[0];
         if (!profile) fail("The user's profile was not found.", "NOT_FOUND");
-        if (!input.approved) {
-          const refundedBalance = refundRejectedWithdrawal(
-            profile.balancePkr,
-            request.amountPkr
-          );
-          await db
-            .update(profiles)
+        await withDbTransaction(db, async (tx) => {
+          const requestSelection = tx
+            .select({ id: withdrawals.id, status: withdrawals.status })
+            .from(withdrawals)
+            .where(eq(withdrawals.id, request.id))
+            .limit(1);
+          const lockedRequest = (
+            await (typeof requestSelection.for === "function"
+              ? requestSelection.for("update")
+              : requestSelection)
+          )[0];
+          if (!lockedRequest) fail("Withdrawal request was not found.", "NOT_FOUND");
+          if (lockedRequest.status !== "pending")
+            fail("This withdrawal request has already been reviewed.");
+          if (!input.approved) {
+            const refundedBalance = refundRejectedWithdrawal(
+              profile.balancePkr,
+              request.amountPkr
+            );
+            await tx
+              .update(profiles)
+              .set({
+                balancePkr: refundedBalance,
+                withdrawalLimitPkr: profile.withdrawalLimitPkr + request.amountPkr,
+              })
+              .where(eq(profiles.userId, request.userId));
+          }
+          await tx
+            .update(withdrawals)
             .set({
-              balancePkr: refundedBalance,
-              withdrawalLimitPkr:
-                profile.withdrawalLimitPkr + request.amountPkr,
+              status: input.approved ? "approved" : "rejected",
+              adminNote: input.note ?? null,
+              rejectionReason: input.approved ? null : input.rejectionReason,
+              reviewedAt: new Date(),
             })
-            .where(eq(profiles.userId, request.userId));
-        }
-        await db
-          .update(withdrawals)
-          .set({
-            status: input.approved ? "approved" : "rejected",
-            adminNote: input.note ?? null,
-            rejectionReason: input.approved ? null : input.rejectionReason,
-            reviewedAt: new Date(),
-          })
-          .where(eq(withdrawals.id, request.id));
-        if (
-          input.approved &&
-          profile.whatsappRewardEligible &&
-          profile.whatsappBonusClaimed &&
-          !profile.whatsappRewardWithdrawn &&
-          request.currency === "PKR" &&
-          request.amountPkr === WHATSAPP_JOIN_REWARD_PKR
-        )
-          await db
-            .update(profiles)
-            .set({ whatsappRewardWithdrawn: true })
-            .where(eq(profiles.userId, request.userId));
-        await db
-          .update(transactions)
-          .set({
-            status: input.approved ? "approved" : "rejected",
-            direction: input.approved ? "debit" : "neutral",
-          })
-          .where(
-            and(
-              eq(transactions.referenceType, "withdrawal"),
-              eq(transactions.referenceId, request.id),
-              eq(transactions.status, "pending")
-            )
-          );
+            .where(eq(withdrawals.id, request.id));
+          if (
+            input.approved &&
+            profile.whatsappRewardEligible &&
+            profile.whatsappBonusClaimed &&
+            !profile.whatsappRewardWithdrawn &&
+            request.currency === "PKR" &&
+            request.amountPkr === WHATSAPP_JOIN_REWARD_PKR
+          )
+            await tx
+              .update(profiles)
+              .set({ whatsappRewardWithdrawn: true })
+              .where(eq(profiles.userId, request.userId));
+          await tx
+            .update(transactions)
+            .set({
+              status: input.approved ? "approved" : "rejected",
+              direction: input.approved ? "debit" : "neutral",
+            })
+            .where(
+              and(
+                eq(transactions.referenceType, "withdrawal"),
+                eq(transactions.referenceId, String(request.id)),
+                eq(transactions.status, "pending")
+              )
+            );
+        });
         await notifyUser(
           db,
           request.userId,

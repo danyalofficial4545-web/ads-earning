@@ -44,7 +44,7 @@ describe("router accounting flows", () => {
     await appRouter.createCaller(context()).withdrawal.create({ currency: "PKR", amount: 100, walletType: "JazzCash", accountName: "Test Account", accountDetails: "03001234567" });
 
     expect(updates[0]?.values).toEqual({ balancePkr: 5900, withdrawalLimitPkr: 4900 });
-    expect(inserts[1]?.values).toMatchObject({ direction: "debit", status: "pending", amountPkr: 100, referenceId: 44 });
+    expect(inserts[1]?.values).toMatchObject({ direction: "debit", status: "pending", amountPkr: 100, referenceId: "44" });
     expect(inserts[0]?.values).toMatchObject({ walletType: "JazzCash", accountName: "Test Account", accountDetails: "03001234567" });
     expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("💸 WITHDRAW REQUEST"));
     expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("03001234567"));

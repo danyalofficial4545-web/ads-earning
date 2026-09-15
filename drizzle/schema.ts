@@ -145,13 +145,13 @@ export const adminAdImpressions = mysqlTable("adminAdImpressions", {
 export const transactions = mysqlTable("transactions", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  type: mysqlEnum("type", ["deposit", "package", "ad_reward", "withdrawal", "referral_limit", "adjustment", "bonus"]).notNull(),
+  type: varchar("type", { length: 50 }).notNull(),
   direction: mysqlEnum("direction", ["credit", "debit", "neutral"]).notNull(),
   amountPkr: int("amountPkr").notNull(),
   status: mysqlEnum("status", ["pending", "approved", "rejected", "completed"]).notNull().default("completed"),
   note: varchar("note", { length: 256 }).notNull(),
-  referenceType: varchar("referenceType", { length: 64 }),
-  referenceId: int("referenceId"),
+  referenceType: varchar("referenceType", { length: 50 }),
+  referenceId: varchar("referenceId", { length: 100 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => [index("transactions_user_created_idx").on(table.userId, table.createdAt)]);
 

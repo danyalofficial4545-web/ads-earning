@@ -21,6 +21,7 @@ import {
 import { getPakistanDayKey } from "../shared/adRules";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _transactionSchemaReady: Promise<void> | null = null;
 
 export const ADMIN_EMAIL = DESIGNATED_ADMIN_EMAIL;
 export const ADMIN_USERNAME = DESIGNATED_ADMIN_USERNAME;
@@ -80,6 +81,12 @@ export async function getDb() {
         database: parsed.pathname.replace(/^\//, ""),
         ssl: { rejectUnauthorized: true },
       });
+      _transactionSchemaReady ??= client
+        .query(
+          "ALTER TABLE `transactions` MODIFY COLUMN `type` varchar(50) NOT NULL, MODIFY COLUMN `referenceType` varchar(50) NULL, MODIFY COLUMN `referenceId` varchar(100) NULL"
+        )
+        .then(() => undefined);
+      await _transactionSchemaReady;
       _db = drizzle({ client }) as unknown as ReturnType<typeof drizzle>;
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
