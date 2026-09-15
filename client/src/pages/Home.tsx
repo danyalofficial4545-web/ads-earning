@@ -128,7 +128,7 @@ const typeLabels: Record<string, TranslationKey> = {
   withdrawal: "withdrawal",
   referral_limit: "withdrawalLimit",
   adjustment: "settings",
-  bonus: "settings",
+  bonus: "depositBonus",
 };
 const statusLabels: Record<string, TranslationKey> = {
   pending: "pending",
@@ -1739,7 +1739,7 @@ function TransactionRow({ row }: { row: any }) {
         </div>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">
-            {row.type === "bonus"
+            {row.type === "bonus" || row.type === "referral_limit"
               ? row.note || "Bonus"
               : translate(language, typeLabels[row.type] ?? "type")}
           </p>
@@ -2324,6 +2324,7 @@ function Referral({ t }: any) {
       <PageHeading
         eyebrow={t("invite")}
         title={t("invite")}
+        description={t("referralSubtitle")}
       />
       <div className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
         <div className="panel">
@@ -2372,6 +2373,55 @@ function Referral({ t }: any) {
           value={String(referral.data.purchasedReferrals)}
           accent="emerald"
         />
+      </div>
+      <div className="panel mt-5 overflow-hidden">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="eyebrow">{t("invite")}</p>
+            <h2 className="mt-1 text-xl font-bold">My Invited Users</h2>
+          </div>
+          <p className="text-xs text-slate-400">{referral.data.referrals.length} invited user{referral.data.referrals.length === 1 ? "" : "s"}</p>
+        </div>
+        {referral.data.referrals.length ? (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-400">
+                <tr>
+                  <th className="px-3 py-3">User</th>
+                  <th className="px-3 py-3">Email</th>
+                  <th className="px-3 py-3">Registered</th>
+                  <th className="px-3 py-3">Deposit</th>
+                  <th className="px-3 py-3">Package</th>
+                  <th className="px-3 py-3 text-right">Reward</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {referral.data.referrals.map((invited: any) => (
+                  <tr key={invited.userId} className="text-slate-200">
+                    <td className="px-3 py-3 font-semibold">{invited.username}</td>
+                    <td className="px-3 py-3 text-slate-400">{invited.email ?? "—"}</td>
+                    <td className="px-3 py-3 whitespace-nowrap text-slate-400">{dateTime(invited.registeredAt)}</td>
+                    <td className="px-3 py-3">
+                      <span className={`inline-flex items-center gap-1.5 font-semibold ${invited.depositStatus === "approved" ? "text-emerald-300" : "text-amber-200"}`}>
+                        <span className={`size-2 rounded-full ${invited.depositStatus === "approved" ? "bg-emerald-400" : "bg-amber-300"}`} />
+                        {invited.depositStatus === "approved" ? "Approved" : "Pending"}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3">
+                      <span className={`inline-flex items-center gap-1.5 ${invited.packageActive ? "text-emerald-300" : "text-red-300"}`}>
+                        <span className={`size-2 rounded-full ${invited.packageActive ? "bg-emerald-400" : "bg-red-400"}`} />
+                        {invited.packageActive ? invited.packageName : "No"}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-right font-bold text-amber-300">{money(invited.rewardPkr)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-5 rounded-xl border border-white/10 bg-white/5 p-5 text-sm text-slate-400">No invited users yet.</p>
+        )}
       </div>
     </>
   );

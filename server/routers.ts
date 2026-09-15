@@ -38,6 +38,10 @@ import { systemRouter } from "./_core/systemRouter";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import {
+  calculateDepositorBonus,
+  calculateInviterReward,
+} from "./depositService";
+import {
   createLocalSession,
   hashPassword,
   LOCAL_SESSION_COOKIE,
@@ -1212,28 +1216,43 @@ export const appRouter = router({
           userId: profiles.userId,
           username: profiles.username,
           createdAt: profiles.createdAt,
+          email: users.email,
         })
         .from(profiles)
+        .innerJoin(users, eq(users.id, profiles.userId))
         .where(eq(profiles.referredByUserId, user.id));
-      const purchaserRows = referrals.length
-        ? await db
-            .select({ userId: userPackages.userId })
-            .from(userPackages)
-            .where(
-              inArray(
-                userPackages.userId,
-                referrals.map(referral => referral.userId)
-              )
-            )
-        : [];
-      const purchasers = new Set(purchaserRows.map(row => row.userId));
+      const invitedUsers = await Promise.all(referrals.map(async referral => {
+        const latestDeposit = (await db
+          .select({ status: deposits.status })
+          .from(deposits)
+          .where(eq(deposits.userId, referral.userId))
+          .orderBy(desc(deposits.createdAt))
+          .limit(1))[0];
+        const rewards = await db
+          .select({ total: sql<number>`coalesce(sum(${referralRewards.amountPkr}), 0)` })
+          .from(referralRewards)
+          .where(eq(referralRewards.invitedUserId, referral.userId));
+        const activePackage = await getActivePackageForUser(referral.userId);
+        return {
+          userId: referral.userId,
+          username: referral.username,
+          email: referral.email,
+          registeredAt: referral.createdAt,
+          depositStatus: latestDeposit?.status ?? "pending",
+          packageActive: Boolean(activePackage),
+          packageName: activePackage?.plan.name ?? null,
+          rewardPkr: Number(rewards[0]?.total ?? 0),
+        };
+      }));
+      const purchasers = invitedUsers.filter(invitedUser => invitedUser.packageActive);
       return {
         username: profile.username,
         referralCode: profile.referralCode,
         totalReferrals: referrals.length,
-        purchasedReferrals: purchasers.size,
+        purchasedReferrals: purchasers.length,
         withdrawalLimitPkr: profile.withdrawalLimitPkr,
-        referrals,
+        referralEarningsPkr: invitedUsers.reduce((total, invitedUser) => total + invitedUser.rewardPkr, 0),
+        referrals: invitedUsers,
       };
     }),
   }),
@@ -1467,6 +1486,109 @@ export const appRouter = router({
         if (deposit.status !== "pending")
           fail("This deposit request has already been reviewed.");
         const status = input.approved ? "approved" : "rejected";
+        if (input.approved) {
+          console.log("DEPOSIT APPROVAL DEBUG:", {
+            depositId: deposit.id,
+            userId: deposit.userId,
+            amountPkr: deposit.amountPkr,
+          });
+          const profile = (
+            await db
+              .select()
+              .from(profiles)
+              .where(eq(profiles.userId, deposit.userId))
+              .limit(1)
+          )[0];
+          console.log("Invited user referredBy:", profile?.referredByUserId);
+          if (profile) {
+            const existingDepositBonus = (
+              await db
+                .select({ id: transactions.id })
+                .from(transactions)
+                .where(
+                  and(
+                    eq(transactions.userId, deposit.userId),
+                    eq(transactions.referenceType, "deposit_bonus"),
+                    eq(transactions.referenceId, deposit.id)
+                  )
+                )
+                .limit(1)
+            )[0];
+            const depositBonusPkr = calculateDepositorBonus(deposit.amountPkr);
+            if (!existingDepositBonus) {
+              await db
+                .update(profiles)
+                .set({ balancePkr: profile.balancePkr + deposit.amountPkr + depositBonusPkr })
+                .where(eq(profiles.userId, deposit.userId));
+              await db.insert(transactions).values({
+                userId: deposit.userId,
+                type: "bonus",
+                direction: "credit",
+                amountPkr: depositBonusPkr,
+                status: "completed",
+                note: `Deposit Bonus 10% +PKR ${depositBonusPkr}`,
+                referenceType: "deposit_bonus",
+                referenceId: deposit.id,
+              });
+            }
+          }
+          if (profile?.referredByUserId) {
+            const existing = (
+              await db
+                .select()
+                .from(referralRewards)
+                .where(eq(referralRewards.depositId, deposit.id))
+                .limit(1)
+            )[0];
+            if (!existing) {
+              const commission = calculateInviterReward(deposit.amountPkr);
+              const inviter = (
+                await db
+                  .select()
+                  .from(profiles)
+                  .where(eq(profiles.userId, profile.referredByUserId))
+                  .limit(1)
+              )[0];
+              if (inviter) {
+                await db
+                  .update(profiles)
+                  .set({
+                    withdrawalLimitPkr: inviter.withdrawalLimitPkr + commission,
+                  })
+                  .where(eq(profiles.userId, inviter.userId));
+                await db.insert(referralRewards).values({
+                  depositId: deposit.id,
+                  inviterId: inviter.userId,
+                  invitedUserId: deposit.userId,
+                  amountPkr: commission,
+                });
+                await db.insert(transactions).values({
+                  userId: inviter.userId,
+                  type: "referral_limit",
+                  direction: "credit",
+                  amountPkr: commission,
+                  status: "completed",
+                  note: `Referral Reward 40% +PKR ${commission} from Player ${profile.username}`,
+                  referenceType: "deposit",
+                  referenceId: deposit.id,
+                });
+                await notifyUser(
+                  db,
+                  inviter.userId,
+                  "🎉 Mubarak Ho! Referral Reward Mil Gaya!",
+                  `Wah! Aap ne jis dost ko invite kiya tha us ne Rs ${deposit.amountPkr} ka deposit kiya hai. Aap ko Rs ${commission} (40%) ka withdrawal reward mil gaya hai! Shukriya!`
+                );
+                console.log(
+                  `REFERRAL SUCCESS: ${commission} credited to ${inviter.userId} for deposit ${deposit.id}`
+                );
+              }
+            } else {
+              console.log("Referral already given for this deposit", deposit.id);
+            }
+          } else {
+            console.log("No referrer found for user", deposit.userId);
+          }
+        }
         await db
           .update(deposits)
           .set({
@@ -1486,96 +1608,6 @@ export const appRouter = router({
               eq(transactions.status, "pending")
             )
           );
-        if (input.approved) {
-          console.log("DEPOSIT APPROVAL DEBUG:", {
-            depositId: deposit.id,
-            userId: deposit.userId,
-            amountPkr: deposit.amountPkr,
-          });
-          const profile = (
-            await db
-              .select()
-              .from(profiles)
-              .where(eq(profiles.userId, deposit.userId))
-              .limit(1)
-          )[0];
-          console.log("Invited user referredBy:", profile?.referredByUserId);
-          if (profile)
-            {
-              const depositBonusPkr = Math.floor(deposit.amountPkr * 0.1);
-              await db
-                .update(profiles)
-                .set({ balancePkr: profile.balancePkr + deposit.amountPkr + depositBonusPkr })
-                .where(eq(profiles.userId, deposit.userId));
-              await db.insert(transactions).values({
-                userId: deposit.userId,
-                type: "bonus",
-                direction: "credit",
-                amountPkr: depositBonusPkr,
-                status: "completed",
-                note: "Deposit Bonus 10%",
-                referenceType: "deposit_bonus",
-                referenceId: deposit.id,
-              });
-            }
-          if (profile?.referredByUserId) {
-            const existing = (
-              await db
-                .select()
-                .from(referralRewards)
-                .where(eq(referralRewards.depositId, deposit.id))
-                .limit(1)
-            )[0];
-            if (!existing) {
-              const commission = Math.floor(deposit.amountPkr * 0.5);
-              const inviter = (
-                await db
-                  .select()
-                  .from(profiles)
-                  .where(eq(profiles.userId, profile.referredByUserId))
-                  .limit(1)
-              )[0];
-              if (inviter) {
-                await db
-                  .update(profiles)
-                  .set({
-                    balancePkr: inviter.balancePkr + commission,
-                    withdrawalLimitPkr: inviter.withdrawalLimitPkr + commission,
-                  })
-                  .where(eq(profiles.userId, inviter.userId));
-                await db.insert(referralRewards).values({
-                  depositId: deposit.id,
-                  inviterId: inviter.userId,
-                  invitedUserId: deposit.userId,
-                  amountPkr: commission,
-                });
-                await db.insert(transactions).values({
-                  userId: inviter.userId,
-                  type: "referral_limit",
-                  direction: "credit",
-                  amountPkr: commission,
-                  status: "completed",
-                  note: "Referral Bonus",
-                  referenceType: "deposit",
-                  referenceId: deposit.id,
-                });
-                await notifyUser(
-                  db,
-                  inviter.userId,
-                  "🎉 Mubarak Ho! Referral Reward Mil Gaya!",
-                  `Wah! Aap ne jis dost ko invite kiya tha us ne Rs ${deposit.amountPkr} ka deposit kiya hai. Aap ko Rs ${commission} (50%) ka inaam mil gaya hai! Shukriya!`
-                );
-                console.log(
-                  `REFERRAL SUCCESS: ${commission} credited to ${inviter.userId} for deposit ${deposit.id}`
-                );
-              }
-            } else {
-              console.log("Referral already given for this deposit", deposit.id);
-            }
-          } else {
-            console.log("No referrer found for user", deposit.userId);
-          }
-        }
         await notifyUser(
           db,
           deposit.userId,
