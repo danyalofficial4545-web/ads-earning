@@ -37,6 +37,7 @@ import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { systemRouter } from "./_core/systemRouter";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { getDiscountedPackagePrice } from "../shared/packagePricing";
 import {
   calculateDepositorBonus,
   calculateInviterReward,
@@ -725,7 +726,8 @@ export const appRouter = router({
             .limit(1)
         )[0];
         if (!plan) fail("That package is not available.", "NOT_FOUND");
-        if (profile.balancePkr < plan.pricePkr)
+        const purchasePricePkr = getDiscountedPackagePrice(plan.pricePkr);
+        if (profile.balancePkr < purchasePricePkr)
           fail(
             "Your wallet balance is insufficient. Please deposit funds first."
           );
@@ -735,7 +737,7 @@ export const appRouter = router({
         );
         await db
           .update(profiles)
-          .set({ balancePkr: profile.balancePkr - plan.pricePkr })
+          .set({ balancePkr: profile.balancePkr - purchasePricePkr })
           .where(eq(profiles.userId, user.id));
         await db.insert(userPackages).values({
           userId: user.id,
@@ -747,9 +749,9 @@ export const appRouter = router({
           userId: user.id,
           type: "package",
           direction: "debit",
-          amountPkr: plan.pricePkr,
+          amountPkr: purchasePricePkr,
           status: "completed",
-          note: `${plan.name} package purchased`,
+          note: `${plan.name} package purchased at 15% discount`,
         });
         // Wallet purchase - no referral commission - company loss fix
         return { success: true, expiresAt };

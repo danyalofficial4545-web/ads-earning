@@ -39,6 +39,7 @@ import {
   type DashboardMetricKey,
 } from "@/lib/dashboardMetrics";
 import { translate, type Language, type TranslationKey } from "@/lib/i18n";
+import { getDiscountedPackagePrice } from "@shared/packagePricing";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import {
@@ -1493,16 +1494,17 @@ function QuickAction({ icon: Icon, label, onClick, disabled = false }: any) {
 function Packages({ t, language, plans, balance, active, onPurchase, onRequestDeposit }: any) {
   const [shortfallPlan, setShortfallPlan] = useState<any>(null);
   const orderedPlans = [...plans].sort((a, b) => a.pricePkr - b.pricePkr);
+  const discountedPrice = (plan: any) => getDiscountedPackagePrice(plan.pricePkr);
   const shortfall = shortfallPlan
-    ? Math.max(0, shortfallPlan.pricePkr - balance)
+    ? Math.max(0, discountedPrice(shortfallPlan) - balance)
     : 0;
   const handlePurchase = (plan: any) => {
-    if (balance >= plan.pricePkr) {
+    if (balance >= discountedPrice(plan)) {
       onPurchase(plan);
       return;
     }
     if (balance <= 0) {
-      onRequestDeposit(plan, plan.pricePkr);
+      onRequestDeposit(plan, discountedPrice(plan));
       return;
     }
     setShortfallPlan(plan);
@@ -1527,8 +1529,12 @@ function Packages({ t, language, plans, balance, active, onPurchase, onRequestDe
               </div>
               <p className="eyebrow">{plan.tier}</p>
               <h2 className="mt-1 pr-8 text-lg font-bold sm:text-xl">{plan.name}</h2>
-              <p className="mt-4 text-xl font-bold text-amber-300 sm:text-2xl">
-                {money(plan.pricePkr)}
+              <div className="mt-4 flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-500 line-through sm:text-sm">{money(plan.pricePkr)}</span>
+                <span className="rounded-full bg-emerald-300/15 px-2 py-1 text-[10px] font-black text-emerald-200">15% OFF</span>
+              </div>
+              <p className="mt-1 text-xl font-bold text-amber-300 sm:text-2xl">
+                {money(discountedPrice(plan))}
               </p>
               <p className="mt-2 text-xs font-extrabold text-emerald-200 sm:text-sm">
                 {plan.dailyAds} {plan.dailyAds === 1 ? t("ad") : t("ads")} - {plan.adRewardPkr} PKR / {t("ad")}
@@ -1553,7 +1559,7 @@ function Packages({ t, language, plans, balance, active, onPurchase, onRequestDe
               >
                 {isActive ? t("currentPackage") : t("buyPackage")}
               </button>
-              {!isActive && balance < plan.pricePkr && (
+              {!isActive && balance < discountedPrice(plan) && (
                 <p className="mt-2 text-center text-[11px] text-amber-200/70">
                   {t("insufficient")}
                 </p>
@@ -1872,6 +1878,9 @@ function Deposit({ t, settings, packages, onDone, initialRequestedPackageId = ""
         description={t("officialAccounts")}
         action={<button onClick={() => setShowHistory(!showHistory)} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-amber-300">{showHistory ? t("hideHistory") : t("viewDepositHistory")}</button>}
       />
+      <p className="mb-5 rounded-xl border border-emerald-300/25 bg-emerald-300/10 p-4 text-sm font-semibold leading-6 text-emerald-50">
+        {t("depositBonusNote")}
+      </p>
       <div className="grid gap-5 xl:grid-cols-[.85fr_1.15fr]">
         <div className="panel">
           <p className="eyebrow">{t("officialAccounts")}</p>
@@ -1990,7 +1999,7 @@ function Deposit({ t, settings, packages, onDone, initialRequestedPackageId = ""
                 <span className="field-label">{t("requestedPackage")}</span>
                 <select className="field" value={requestedPackageId} onChange={e => setRequestedPackageId(e.target.value)}>
                   <option value="">{t("walletDeposit")}</option>
-                  {packages.map((plan: any) => <option key={plan.id} value={plan.id}>{plan.name} · {money(plan.pricePkr)}</option>)}
+                  {packages.map((plan: any) => <option key={plan.id} value={plan.id}>{plan.name} · {money(getDiscountedPackagePrice(plan.pricePkr))}</option>)}
                 </select>
               </label>
             </div>
@@ -2063,19 +2072,8 @@ function Withdrawal({ t, profile, showRewardWithdrawalPrompt, activePackage, has
   const [accountDetails, setAccountDetails] = useState("");
   const [errors, setErrors] = useState<FormErrors>({});
   const [showHistory, setShowHistory] = useState(false);
-  const [showInviteTicker, setShowInviteTicker] = useState(
-    () => Boolean(activePackage && profile.withdrawalLimitPkr <= 0)
-  );
+  const [showWithdrawalRule, setShowWithdrawalRule] = useState(false);
   const utils = trpc.useUtils();
-  useEffect(() => {
-    const shouldShowInviteTicker = Boolean(
-      activePackage && profile.withdrawalLimitPkr <= 0
-    );
-    setShowInviteTicker(shouldShowInviteTicker);
-    if (!shouldShowInviteTicker) return;
-    const tickerTimer = window.setTimeout(() => setShowInviteTicker(false), 6_000);
-    return () => window.clearTimeout(tickerTimer);
-  }, [activePackage?.ownershipId, profile.withdrawalLimitPkr]);
   const create = trpc.withdrawal.create.useMutation({
     onSuccess: data => {
       toast.success(t("submitted"));
@@ -2125,14 +2123,17 @@ function Withdrawal({ t, profile, showRewardWithdrawalPrompt, activePackage, has
             {t("whatsappWithdrawalPrompt")}
           </p>
         )}
-        {showInviteTicker && !showRewardWithdrawalPrompt && (
+        {showWithdrawalRule && !showRewardWithdrawalPrompt && (
           <div className="withdrawal-invite-ticker mb-5 rounded-xl border border-emerald-300/25 bg-emerald-300/10 py-3 text-sm font-semibold text-emerald-50" role="status">
-            <p className="withdrawal-invite-ticker__text">{t("withdrawalInviteTicker")}</p>
+            <p className="withdrawal-invite-ticker__text">{t("withdrawalInviteRule")}</p>
           </div>
         )}
           <form
             onSubmit={event => {
               event.preventDefault();
+              if (activePackage && profile.withdrawalLimitPkr <= 0) {
+                setShowWithdrawalRule(true);
+              }
               const failure = firstWithdrawalFailure({
                 amount,
                 currency,
@@ -2310,24 +2311,13 @@ function Referral({ t }: any) {
     toast.success(t("copied"));
     window.setTimeout(() => setCopied(false), 1500);
   };
-  const share = async () => {
-    if (navigator.share)
-      await navigator.share({
-        title: t("brand"),
-        text: t("referralTitle"),
-        url: link,
-      });
-    else copy();
-  };
   return (
     <>
       <PageHeading
         eyebrow={t("invite")}
         title={t("invite")}
-        description={t("referralSubtitle")}
       />
-      <div className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
-        <div className="panel">
+      <div className="panel">
           <p className="eyebrow">{t("yourLink")}</p>
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
             <input
@@ -2342,38 +2332,8 @@ function Referral({ t }: any) {
               <Copy className="size-4" />
               {copied ? "✓" : t("copy")}
             </button>
-            <button
-              onClick={share}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-amber-300 px-4 text-sm font-bold text-slate-950"
-            >
-              <Send className="size-4" />
-              {t("share")}
-            </button>
           </div>
         </div>
-        <div className="panel">
-          <p className="eyebrow">{t("referralEarnings")}</p>
-          <p className="mt-2 text-3xl font-bold text-amber-300">
-            {money(invite.referralEarningsPkr)}
-          </p>
-          <p className="mt-4 text-xs font-bold text-slate-400">{t("referralCode")}</p>
-          <p className="mt-1 font-mono text-sm text-amber-300">{referral.data.referralCode}</p>
-        </div>
-      </div>
-      <div className="mt-5 grid gap-4 md:grid-cols-2">
-        <StatCard
-          icon={Users}
-          label={t("totalReferrals")}
-          value={String(invite.totalInvites)}
-          accent="blue"
-        />
-        <StatCard
-          icon={PackageCheck}
-          label={t("friendsPurchased")}
-          value={String(referral.data.purchasedReferrals)}
-          accent="emerald"
-        />
-      </div>
       <div className="panel mt-5 overflow-hidden">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
