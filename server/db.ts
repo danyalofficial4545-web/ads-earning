@@ -21,6 +21,7 @@ import {
 import { getPakistanDayKey } from "../shared/adRules";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let transactionsSchemaReady = false;
 let _transactionSchemaReady: Promise<void> | null = null;
 
 export const ADMIN_EMAIL = DESIGNATED_ADMIN_EMAIL;
@@ -176,7 +177,12 @@ export async function linkOAuthUser(
 export async function ensurePlatformData() {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-
+  if (!transactionsSchemaReady && typeof (db as any).execute === "function") {
+    await db.execute(sql.raw(
+      "ALTER TABLE `transactions` MODIFY COLUMN `type` varchar(50) NOT NULL, MODIFY COLUMN `referenceType` varchar(50) NULL, MODIFY COLUMN `referenceId` varchar(100) NULL, MODIFY COLUMN `id` int NOT NULL AUTO_INCREMENT"
+    ));
+    transactionsSchemaReady = true;
+  }
   const settings = await db
     .select()
     .from(appSettings)
