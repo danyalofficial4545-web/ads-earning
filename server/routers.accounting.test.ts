@@ -223,7 +223,7 @@ describe("router accounting flows", () => {
     expect(inserts[0]).toMatchObject({ amountPkr: 10, status: "pending" });
   });
 
-  it("credits referral commission only to the referrer withdrawal limit", async () => {
+  it("does not credit referral commission for a wallet package purchase", async () => {
     const plan = { id: 1, tier: "bronze", name: "Bronze", icon: "B", pricePkr: 1000, dailyAds: 2, durationDays: 30, isActive: true, createdAt: new Date(), updatedAt: new Date() };
     const updates: Array<{ table: unknown; values: any }> = [];
     const inserts: Array<{ table: unknown; values: any }> = [];
@@ -236,9 +236,7 @@ describe("router accounting flows", () => {
 
     await appRouter.createCaller(context()).package.buy({ packageId: 1 });
 
-    const referrerUpdate = updates.find((entry) => entry.table === profiles && entry.values?.withdrawalLimitPkr !== undefined);
-    expect(referrerUpdate?.values).toEqual({ withdrawalLimitPkr: 500 });
-    expect(referrerUpdate?.values.balancePkr).toBeUndefined();
-    expect(inserts.some((entry) => entry.values?.userId === 10 && entry.values?.type === "referral_limit")).toBe(true);
+    expect(updates.some((entry) => entry.table === profiles && entry.values?.withdrawalLimitPkr !== undefined)).toBe(false);
+    expect(inserts.some((entry) => entry.values?.type === "referral_limit")).toBe(false);
   });
 });
