@@ -79,7 +79,8 @@ export function PublicAuth({
   const login = trpc.auth.signIn.useMutation({
     onSuccess: () => complete(t("signedIn")),
     onError: error => {
-      setSignInErrors(friendlyServerError(error, "password"));
+      console.error("[Auth] Login error", error);
+      setSignInErrors({ general: error.message || friendlyMessages.requestFailed });
     },
   });
   const register = trpc.auth.register.useMutation({
@@ -98,7 +99,7 @@ export function PublicAuth({
     console.debug("Auth validation result", { mode: "signIn", email: signIn.email, errors });
     if (errors.email || errors.password) return setSignInErrors(errors);
     setSignInErrors({});
-    login.mutate(signIn);
+    login.mutate({ ...signIn, email: signIn.email.toLowerCase().trim() });
   };
   const submitSignUp = (event: React.FormEvent) => {
     event.preventDefault();

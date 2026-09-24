@@ -4,7 +4,8 @@ import { SignJWT, jwtVerify } from "jose";
 import { ENV } from "./_core/env";
 
 const scrypt = promisify(scryptCallback);
-export const LOCAL_SESSION_COOKIE = "pep_local_session";
+export const LOCAL_SESSION_COOKIE = "auth-token";
+export const LEGACY_LOCAL_SESSION_COOKIE = "pep_local_session";
 const encoder = new TextEncoder();
 
 function secret() {

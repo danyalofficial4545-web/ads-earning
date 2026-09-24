@@ -515,15 +515,33 @@ export const appRouter = router({
         const db = await getDb();
         if (!db)
           fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-        const user = (
+        const identifier = input.email.toLowerCase().trim();
+        let user = (
           await db
             .select()
             .from(users)
-            .where(eq(users.email, input.email.toLowerCase()))
+            .where(eq(users.email, identifier))
             .limit(1)
         )[0];
-        if (!user || !(await verifyPassword(input.password, user.passwordHash)))
-          fail("Incorrect email or password.", "UNAUTHORIZED");
+        if (!user) {
+          const usernameMatch = (
+            await db
+              .select({ user: users })
+              .from(profiles)
+              .innerJoin(users, eq(users.id, profiles.userId))
+              .where(eq(profiles.username, identifier))
+              .limit(1)
+          )[0];
+          user = usernameMatch?.user;
+        }
+        const passwordMatch = Boolean(user?.passwordHash) && await verifyPassword(input.password, user?.passwordHash);
+        console.info("[Auth] Login attempt for", identifier, "user found:", Boolean(user), "password match:", passwordMatch);
+        if (!user) fail("User not found", "NOT_FOUND");
+        if (!user.passwordHash) fail("This account uses Google Login, please Continue with Google", "UNAUTHORIZED");
+        if (!passwordMatch) {
+          console.warn("[Auth] Invalid credentials for", identifier, "userId:", user.id);
+          fail("Invalid credentials", "UNAUTHORIZED");
+        }
         const profile = await ensureProfile(user);
         if (profile.isBlocked)
           fail(
