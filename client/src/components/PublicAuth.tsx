@@ -80,7 +80,11 @@ export function PublicAuth({
     onSuccess: () => complete(t("signedIn")),
     onError: error => {
       console.error("[Auth] Login error", error);
-      setSignInErrors({ general: error.message || friendlyMessages.requestFailed });
+      const rawMessage = error.message || "";
+      const safeMessage = /failed query|sql|mysql|tidb|drizzle|database|unknown column|syntax error/i.test(rawMessage)
+        ? "Server error, please try again"
+        : rawMessage || friendlyMessages.requestFailed;
+      setSignInErrors({ general: safeMessage });
     },
   });
   const register = trpc.auth.register.useMutation({
