@@ -429,6 +429,8 @@ export const appRouter = router({
           referralCode: `PEP${userId.toString(36).toUpperCase()}`,
           referredByUserId,
           balancePkr: 0,
+          depositWalletBalance: 0,
+          earningWalletBalance: 0,
           withdrawalLimitPkr: 0,
           preferredCurrency: "PKR",
           whatsappRewardEligible: true,
@@ -681,9 +683,8 @@ export const appRouter = router({
         .set({
           whatsappJoined: true,
           whatsappBonusClaimed: true,
-          balancePkr: profile.balancePkr + WHATSAPP_JOIN_REWARD_PKR,
-          withdrawalLimitPkr:
-            profile.withdrawalLimitPkr + WHATSAPP_JOIN_REWARD_PKR,
+          earningWalletBalance:
+            (profile.earningWalletBalance ?? 0) + WHATSAPP_JOIN_REWARD_PKR * 100,
         })
         .where(eq(profiles.userId, user.id));
       await db.insert(transactions).values({
@@ -730,18 +731,24 @@ export const appRouter = router({
             .limit(1)
         )[0];
         if (!plan) fail("That package is not available.", "NOT_FOUND");
-        const purchasePricePkr = getDiscountedPackagePrice(plan.pricePkr);
-        if (profile.balancePkr < purchasePricePkr)
+        const purchasePriceCoins = plan.priceCoins ?? plan.pricePkr * 100;
+        if ((profile.depositWalletBalance ?? 0) < purchasePriceCoins)
           fail(
-            "Your wallet balance is insufficient. Please deposit funds first."
+            "Your Deposit Wallet balance is insufficient. Please deposit funds first."
           );
         const now = new Date();
         const expiresAt = new Date(
-          now.getTime() + plan.durationDays * 86_400_000
+          plan.durationDays === 0
+            ? new Date("2099-12-31T23:59:59.999Z").getTime()
+            : now.getTime() + plan.durationDays * 86_400_000
         );
         await db
           .update(profiles)
-          .set({ balancePkr: profile.balancePkr - purchasePricePkr })
+          .set({
+            depositWalletBalance: (profile.depositWalletBalance ?? 0) - purchasePriceCoins,
+            activePackageId: plan.id,
+            packageExpiryDate: expiresAt,
+          })
           .where(eq(profiles.userId, user.id));
         await db.insert(userPackages).values({
           userId: user.id,
@@ -753,9 +760,9 @@ export const appRouter = router({
           userId: user.id,
           type: "package",
           direction: "debit",
-          amountPkr: purchasePricePkr,
+          amountPkr: plan.pricePkr,
           status: "completed",
-          note: `${plan.name} package purchased at 15% discount`,
+          note: `${plan.name} package purchased from Deposit Wallet (${purchasePriceCoins} coins)`,
         });
         // Wallet purchase - no referral commission - company loss fix
         return { success: true, expiresAt };
@@ -778,7 +785,7 @@ export const appRouter = router({
         ...data,
         recent,
         balanceUsd: fromPkr(
-          data.profile.balancePkr,
+          (data.profile.earningWalletBalance ?? 0) / 100,
           data.settings.exchangeRatePkrPerUsd
         ),
         withdrawalLimitUsd: fromPkr(
@@ -951,7 +958,7 @@ export const appRouter = router({
         const profile = (await db.select().from(profiles).where(eq(profiles.userId, user.id)).limit(1))[0];
         if (!profile) fail("Profile was not found.", "NOT_FOUND");
         await db.update(adSessions).set({ claimedAt: new Date() }).where(eq(adSessions.id, session.id));
-        await db.update(profiles).set({ balancePkr: profile.balancePkr + session.rewardPkr }).where(eq(profiles.userId, user.id));
+        await db.update(profiles).set({ earningWalletBalance: (profile.earningWalletBalance ?? 0) + session.rewardPkr * 100 }).where(eq(profiles.userId, user.id));
         await db.insert(transactions).values({ userId: user.id, type: "ad_reward", direction: "credit", amountPkr: session.rewardPkr, status: "completed", note: "Daily ad reward claimed" });
         return {
           success: true,
@@ -1124,16 +1131,10 @@ export const appRouter = router({
           amountPkr !== WHATSAPP_JOIN_REWARD_PKR
         )
           fail(WITHDRAWAL_NO_PACKAGE_MESSAGE);
-        const withdrawalError = validateWithdrawalRequest({
-          balancePkr: profile.balancePkr,
-          withdrawalLimitPkr: profile.withdrawalLimitPkr,
-          amountPkr,
-          activePackage: activePackage || hasPendingChannelReward,
-          freeWithdrawalCompleted:
-            profile.whatsappRewardEligible && profile.whatsappRewardWithdrawn,
-          allowChannelRewardAmount: hasPendingChannelReward,
-        });
-        if (withdrawalError) fail(withdrawalError);
+        if (!activePackage && !hasPendingChannelReward)
+          fail("Please purchase an active package before withdrawing.");
+        if ((profile.earningWalletBalance ?? 0) < amountPkr * 100)
+          fail("Insufficient Balance");
         if (
           !["JazzCash", "Easypaisa", "SadaPay", "NayaPay", "Skrill", "Payoneer", "Binance", "Other"].includes(input.walletType)
         )
@@ -1161,16 +1162,11 @@ export const appRouter = router({
             status: "pending",
           });
           const withdrawalId = Number(result[0].insertId);
-          const reserved = applyWithdrawalRequest(
-            profile.balancePkr,
-            profile.withdrawalLimitPkr,
-            amountPkr
-          );
           await tx
             .update(profiles)
             .set({
-              balancePkr: reserved.balancePkr,
-              withdrawalLimitPkr: reserved.withdrawalLimitPkr,
+              earningWalletBalance:
+                (profile.earningWalletBalance ?? 0) - amountPkr * 100,
               ...(completedChannelRewardWithdrawal
                 ? { whatsappRewardWithdrawn: true }
                 : {}),
@@ -1537,7 +1533,11 @@ export const appRouter = router({
             if (!existingDepositBonus) {
               await tx
                 .update(profiles)
-                .set({ balancePkr: profile.balancePkr + lockedDeposit.amountPkr + depositBonusPkr })
+                .set({
+                  depositWalletBalance:
+                    (profile.depositWalletBalance ?? 0) +
+                    (lockedDeposit.amountPkr + depositBonusPkr) * 100,
+                })
                 .where(eq(profiles.userId, lockedDeposit.userId));
               await tx.insert(transactions).values({
                 userId: lockedDeposit.userId,
@@ -1584,7 +1584,10 @@ export const appRouter = router({
                 if (inviter) {
                   await tx
                     .update(profiles)
-                    .set({ withdrawalLimitPkr: inviter.withdrawalLimitPkr + commission })
+                    .set({
+                      earningWalletBalance:
+                        (inviter.earningWalletBalance ?? 0) + commission * 100,
+                    })
                     .where(eq(profiles.userId, inviter.userId));
                   await tx.insert(referralRewards).values({
                     depositId: lockedDeposit.id,
@@ -1721,15 +1724,11 @@ export const appRouter = router({
           if (lockedRequest.status !== "pending")
             fail("This withdrawal request has already been reviewed.");
           if (!input.approved) {
-            const refundedBalance = refundRejectedWithdrawal(
-              profile.balancePkr,
-              request.amountPkr
-            );
             await tx
               .update(profiles)
               .set({
-                balancePkr: refundedBalance,
-                withdrawalLimitPkr: profile.withdrawalLimitPkr + request.amountPkr,
+                earningWalletBalance:
+                  (profile.earningWalletBalance ?? 0) + request.amountPkr * 100,
               })
               .where(eq(profiles.userId, request.userId));
           }

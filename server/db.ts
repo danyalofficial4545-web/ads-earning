@@ -28,14 +28,9 @@ export const ADMIN_EMAIL = DESIGNATED_ADMIN_EMAIL;
 export const ADMIN_USERNAME = DESIGNATED_ADMIN_USERNAME;
 
 const defaultPackages = [
-  { tier: "pkr_100", name: "100 PKR Package", icon: "🥉", pricePkr: 100, dailyAds: 1, adRewardPkr: 30 },
-  { tier: "pkr_200", name: "200 PKR Package", icon: "🥈", pricePkr: 200, dailyAds: 2, adRewardPkr: 30 },
-  { tier: "pkr_300", name: "300 PKR Package", icon: "🔷", pricePkr: 300, dailyAds: 2, adRewardPkr: 40 },
-  { tier: "pkr_400", name: "400 PKR Package", icon: "🔶", pricePkr: 400, dailyAds: 2, adRewardPkr: 60 },
-  { tier: "pkr_500", name: "500 PKR Package", icon: "🥇", pricePkr: 500, dailyAds: 3, adRewardPkr: 70 },
-  { tier: "pkr_1000", name: "1000 PKR Package", icon: "💎", pricePkr: 1000, dailyAds: 4, adRewardPkr: 80 },
-  { tier: "pkr_2000", name: "2000 PKR Package", icon: "💠", pricePkr: 2000, dailyAds: 5, adRewardPkr: 100 },
-  { tier: "pkr_5000", name: "5000 PKR Package", icon: "👑", pricePkr: 5000, dailyAds: 5, adRewardPkr: 200 },
+  { tier: "free", name: "FREE", icon: "🆓", pricePkr: 0, priceCoins: 0, dailyAds: 1, dailyTasks: 1, adRewardPkr: 3, dailyEarningCoins: 300, minWithdrawCoins: 50_000, durationDays: 0 },
+  { tier: "pkr_200", name: "Package 200", icon: "🥈", pricePkr: 200, priceCoins: 20_000, dailyAds: 2, dailyTasks: 2, adRewardPkr: 25, dailyEarningCoins: 2_500, minWithdrawCoins: 30_000, durationDays: 30 },
+  { tier: "pkr_500", name: "Package 500", icon: "🥇", pricePkr: 500, priceCoins: 50_000, dailyAds: 5, dailyTasks: 5, adRewardPkr: 70, dailyEarningCoins: 7_000, minWithdrawCoins: 60_000, durationDays: 30 },
 ] as const;
 
 const defaultAccounts = [
@@ -198,18 +193,17 @@ export async function ensurePlatformData() {
   const retainedPackageIds = new Set<number>();
   for (const item of defaultPackages) {
     const existing =
-      existingPackages.find(row => row.tier === item.tier) ??
-      existingPackages.find(row => row.pricePkr === item.pricePkr);
+      existingPackages.find(row => row.tier === item.tier);
     if (existing) {
       retainedPackageIds.add(existing.id);
       await db
         .update(packages)
-        .set({ ...item, durationDays: 30, isActive: true })
+        .set({ ...item, isActive: true })
         .where(eq(packages.id, existing.id));
     } else {
       const result = await db
         .insert(packages)
-        .values({ ...item, durationDays: 30, isActive: true });
+        .values({ ...item, isActive: true });
       retainedPackageIds.add(Number(result[0].insertId));
     }
   }
@@ -249,6 +243,8 @@ export async function ensureProfile(user: User): Promise<Profile> {
     username: baseUsername,
     referralCode,
     balancePkr: 0,
+    depositWalletBalance: 0,
+    earningWalletBalance: 0,
     withdrawalLimitPkr: 0,
     whatsappRewardEligible: isEligibleForNewUserWhatsappReward(user.createdAt),
   });

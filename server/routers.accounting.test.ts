@@ -17,8 +17,8 @@ vi.mock("./telegram", () => ({ sendTelegramAlert: mocks.sendTelegramAlert }));
 import { appRouter } from "./routers";
 
 const member = { id: 20, openId: "member", name: "Member", email: "member@example.com", loginMethod: "password", role: "user" as const, createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() };
-const memberProfile = { id: 2, userId: 20, username: "member", referralCode: "PEP14", referredByUserId: 10, balancePkr: 1000, withdrawalLimitPkr: 0, preferredCurrency: "PKR" as const, isBlocked: false, createdAt: new Date(), updatedAt: new Date() };
-const referrerProfile = { id: 1, userId: 10, username: "referrer", referralCode: "PEP10", referredByUserId: null, balancePkr: 777, withdrawalLimitPkr: 0, preferredCurrency: "PKR" as const, isBlocked: false, createdAt: new Date(), updatedAt: new Date() };
+const memberProfile = { id: 2, userId: 20, username: "member", referralCode: "PEP14", referredByUserId: 10, balancePkr: 1000, depositWalletBalance: 100000, earningWalletBalance: 100000, withdrawalLimitPkr: 0, preferredCurrency: "PKR" as const, isBlocked: false, createdAt: new Date(), updatedAt: new Date() };
+const referrerProfile = { id: 1, userId: 10, username: "referrer", referralCode: "PEP10", referredByUserId: null, balancePkr: 777, depositWalletBalance: 0, earningWalletBalance: 0, withdrawalLimitPkr: 0, preferredCurrency: "PKR" as const, isBlocked: false, createdAt: new Date(), updatedAt: new Date() };
 
 const context = () => ({ user: member, req: { protocol: "https", headers: {} }, res: { cookie: vi.fn(), clearCookie: vi.fn() } } as unknown as TrpcContext);
 
@@ -31,7 +31,7 @@ describe("router accounting flows", () => {
   });
 
   it("deducts wallet balance immediately and reserves only the requested withdrawal limit", async () => {
-    mocks.ensureProfile.mockResolvedValue({ ...memberProfile, balancePkr: 6000, withdrawalLimitPkr: 5000 });
+    mocks.ensureProfile.mockResolvedValue({ ...memberProfile, earningWalletBalance: 600000 });
     mocks.getActivePackageForUser.mockResolvedValue({ id: 1 });
     const updates: Array<{ table: unknown; values: any }> = [];
     const inserts: Array<{ table: unknown; values: any }> = [];
@@ -43,7 +43,7 @@ describe("router accounting flows", () => {
 
     await appRouter.createCaller(context()).withdrawal.create({ currency: "PKR", amount: 100, walletType: "JazzCash", accountName: "Test Account", accountDetails: "03001234567" });
 
-    expect(updates[0]?.values).toEqual({ balancePkr: 5900, withdrawalLimitPkr: 4900 });
+    expect(updates[0]?.values).toEqual({ earningWalletBalance: 590000 });
     expect(inserts[1]?.values).toMatchObject({ direction: "debit", status: "pending", amountPkr: 100, referenceId: "44" });
     expect(inserts[0]?.values).toMatchObject({ walletType: "JazzCash", accountName: "Test Account", accountDetails: "03001234567" });
     expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("💸 WITHDRAW REQUEST"));
@@ -132,6 +132,7 @@ describe("router accounting flows", () => {
     mocks.ensureProfile.mockResolvedValue({
       ...memberProfile,
       balancePkr: 0,
+      earningWalletBalance: 0,
       withdrawalLimitPkr: 0,
       whatsappJoined: false,
       whatsappRewardEligible: true,
@@ -159,8 +160,7 @@ describe("router accounting flows", () => {
     expect(updates[0]?.values).toEqual({
       whatsappJoined: true,
       whatsappBonusClaimed: true,
-      balancePkr: 10,
-      withdrawalLimitPkr: 10,
+      earningWalletBalance: 1000,
     });
     expect(inserts[0]).toMatchObject({
       type: "adjustment",
@@ -191,8 +191,7 @@ describe("router accounting flows", () => {
   it("removes the pending new-user reward prompt when its exact reward withdrawal is submitted", async () => {
     mocks.ensureProfile.mockResolvedValue({
       ...memberProfile,
-      balancePkr: 10,
-      withdrawalLimitPkr: 10,
+      earningWalletBalance: 1000,
       whatsappRewardEligible: true,
       whatsappJoined: true,
       whatsappBonusClaimed: true,
@@ -216,15 +215,14 @@ describe("router accounting flows", () => {
 
     expect(result).toMatchObject({ success: true, rewardWithdrawalSubmitted: true });
     expect(updates[0]?.values).toEqual({
-      balancePkr: 0,
-      withdrawalLimitPkr: 0,
+      earningWalletBalance: 0,
       whatsappRewardWithdrawn: true,
     });
     expect(inserts[0]).toMatchObject({ amountPkr: 10, status: "pending" });
   });
 
   it("does not credit referral commission for a wallet package purchase", async () => {
-    const plan = { id: 1, tier: "bronze", name: "Bronze", icon: "B", pricePkr: 1000, dailyAds: 2, durationDays: 30, isActive: true, createdAt: new Date(), updatedAt: new Date() };
+    const plan = { id: 1, tier: "bronze", name: "Bronze", icon: "B", pricePkr: 1000, priceCoins: 100000, dailyAds: 2, durationDays: 30, isActive: true, createdAt: new Date(), updatedAt: new Date() };
     const updates: Array<{ table: unknown; values: any }> = [];
     const inserts: Array<{ table: unknown; values: any }> = [];
     const db = {
@@ -233,6 +231,7 @@ describe("router accounting flows", () => {
       insert: vi.fn((table) => ({ values: async (values: any) => { inserts.push({ table, values }); return [{ insertId: 1 }]; } })),
     };
     mocks.getDb.mockResolvedValue(db);
+    mocks.ensureProfile.mockResolvedValue({ ...memberProfile, depositWalletBalance: 100000 });
 
     await appRouter.createCaller(context()).package.buy({ packageId: 1 });
 

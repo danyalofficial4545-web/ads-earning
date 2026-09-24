@@ -39,7 +39,6 @@ import {
   type DashboardMetricKey,
 } from "@/lib/dashboardMetrics";
 import { translate, type Language, type TranslationKey } from "@/lib/i18n";
-import { getDiscountedPackagePrice } from "@shared/packagePricing";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import {
@@ -145,6 +144,9 @@ function money(amount: number, currency = "PKR") {
   return currency === "USD"
     ? `$${(amount / 280).toFixed(2)}`
     : `PKR ${amount.toLocaleString()}`;
+}
+function coins(amount: number) {
+  return `${Math.max(0, Math.round(amount)).toLocaleString()} Coins`;
 }
 function dateTime(value: Date | string) {
   return new Date(value).toLocaleString([], {
@@ -298,7 +300,7 @@ export default function Home() {
               className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-emerald-200 md:flex"
             >
               <WalletCards className="size-4" />
-              {money(overview.data?.profile.balancePkr ?? 0)}
+              {coins(overview.data?.profile.earningWalletBalance ?? 0)}
             </button>
           </div>
         </div>
@@ -1156,12 +1158,12 @@ function Workspace({
         t={t}
         language={language}
         plans={packages}
-        balance={profile.balancePkr}
+        balance={profile.depositWalletBalance ?? 0}
         active={overview.activePackage}
         onDone={invalidateCore}
         onPurchase={(plan: any) => purchasePackage.mutate({ packageId: plan.id })}
-        onRequestDeposit={(plan: any, shortfall: number) =>
-          openPackagePayment(plan.id, Math.max(100, shortfall))
+          onRequestDeposit={(plan: any, shortfall: number) =>
+          openPackagePayment(plan.id, Math.max(100, Math.ceil(shortfall / 100)))
         }
       />
     ),
@@ -1272,8 +1274,8 @@ function Dashboard({ t, overview, announcements, setPage, onRequestWithdrawal }:
     balance: (
       <StatCard
         icon={WalletCards}
-        label={t("balance")}
-        value={money(overview.profile.balancePkr)}
+        label="Earning Wallet"
+        value={coins(overview.profile.earningWalletBalance ?? 0)}
         accent="emerald"
       />
     ),
@@ -1494,17 +1496,17 @@ function QuickAction({ icon: Icon, label, onClick, disabled = false }: any) {
 function Packages({ t, language, plans, balance, active, onPurchase, onRequestDeposit }: any) {
   const [shortfallPlan, setShortfallPlan] = useState<any>(null);
   const orderedPlans = [...plans].sort((a, b) => a.pricePkr - b.pricePkr);
-  const discountedPrice = (plan: any) => getDiscountedPackagePrice(plan.pricePkr);
+  const packagePriceCoins = (plan: any) => plan.priceCoins ?? plan.pricePkr * 100;
   const shortfall = shortfallPlan
-    ? Math.max(0, discountedPrice(shortfallPlan) - balance)
+    ? Math.max(0, packagePriceCoins(shortfallPlan) - balance)
     : 0;
   const handlePurchase = (plan: any) => {
-    if (balance >= discountedPrice(plan)) {
+    if (balance >= packagePriceCoins(plan)) {
       onPurchase(plan);
       return;
     }
     if (balance <= 0) {
-      onRequestDeposit(plan, discountedPrice(plan));
+      onRequestDeposit(plan, packagePriceCoins(plan));
       return;
     }
     setShortfallPlan(plan);
@@ -1530,17 +1532,16 @@ function Packages({ t, language, plans, balance, active, onPurchase, onRequestDe
               <p className="eyebrow">{plan.tier}</p>
               <h2 className="mt-1 pr-8 text-lg font-bold sm:text-xl">{plan.name}</h2>
               <div className="mt-4 flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-500 line-through sm:text-sm">{money(plan.pricePkr)}</span>
-                <span className="rounded-full bg-emerald-300/15 px-2 py-1 text-[10px] font-black text-emerald-200">15% OFF</span>
+                <span className="text-xs font-semibold text-slate-500 sm:text-sm">{coins(packagePriceCoins(plan))}</span>
               </div>
               <p className="mt-1 text-xl font-bold text-amber-300 sm:text-2xl">
-                {money(discountedPrice(plan))}
+                {money(plan.pricePkr)}
               </p>
               <p className="mt-2 text-xs font-extrabold text-emerald-200 sm:text-sm">
                 {plan.dailyAds} {plan.dailyAds === 1 ? t("ad") : t("ads")} - {plan.adRewardPkr} PKR / {t("ad")}
               </p>
               <p className="mt-1 text-xs font-semibold text-amber-100">
-                {t("totalDailyEarning")}: {money(plan.dailyAds * plan.adRewardPkr)}
+                {t("totalDailyEarning")}: {coins(plan.dailyEarningCoins ?? plan.dailyAds * plan.adRewardPkr * 100)}
               </p>
               <div className="mt-4 space-y-2 text-xs text-slate-300 sm:text-sm">
                 <p className="flex items-center gap-2">
@@ -1559,7 +1560,7 @@ function Packages({ t, language, plans, balance, active, onPurchase, onRequestDe
               >
                 {isActive ? t("currentPackage") : t("buyPackage")}
               </button>
-              {!isActive && balance < discountedPrice(plan) && (
+              {!isActive && balance < packagePriceCoins(plan) && (
                 <p className="mt-2 text-center text-[11px] text-amber-200/70">
                   {t("insufficient")}
                 </p>
@@ -1646,14 +1647,14 @@ function ProfileWallet({
       <div className="mt-5 grid gap-4 md:grid-cols-3">
         <StatCard
           icon={WalletCards}
-          label={t("depositWallet")}
-          value={money(wallet.profile.balancePkr)}
+          label="Deposit Wallet"
+          value={coins(wallet.profile.depositWalletBalance ?? 0)}
           accent="emerald"
         />
         <StatCard
           icon={Landmark}
-          label={t("totalDeposits")}
-          value={money(totalDepositsPkr)}
+          label="Earning Wallet"
+          value={coins(wallet.profile.earningWalletBalance ?? 0)}
           accent="amber"
         />
         <StatCard
@@ -1663,7 +1664,7 @@ function ProfileWallet({
           accent="blue"
         />
       </div>
-      {!canWithdraw && wallet.profile.balancePkr <= 0 && <p className="mt-4 rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm font-semibold text-amber-50">{t("noPackageBalanceMessage")}</p>}
+      {!canWithdraw && (wallet.profile.earningWalletBalance ?? 0) <= 0 && <p className="mt-4 rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm font-semibold text-amber-50">{t("noPackageBalanceMessage")}</p>}
       <div className="mt-5 grid gap-5 xl:grid-cols-[1.05fr_.95fr]">
         <div className="panel space-y-4">
           <div className="flex items-center justify-between gap-3">
@@ -1999,7 +2000,7 @@ function Deposit({ t, settings, packages, onDone, initialRequestedPackageId = ""
                 <span className="field-label">{t("requestedPackage")}</span>
                 <select className="field" value={requestedPackageId} onChange={e => setRequestedPackageId(e.target.value)}>
                   <option value="">{t("walletDeposit")}</option>
-                  {packages.map((plan: any) => <option key={plan.id} value={plan.id}>{plan.name} · {money(getDiscountedPackagePrice(plan.pricePkr))}</option>)}
+                  {packages.map((plan: any) => <option key={plan.id} value={plan.id}>{plan.name} · {coins(plan.priceCoins ?? plan.pricePkr * 100)}</option>)}
                 </select>
               </label>
             </div>
@@ -2114,7 +2115,7 @@ function Withdrawal({ t, profile, showRewardWithdrawalPrompt, activePackage, has
         {activePackage && (
           <div className="mb-5 flex items-center justify-between gap-4 rounded-xl border border-amber-300/30 bg-amber-300/10 p-4">
             <p className="text-sm font-bold text-amber-100">{t("yourWithdrawalLimit")}</p>
-            <strong className="text-lg font-black text-amber-300">PKR {Number(profile.withdrawalLimitPkr ?? 0).toLocaleString()}</strong>
+            <strong className="text-lg font-black text-amber-300">{coins(profile.earningWalletBalance ?? 0)}</strong>
           </div>
         )}
         {showRewardWithdrawalPrompt && (
@@ -2131,13 +2132,13 @@ function Withdrawal({ t, profile, showRewardWithdrawalPrompt, activePackage, has
           <form
             onSubmit={event => {
               event.preventDefault();
-              if (activePackage && profile.withdrawalLimitPkr <= 0) {
+              if (activePackage && (profile.earningWalletBalance ?? 0) <= 0) {
                 setShowWithdrawalRule(true);
               }
               const failure = firstWithdrawalFailure({
                 amount,
                 currency,
-                withdrawalLimitPkr: profile.withdrawalLimitPkr,
+                withdrawalLimitPkr: Math.floor((profile.earningWalletBalance ?? 0) / 100),
                 activePackage: Boolean(activePackage),
                 pendingChannelReward: Boolean(hasPendingChannelReward),
                 freeWithdrawalCompleted: Boolean(rewardWithdrawalCompleted),

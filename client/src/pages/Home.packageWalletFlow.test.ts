@@ -5,7 +5,7 @@ describe("package-gated wallet and withdrawal flow", () => {
   const source = readFileSync(new URL("./Home.tsx", import.meta.url), "utf8");
 
   it("shows a zero-balance package prompt and disables withdrawal entry until an active package exists", () => {
-    expect(source).toContain('money(overview.data?.profile.balancePkr ?? 0)');
+    expect(source).toContain('coins(overview.data?.profile.earningWalletBalance ?? 0)');
     expect(source).toContain('disabled={!canWithdraw}');
     expect(source).toContain('hasPendingChannelReward');
     expect(source).toContain('t("noPackageBalanceMessage")');

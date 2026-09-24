@@ -17,9 +17,9 @@ describe("historical 10 PKR reward withdrawal guidance", () => {
     expect(historyQuery).not.toContain("withdrawals.status");
   });
 
-  it("continues to calculate referral credit only as a withdrawal-limit update", () => {
-    expect(source).toContain("const credit = referralLimitCredit(");
-    expect(source).toContain("settings.referralCommissionPercent");
-    expect(source).toContain(".set({ withdrawalLimitPkr: referrer.withdrawalLimitPkr + credit })");
+  it("credits referral rewards to the Earning Wallet", () => {
+    expect(source).toContain("earningWalletBalance");
+    expect(source).toContain("commission * 100");
+    expect(source).not.toContain("referrer.withdrawalLimitPkr + credit");
   });
 });

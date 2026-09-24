@@ -10,7 +10,8 @@ describe("dual Google and Gmail account entry", () => {
     expect(publicEntry).toContain("trpc.auth.register.useMutation");
     expect(publicEntry).toContain("onClick={() => startLogin()}");
     expect(publicEntry).toContain('mode === "signUp"');
-    expect(publicEntry).toContain("VisualCodeCheck");
+    expect(publicEntry).toContain('autoComplete="new-password"');
+    expect(publicEntry).toContain('t("createAccount")');
   });
 
   it("uses a safe Manus OAuth portal fallback when Vercel omits the portal env variable", () => {

@@ -6,7 +6,7 @@ describe("wallet-first package purchase flow", () => {
     const source = readFileSync(new URL("./Home.tsx", import.meta.url), "utf8");
 
     expect(source).toContain("const purchasePackage = trpc.package.buy.useMutation");
-    expect(source).toContain("if (balance >= plan.pricePkr)");
+    expect(source).toContain("if (balance >= packagePriceCoins(plan))");
     expect(source).toContain("purchasePackage.mutate({ packageId: plan.id })");
   });
 
