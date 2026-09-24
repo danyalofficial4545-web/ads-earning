@@ -8,7 +8,7 @@ export function buildInviteSummary(
   origin: string
 ) {
   return {
-    link: `${origin}/?ref=${encodeURIComponent(referral.username)}`,
+    link: `${origin}/register?ref=${encodeURIComponent(referral.username)}`,
     referralCode: referral.referralCode,
     totalInvites: referral.totalReferrals,
     referralEarningsPkr: referral.withdrawalLimitPkr,

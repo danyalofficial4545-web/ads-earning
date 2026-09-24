@@ -5,7 +5,11 @@ import { AdminPanel } from "@/components/AdminPanel";
 import { GoogleOnboarding, PublicAuth } from "@/components/PublicAuth";
 import { WorkspaceAccessGate } from "@/components/WorkspaceAccessGate";
 import { AdsTasks } from "@/components/AdsTasks";
-import { ManualTasksPage, TaskDetailPage, TimewallPage } from "@/pages/Phase3Tasks";
+import {
+  ManualTasksPage,
+  TaskDetailPage,
+  TimewallPage,
+} from "@/pages/Phase3Tasks";
 import { SupportChat } from "@/components/SupportChat";
 import { BrandLogo } from "@/components/BrandLogo";
 import { trpc } from "@/lib/trpc";
@@ -117,7 +121,9 @@ const AUTHENTICATED_ADSTERRA_SCRIPTS = [
 
 function loadAuthenticatedAdsterraScripts() {
   for (const source of AUTHENTICATED_ADSTERRA_SCRIPTS) {
-    if (document.querySelector(`script[data-authenticated-adsterra="${source}"]`))
+    if (
+      document.querySelector(`script[data-authenticated-adsterra="${source}"]`)
+    )
       continue;
     const script = document.createElement("script");
     script.async = true;
@@ -213,7 +219,8 @@ export default function Home() {
     document.documentElement.dir = language === "ur" ? "rtl" : "ltr";
   }, [language]);
   useEffect(() => {
-    if (location === "/admin" || location.startsWith("/admin/")) setPage("admin");
+    if (location === "/admin" || location.startsWith("/admin/"))
+      setPage("admin");
     else if (location === "/support") setPage("support");
     else if (location === "/earn-coins") setPage("earnCoins");
     else if (location === "/tasks") setPage("tasks");
@@ -257,10 +264,21 @@ export default function Home() {
   const selectPage = (next: Page) => {
     setPage(next);
     if (next === "admin" && !location.startsWith("/admin")) navigate("/admin");
-    else if (next === "support" && location !== "/support") navigate("/support");
-    else if (next === "earnCoins" && location !== "/earn-coins") navigate("/earn-coins");
+    else if (next === "support" && location !== "/support")
+      navigate("/support");
+    else if (next === "earnCoins" && location !== "/earn-coins")
+      navigate("/earn-coins");
     else if (next === "tasks" && location !== "/tasks") navigate("/tasks");
-    else if (next !== "admin" && next !== "support" && (location.startsWith("/admin") || location === "/support" || location === "/earn-coins" || location === "/tasks" || location.startsWith("/task/"))) navigate("/");
+    else if (
+      next !== "admin" &&
+      next !== "support" &&
+      (location.startsWith("/admin") ||
+        location === "/support" ||
+        location === "/earn-coins" ||
+        location === "/tasks" ||
+        location.startsWith("/task/"))
+    )
+      navigate("/");
     setMobileNavOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -289,7 +307,9 @@ export default function Home() {
           >
             <BrandMark src={branding.logoUrl} name={branding.websiteName} />
             <div className="hidden sm:block">
-              <p className="text-sm font-bold tracking-tight">{branding.websiteName}</p>
+              <p className="text-sm font-bold tracking-tight">
+                {branding.websiteName}
+              </p>
               <p className="text-[10px] text-amber-300">{t("tagline")}</p>
             </div>
           </button>
@@ -402,7 +422,10 @@ export default function Home() {
   );
 }
 
-function BrandMark({ src, name }: { src?: string | null; name?: string | null } = {}) {
+function BrandMark({
+  src,
+  name,
+}: { src?: string | null; name?: string | null } = {}) {
   return <BrandLogo src={src} name={name} className="size-11" />;
 }
 function LoadingScreen({ text }: { text: string }) {
@@ -501,6 +524,46 @@ function Landing({
     login.mutate(signIn);
   };
   const busy = register.isPending || login.isPending;
+  const [referralWelcome, setReferralWelcome] = useState(() =>
+    Boolean(new URLSearchParams(window.location.search).get("ref"))
+  );
+  if (referralWelcome) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-[#102621] px-5 text-center text-white">
+        <div className="w-full max-w-sm">
+          <BrandMark />
+          <h1 className="mt-6 text-3xl font-black">
+            Join PixEarn &amp; Start Earning
+          </h1>
+          <p className="mt-3 text-sm text-slate-300">
+            You have been invited to PixEarn.
+          </p>
+          <div className="mt-8 grid gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setMode("signIn");
+                setReferralWelcome(false);
+              }}
+              className="h-12 rounded-xl border border-white/15 bg-white/5 text-sm font-bold"
+            >
+              Sign in
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode("signUp");
+                setReferralWelcome(false);
+              }}
+              className="h-12 rounded-xl bg-amber-300 text-sm font-bold text-slate-950"
+            >
+              Sign up
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div
       className="min-h-screen overflow-hidden bg-[#102621] text-white"
@@ -647,14 +710,13 @@ function Landing({
                 <label>
                   <span className="field-label">{t("username")}</span>
                   <input
-                    required
-                    minLength={3}
                     autoComplete="username"
                     className="field"
                     value={signUp.username}
                     onChange={event =>
                       setSignUp({ ...signUp, username: event.target.value })
                     }
+                    placeholder="Leave blank to auto-generate"
                   />
                 </label>
                 <label>
@@ -898,7 +960,10 @@ function WhatsAppJoinPrompt({ t, onJoin, onClose, joining }: any) {
           <p className="mt-6 text-xs font-bold uppercase tracking-[0.18em] text-emerald-200">
             WhatsApp Channel
           </p>
-          <h2 id="whatsapp-join-title" className="mt-2 text-2xl font-extrabold leading-8 text-white">
+          <h2
+            id="whatsapp-join-title"
+            className="mt-2 text-2xl font-extrabold leading-8 text-white"
+          >
             {t("whatsappPromptTitle")}
           </h2>
           <p className="mt-3 text-sm leading-6 text-emerald-50/80">
@@ -914,7 +979,11 @@ function WhatsAppJoinPrompt({ t, onJoin, onClose, joining }: any) {
             onClick={onJoin}
             className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#25D366] px-4 text-sm font-extrabold text-[#073524] transition hover:bg-[#47df7e] active:scale-[.97] disabled:opacity-60"
           >
-            {joining ? <Loader2 className="size-4 animate-spin" /> : <MessageCircle className="size-4" />}
+            {joining ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <MessageCircle className="size-4" />
+            )}
             {t("joinNow")}
           </button>
         </div>
@@ -1096,17 +1165,16 @@ function Workspace({
   const [depositPackageId, setDepositPackageId] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
   const [showChannelPrompt, setShowChannelPrompt] = useState(false);
-  const [rewardWithdrawalSubmittedLocally, setRewardWithdrawalSubmittedLocally] = useState(false);
+  const [
+    rewardWithdrawalSubmittedLocally,
+    setRewardWithdrawalSubmittedLocally,
+  ] = useState(false);
   useEffect(() => {
     const loadTimer = window.setTimeout(loadAuthenticatedAdsterraScripts, 750);
     return () => window.clearTimeout(loadTimer);
   }, []);
   useEffect(() => {
-    if (
-      overview &&
-      profile.whatsappRewardEligible &&
-      !profile.whatsappJoined
-    )
+    if (overview && profile.whatsappRewardEligible && !profile.whatsappJoined)
       setShowChannelPrompt(true);
   }, [overview, profile.whatsappRewardEligible, profile.whatsappJoined]);
   const joinWhatsApp = trpc.platform.joinWhatsApp.useMutation({
@@ -1144,16 +1212,23 @@ function Workspace({
   const hasPendingChannelReward =
     memberProfile.whatsappRewardEligible &&
     memberProfile.whatsappBonusClaimed &&
-      !rewardWithdrawalRequested;
+    !rewardWithdrawalRequested;
   const openWithdrawal = () => setPage("withdrawal");
   const purchasePackage = trpc.package.buy.useMutation({
     onSuccess: () => {
-      toast.success(language === "ur" ? "پیکیج کامیابی سے فعال ہو گیا ہے۔" : "Package activated successfully.");
+      toast.success(
+        language === "ur"
+          ? "پیکیج کامیابی سے فعال ہو گیا ہے۔"
+          : "Package activated successfully."
+      );
       invalidateCore();
       setPage("dashboard");
     },
     onError: error =>
-      toast.error(friendlyServerError(error, "amount").amount || friendlyMessages.requestFailed),
+      toast.error(
+        friendlyServerError(error, "amount").amount ||
+          friendlyMessages.requestFailed
+      ),
   });
   const openPackagePayment = (packageId: number, requiredAmount: number) => {
     setDepositPackageId(String(packageId));
@@ -1178,8 +1253,10 @@ function Workspace({
         balance={profile.depositWalletBalance ?? 0}
         active={overview.activePackage}
         onDone={invalidateCore}
-        onPurchase={(plan: any) => purchasePackage.mutate({ packageId: plan.id })}
-          onRequestDeposit={(plan: any, shortfall: number) =>
+        onPurchase={(plan: any) =>
+          purchasePackage.mutate({ packageId: plan.id })
+        }
+        onRequestDeposit={(plan: any, shortfall: number) =>
           openPackagePayment(plan.id, Math.max(100, Math.ceil(shortfall / 100)))
         }
       />
@@ -1197,7 +1274,16 @@ function Workspace({
         onRequestWithdrawal={openWithdrawal}
       />
     ),
-    deposit: <Deposit t={t} settings={settings} packages={packages} onDone={invalidateCore} initialRequestedPackageId={depositPackageId} initialAmount={depositAmount} />,
+    deposit: (
+      <Deposit
+        t={t}
+        settings={settings}
+        packages={packages}
+        onDone={invalidateCore}
+        initialRequestedPackageId={depositPackageId}
+        initialAmount={depositAmount}
+      />
+    ),
     withdrawal: (
       <Withdrawal
         t={t}
@@ -1208,19 +1294,45 @@ function Workspace({
         rewardWithdrawalCompleted={
           memberProfile.whatsappRewardEligible && rewardWithdrawalRequested
         }
-        onRewardWithdrawalSubmitted={() => setRewardWithdrawalSubmittedLocally(true)}
+        onRewardWithdrawalSubmitted={() =>
+          setRewardWithdrawalSubmittedLocally(true)
+        }
         onDone={invalidateCore}
       />
     ),
-    earn: <AdsTasks t={t} onDone={invalidateCore} language={language} onGoDeposit={() => setPage("deposit")} />,
+    earn: (
+      <AdsTasks
+        t={t}
+        onDone={invalidateCore}
+        language={language}
+        onGoDeposit={() => setPage("deposit")}
+      />
+    ),
     earnCoins: <TimewallPage onGoTasks={() => setPage("tasks")} />,
     tasks: <ManualTasksPage />,
-    taskDetail: <TaskDetailPage taskId={Number(location.split("/").pop())} onBack={() => setPage("tasks")} />,
+    taskDetail: (
+      <TaskDetailPage
+        taskId={Number(location.split("/").pop())}
+        onBack={() => setPage("tasks")}
+      />
+    ),
     history: <TransactionHistory t={t} />,
     invite: <Referral t={t} />,
-    support: <SupportChat t={t} onOpenTickets={() => setPage("ticketSupport")} />,
+    support: (
+      <SupportChat t={t} onOpenTickets={() => setPage("ticketSupport")} />
+    ),
     ticketSupport: <Support t={t} />,
-    admin: isAdmin ? <AdminPanel t={t} /> : <Empty text={language === "ur" ? "یہ صفحہ صرف ایڈمن کے لیے ہے۔" : "This page is restricted to administrators."} />,
+    admin: isAdmin ? (
+      <AdminPanel t={t} />
+    ) : (
+      <Empty
+        text={
+          language === "ur"
+            ? "یہ صفحہ صرف ایڈمن کے لیے ہے۔"
+            : "This page is restricted to administrators."
+        }
+      />
+    ),
   };
   return (
     <>
@@ -1234,8 +1346,25 @@ function Workspace({
       )}
       <div className="mt-4">{content[page as Page]}</div>
       <div className="pointer-events-none fixed bottom-20 right-4 z-50 flex flex-col items-end gap-2 lg:bottom-6 lg:right-6">
-        <button type="button" onClick={() => setPage("support")} className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-red-600 px-4 py-3 text-sm font-black text-white shadow-xl shadow-red-950/40 transition hover:bg-red-500 active:scale-95" aria-label={t("help")}><CircleHelp className="size-5" />{t("help")}</button>
-        <a href="https://t.me/EADSEARNPRO" target="_blank" rel="noreferrer" className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-sky-500 px-4 py-3 text-sm font-black text-white shadow-xl shadow-sky-950/40 transition hover:bg-sky-400 active:scale-95" aria-label={t("telegramSupport")}><Send className="size-5" />{t("telegramSupport")}</a>
+        <button
+          type="button"
+          onClick={() => setPage("support")}
+          className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-red-600 px-4 py-3 text-sm font-black text-white shadow-xl shadow-red-950/40 transition hover:bg-red-500 active:scale-95"
+          aria-label={t("help")}
+        >
+          <CircleHelp className="size-5" />
+          {t("help")}
+        </button>
+        <a
+          href="https://t.me/EADSEARNPRO"
+          target="_blank"
+          rel="noreferrer"
+          className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-sky-500 px-4 py-3 text-sm font-black text-white shadow-xl shadow-sky-950/40 transition hover:bg-sky-400 active:scale-95"
+          aria-label={t("telegramSupport")}
+        >
+          <Send className="size-5" />
+          {t("telegramSupport")}
+        </a>
       </div>
       <p className="mt-8 text-center text-[11px] text-slate-500">
         {t("brand")} ·{" "}
@@ -1247,11 +1376,55 @@ function Workspace({
 
 function NotificationBell() {
   const [open, setOpen] = useState(false);
-  const notifications = trpc.platform.notifications.useQuery(undefined, { refetchInterval: 30000 });
-  const markRead = trpc.platform.markNotificationRead.useMutation({ onSuccess: () => notifications.refetch() });
+  const notifications = trpc.platform.notifications.useQuery(undefined, {
+    refetchInterval: 30000,
+  });
+  const markRead = trpc.platform.markNotificationRead.useMutation({
+    onSuccess: () => notifications.refetch(),
+  });
   const rows = notifications.data ?? [];
   const unread = rows.filter((item: any) => !item.isRead).length;
-  return <div className="relative"><button type="button" className="relative grid size-9 place-items-center rounded-xl border border-white/10 bg-white/5 text-amber-300" aria-label="Notifications" onClick={() => setOpen(value => !value)}><Bell className="size-4" />{unread > 0 && <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-red-500 px-1 text-center text-[10px] font-black text-white">{unread}</span>}</button>{open && <div className="absolute left-1/2 top-11 z-[70] w-[min(20rem,calc(100vw-1.5rem))] -translate-x-1/2 rounded-2xl border border-white/10 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-xl"><p className="px-2 text-sm font-bold text-white">Notifications</p><div className="mt-2 max-h-80 space-y-2 overflow-auto">{rows.length ? rows.map((item: any) => <button type="button" key={item.id} onClick={() => !item.isRead && markRead.mutate({ id: item.id })} className={`w-full rounded-xl p-3 text-left text-sm ${item.isRead ? "bg-white/5 text-slate-400" : "bg-red-600/15 text-white"}`}><p className="font-bold">{item.title}</p><p className="mt-1">{item.message}</p></button>) : <p className="p-2 text-xs text-slate-400">No notifications</p>}</div></div>}</div>;
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        className="relative grid size-9 place-items-center rounded-xl border border-white/10 bg-white/5 text-amber-300"
+        aria-label="Notifications"
+        onClick={() => setOpen(value => !value)}
+      >
+        <Bell className="size-4" />
+        {unread > 0 && (
+          <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-red-500 px-1 text-center text-[10px] font-black text-white">
+            {unread}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="absolute left-1/2 top-11 z-[70] w-[min(20rem,calc(100vw-1.5rem))] -translate-x-1/2 rounded-2xl border border-white/10 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-xl">
+          <p className="px-2 text-sm font-bold text-white">Notifications</p>
+          <div className="mt-2 max-h-80 space-y-2 overflow-auto">
+            {rows.length ? (
+              rows.map((item: any) => (
+                <button
+                  type="button"
+                  key={item.id}
+                  onClick={() =>
+                    !item.isRead && markRead.mutate({ id: item.id })
+                  }
+                  className={`w-full rounded-xl p-3 text-left text-sm ${item.isRead ? "bg-white/5 text-slate-400" : "bg-red-600/15 text-white"}`}
+                >
+                  <p className="font-bold">{item.title}</p>
+                  <p className="mt-1">{item.message}</p>
+                </button>
+              ))
+            ) : (
+              <p className="p-2 text-xs text-slate-400">No notifications</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 function PageHeading({
   eyebrow,
@@ -1282,11 +1455,20 @@ function PageHeading({
   );
 }
 
-function Dashboard({ t, overview, announcements, setPage, onRequestWithdrawal }: any) {
+function Dashboard({
+  t,
+  overview,
+  announcements,
+  setPage,
+  onRequestWithdrawal,
+}: any) {
   const [dismissed, setDismissed] = useState<number[]>([]);
-  const visibleAnnouncements = announcements.filter((item: any) => !dismissed.includes(item.id));
+  const visibleAnnouncements = announcements.filter(
+    (item: any) => !dismissed.includes(item.id)
+  );
   const active = overview.activePackage;
-  const canWithdraw = Boolean(active) ||
+  const canWithdraw =
+    Boolean(active) ||
     (overview.profile.whatsappRewardEligible &&
       overview.profile.whatsappBonusClaimed &&
       !overview.profile.whatsappRewardWithdrawn);
@@ -1413,8 +1595,16 @@ function Dashboard({ t, overview, announcements, setPage, onRequestWithdrawal }:
             </>
           ) : (
             <div className="mt-5 rounded-2xl border border-amber-300/25 bg-amber-300/10 p-4">
-              <p className="text-sm font-bold text-amber-100">Please Deposit &amp; Buy Package to Unlock Tasks</p>
-              <button onClick={() => setPage("deposit")} className="mt-4 inline-flex h-11 items-center gap-2 rounded-xl bg-amber-300 px-4 text-sm font-bold text-slate-950 transition active:scale-[.97]"><CreditCard className="size-4" />Deposit &amp; Buy Package</button>
+              <p className="text-sm font-bold text-amber-100">
+                Please Deposit &amp; Buy Package to Unlock Tasks
+              </p>
+              <button
+                onClick={() => setPage("deposit")}
+                className="mt-4 inline-flex h-11 items-center gap-2 rounded-xl bg-amber-300 px-4 text-sm font-bold text-slate-950 transition active:scale-[.97]"
+              >
+                <CreditCard className="size-4" />
+                Deposit &amp; Buy Package
+              </button>
             </div>
           )}
         </div>
@@ -1432,7 +1622,11 @@ function Dashboard({ t, overview, announcements, setPage, onRequestWithdrawal }:
               onClick={onRequestWithdrawal}
               disabled={!canWithdraw}
             />
-            {!canWithdraw && <p className="px-1 text-xs font-semibold text-amber-200">{t("noPackageBalanceMessage")}</p>}
+            {!canWithdraw && (
+              <p className="px-1 text-xs font-semibold text-amber-200">
+                {t("noPackageBalanceMessage")}
+              </p>
+            )}
             <QuickAction
               icon={Users}
               label={t("inviteFriends")}
@@ -1453,7 +1647,18 @@ function Dashboard({ t, overview, announcements, setPage, onRequestWithdrawal }:
                 key={item.id}
                 className={`rounded-xl border p-4 ${item.type === "warning" ? "border-red-400/30 bg-red-500/10" : "border-white/10 bg-slate-950/15"}`}
               >
-                <div className="flex items-start justify-between gap-3"><p className="text-sm font-bold">{item.title}</p><button type="button" onClick={() => setDismissed(current => [...current, item.id])} className="text-xs text-slate-400">Dismiss</button></div>
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-bold">{item.title}</p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDismissed(current => [...current, item.id])
+                    }
+                    className="text-xs text-slate-400"
+                  >
+                    Dismiss
+                  </button>
+                </div>
                 <p className="mt-1 text-sm leading-6 text-slate-300">
                   {item.body}
                 </p>
@@ -1510,10 +1715,19 @@ function QuickAction({ icon: Icon, label, onClick, disabled = false }: any) {
   );
 }
 
-function Packages({ t, language, plans, balance, active, onPurchase, onRequestDeposit }: any) {
+function Packages({
+  t,
+  language,
+  plans,
+  balance,
+  active,
+  onPurchase,
+  onRequestDeposit,
+}: any) {
   const [shortfallPlan, setShortfallPlan] = useState<any>(null);
   const orderedPlans = [...plans].sort((a, b) => a.pricePkr - b.pricePkr);
-  const packagePriceCoins = (plan: any) => plan.priceCoins ?? plan.pricePkr * 100;
+  const packagePriceCoins = (plan: any) =>
+    plan.priceCoins ?? plan.pricePkr * 100;
   const shortfall = shortfallPlan
     ? Math.max(0, packagePriceCoins(shortfallPlan) - balance)
     : 0;
@@ -1547,18 +1761,27 @@ function Packages({ t, language, plans, balance, active, onPurchase, onRequestDe
                 {plan.icon}
               </div>
               <p className="eyebrow">{plan.tier}</p>
-              <h2 className="mt-1 pr-8 text-lg font-bold sm:text-xl">{plan.name}</h2>
+              <h2 className="mt-1 pr-8 text-lg font-bold sm:text-xl">
+                {plan.name}
+              </h2>
               <div className="mt-4 flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-500 sm:text-sm">{coins(packagePriceCoins(plan))}</span>
+                <span className="text-xs font-semibold text-slate-500 sm:text-sm">
+                  {coins(packagePriceCoins(plan))}
+                </span>
               </div>
               <p className="mt-1 text-xl font-bold text-amber-300 sm:text-2xl">
                 {money(plan.pricePkr)}
               </p>
               <p className="mt-2 text-xs font-extrabold text-emerald-200 sm:text-sm">
-                {plan.dailyAds} {plan.dailyAds === 1 ? t("ad") : t("ads")} - {plan.adRewardPkr} PKR / {t("ad")}
+                {plan.dailyAds} {plan.dailyAds === 1 ? t("ad") : t("ads")} -{" "}
+                {plan.adRewardPkr} PKR / {t("ad")}
               </p>
               <p className="mt-1 text-xs font-semibold text-amber-100">
-                {t("totalDailyEarning")}: {coins(plan.dailyEarningCoins ?? plan.dailyAds * plan.adRewardPkr * 100)}
+                {t("totalDailyEarning")}:{" "}
+                {coins(
+                  plan.dailyEarningCoins ??
+                    plan.dailyAds * plan.adRewardPkr * 100
+                )}
               </p>
               <div className="mt-4 space-y-2 text-xs text-slate-300 sm:text-sm">
                 <p className="flex items-center gap-2">
@@ -1593,12 +1816,15 @@ function Packages({ t, language, plans, balance, active, onPurchase, onRequestDe
         <AlertDialogContent className="border-red-500/30 bg-slate-950 text-white">
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {language === "ur" ? "والٹ بیلنس ناکافی ہے" : "Wallet balance is short"}
+              {language === "ur"
+                ? "والٹ بیلنس ناکافی ہے"
+                : "Wallet balance is short"}
             </AlertDialogTitle>
             <AlertDialogDescription className="leading-6 text-slate-300">
-              {shortfallPlan && (language === "ur"
-                ? `آپ کے والٹ میں ${money(balance)} ہے۔ ${shortfallPlan.name} کے لیے مزید ${money(shortfall)} درکار ہیں۔ براہِ کرم ڈپازٹ کریں۔`
-                : `Apke wallet me ${money(balance)} hai, is package ke liye ${money(shortfall)} aur chahiye. Please Deposit ${money(Math.max(100, shortfall))}.`)}
+              {shortfallPlan &&
+                (language === "ur"
+                  ? `آپ کے والٹ میں ${money(balance)} ہے۔ ${shortfallPlan.name} کے لیے مزید ${money(shortfall)} درکار ہیں۔ براہِ کرم ڈپازٹ کریں۔`
+                  : `Apke wallet me ${money(balance)} hai, is package ke liye ${money(shortfall)} aur chahiye. Please Deposit ${money(Math.max(100, shortfall))}.`)}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1610,7 +1836,9 @@ function Packages({ t, language, plans, balance, active, onPurchase, onRequestDe
                 setShortfallPlan(null);
               }}
             >
-              {language === "ur" ? `${money(Math.max(100, shortfall))} ڈپازٹ کریں` : `Deposit ${money(Math.max(100, shortfall))}`}
+              {language === "ur"
+                ? `${money(Math.max(100, shortfall))} ڈپازٹ کریں`
+                : `Deposit ${money(Math.max(100, shortfall))}`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1633,7 +1861,8 @@ function ProfileWallet({
   if (!wallet) return <LoadingScreen text={t("loading")} />;
   const [showPassword, setShowPassword] = useState(false);
   const referral = trpc.referral.get.useQuery();
-  const canWithdraw = Boolean(activePackage) ||
+  const canWithdraw =
+    Boolean(activePackage) ||
     (profile.whatsappRewardEligible &&
       profile.whatsappBonusClaimed &&
       !profile.whatsappRewardWithdrawn);
@@ -1681,7 +1910,11 @@ function ProfileWallet({
           accent="blue"
         />
       </div>
-      {!canWithdraw && (wallet.profile.earningWalletBalance ?? 0) <= 0 && <p className="mt-4 rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm font-semibold text-amber-50">{t("noPackageBalanceMessage")}</p>}
+      {!canWithdraw && (wallet.profile.earningWalletBalance ?? 0) <= 0 && (
+        <p className="mt-4 rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm font-semibold text-amber-50">
+          {t("noPackageBalanceMessage")}
+        </p>
+      )}
       <div className="mt-5 grid gap-5 xl:grid-cols-[1.05fr_.95fr]">
         <div className="panel space-y-4">
           <div className="flex items-center justify-between gap-3">
@@ -1703,8 +1936,19 @@ function ProfileWallet({
             <p className="field-label">{t("profilePassword")}</p>
             <div className="mt-1 flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/20 px-3 py-2 text-sm">
               <span>{showPassword ? t("passwordSaved") : "••••••••"}</span>
-              <button type="button" aria-label={showPassword ? t("hidePassword") : t("showPassword")} onClick={() => setShowPassword(!showPassword)} className="text-amber-300">
-                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              <button
+                type="button"
+                aria-label={
+                  showPassword ? t("hidePassword") : t("showPassword")
+                }
+                onClick={() => setShowPassword(!showPassword)}
+                className="text-amber-300"
+              >
+                {showPassword ? (
+                  <EyeOff className="size-4" />
+                ) : (
+                  <Eye className="size-4" />
+                )}
               </button>
             </div>
           </div>
@@ -1712,15 +1956,23 @@ function ProfileWallet({
         <div className="panel space-y-4">
           <div>
             <p className="field-label">{t("activePackage")}</p>
-            <p className="mt-1 font-semibold">{activePackage ? `${activePackage.icon} ${activePackage.name}` : t("noActivePackageProfile")}</p>
+            <p className="mt-1 font-semibold">
+              {activePackage
+                ? `${activePackage.icon} ${activePackage.name}`
+                : t("noActivePackageProfile")}
+            </p>
           </div>
           <div>
             <p className="field-label">{t("totalReferrals")}</p>
-            <p className="mt-1 text-2xl font-bold">{referral.data?.totalReferrals ?? 0}</p>
+            <p className="mt-1 text-2xl font-bold">
+              {referral.data?.totalReferrals ?? 0}
+            </p>
           </div>
           <div>
             <p className="field-label">{t("totalEarnings")}</p>
-            <p className="mt-1 text-2xl font-bold text-amber-300">{money(totalEarnedPkr)}</p>
+            <p className="mt-1 text-2xl font-bold text-amber-300">
+              {money(totalEarnedPkr)}
+            </p>
           </div>
         </div>
       </div>
@@ -1800,31 +2052,86 @@ function Empty({ text }: { text: string }) {
   );
 }
 
-function GroupedFinancialHistory({ rows, t, kind }: { rows: any[]; t: (key: TranslationKey) => string; kind: "deposit" | "withdrawal" }) {
+function GroupedFinancialHistory({
+  rows,
+  t,
+  kind,
+}: {
+  rows: any[];
+  t: (key: TranslationKey) => string;
+  kind: "deposit" | "withdrawal";
+}) {
   const groups = groupHistoryRows(rows ?? []);
   return (
     <div className="mt-5 space-y-5">
       {groups.map(group => {
         const label = historyDateLabel(group.key);
-        const groupTitle = label === "date" ? new Date(`${group.key}T12:00:00`).toLocaleDateString() : t(label);
+        const groupTitle =
+          label === "date"
+            ? new Date(`${group.key}T12:00:00`).toLocaleDateString()
+            : t(label);
         return (
-          <section key={group.key} className="rounded-2xl border border-white/10 bg-slate-950/10 p-4">
-            <p className="text-xs font-bold uppercase tracking-[.16em] text-amber-300">{groupTitle}</p>
+          <section
+            key={group.key}
+            className="rounded-2xl border border-white/10 bg-slate-950/10 p-4"
+          >
+            <p className="text-xs font-bold uppercase tracking-[.16em] text-amber-300">
+              {groupTitle}
+            </p>
             <div className="mt-2 divide-y divide-white/10">
               {group.items.map((item: any) => (
-                <div key={item.id} className="flex items-center justify-between gap-3 py-3 text-sm">
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between gap-3 py-3 text-sm"
+                >
                   <div className="min-w-0">
-                    <p className="font-bold">{money(item.amountPkr)} {t(kind)}</p>
-                    <p className="mt-1 text-xs text-slate-500">{kind === "deposit" ? `${item.method} · ` : ""}{dateTime(item.createdAt)}</p>
-                    {item.status === "pending" && <p className="mt-2 text-xs font-semibold text-amber-200">{kind === "deposit" ? "Deposit Processing in 24 hours - Can be approved anytime within 24h" : "Withdrawal Processing in 24 hours - Can be approved anytime within 24h"}</p>}
-                    {item.status === "rejected" && (item.rejectionReason || item.adminNote) && <p className="mt-2 text-xs font-semibold text-red-300">Admin Message: {item.rejectionReason || item.adminNote}</p>}
+                    <p className="font-bold">
+                      {money(item.amountPkr)} {t(kind)}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {kind === "deposit" ? `${item.method} · ` : ""}
+                      {dateTime(item.createdAt)}
+                    </p>
+                    {item.status === "pending" && (
+                      <p className="mt-2 text-xs font-semibold text-amber-200">
+                        {kind === "deposit"
+                          ? "Deposit Processing in 24 hours - Can be approved anytime within 24h"
+                          : "Withdrawal Processing in 24 hours - Can be approved anytime within 24h"}
+                      </p>
+                    )}
+                    {item.status === "rejected" &&
+                      (item.rejectionReason || item.adminNote) && (
+                        <p className="mt-2 text-xs font-semibold text-red-300">
+                          Admin Message:{" "}
+                          {item.rejectionReason || item.adminNote}
+                        </p>
+                      )}
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {kind === "deposit" && item.senderAccountName && <CopyValue value={item.senderAccountName} label={t("senderAccountName")} />}
-                      {kind === "deposit" && item.senderAccountNumber && <CopyValue value={item.senderAccountNumber} label={t("senderAccountNumber")} />}
-                      {kind === "deposit" && item.transactionId && <CopyValue value={item.transactionId} label={t("transactionId")} />}
+                      {kind === "deposit" && item.senderAccountName && (
+                        <CopyValue
+                          value={item.senderAccountName}
+                          label={t("senderAccountName")}
+                        />
+                      )}
+                      {kind === "deposit" && item.senderAccountNumber && (
+                        <CopyValue
+                          value={item.senderAccountNumber}
+                          label={t("senderAccountNumber")}
+                        />
+                      )}
+                      {kind === "deposit" && item.transactionId && (
+                        <CopyValue
+                          value={item.transactionId}
+                          label={t("transactionId")}
+                        />
+                      )}
                     </div>
                   </div>
-                  <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${statusClass(item.status)}`}>{t(statusLabels[item.status] ?? "status")}</span>
+                  <span
+                    className={`rounded-full px-2 py-1 text-[10px] font-bold ${statusClass(item.status)}`}
+                  >
+                    {t(statusLabels[item.status] ?? "status")}
+                  </span>
                 </div>
               ))}
             </div>
@@ -1852,19 +2159,30 @@ function CopyValue({ value, label }: { value: string; label: string }) {
       aria-label={`Copy ${label}`}
     >
       <Copy className="size-3.5 shrink-0" />
-      <span className="truncate">{label}: {value}</span>
+      <span className="truncate">
+        {label}: {value}
+      </span>
     </button>
   );
 }
 
-function Deposit({ t, settings, packages, onDone, initialRequestedPackageId = "", initialAmount = "" }: any) {
+function Deposit({
+  t,
+  settings,
+  packages,
+  onDone,
+  initialRequestedPackageId = "",
+  initialAmount = "",
+}: any) {
   const [currency, setCurrency] = useState<"PKR" | "USD">("PKR");
   const [amount, setAmount] = useState(initialAmount);
   const [method, setMethod] = useState("");
   const [senderAccountNumber, setSenderAccountNumber] = useState("");
   const [senderAccountName, setSenderAccountName] = useState("");
   const [transactionId, setTransactionId] = useState("");
-  const [requestedPackageId, setRequestedPackageId] = useState(initialRequestedPackageId);
+  const [requestedPackageId, setRequestedPackageId] = useState(
+    initialRequestedPackageId
+  );
   const [proof, setProof] = useState("");
   const [errors, setErrors] = useState<FormErrors>({});
   const [showHistory, setShowHistory] = useState(false);
@@ -1894,7 +2212,14 @@ function Deposit({ t, settings, packages, onDone, initialRequestedPackageId = ""
         eyebrow={t("deposit")}
         title={t("makeDeposit")}
         description={t("officialAccounts")}
-        action={<button onClick={() => setShowHistory(!showHistory)} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-amber-300">{showHistory ? t("hideHistory") : t("viewDepositHistory")}</button>}
+        action={
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-amber-300"
+          >
+            {showHistory ? t("hideHistory") : t("viewDepositHistory")}
+          </button>
+        }
       />
       <p className="mb-5 rounded-xl border border-emerald-300/25 bg-emerald-300/10 p-4 text-sm font-semibold leading-6 text-emerald-50">
         {t("depositBonusNote")}
@@ -1932,7 +2257,9 @@ function Deposit({ t, settings, packages, onDone, initialRequestedPackageId = ""
               const nextErrors: FormErrors = {
                 amount: validateDepositAmount(amount, currency),
                 transactionId: validateTransactionId(transactionId),
-                senderAccountNumber: isValidPakistanMobileNumber(senderAccountNumber)
+                senderAccountNumber: isValidPakistanMobileNumber(
+                  senderAccountNumber
+                )
                   ? undefined
                   : friendlyMessages.paymentNumber,
                 proof: !proof ? friendlyMessages.proofRequired : undefined,
@@ -2001,23 +2328,62 @@ function Deposit({ t, settings, packages, onDone, initialRequestedPackageId = ""
               </label>
               <label>
                 <span className="field-label">{t("senderAccountName")}</span>
-                <input required className="field" value={senderAccountName} onChange={e => setSenderAccountName(e.target.value)} />
+                <input
+                  required
+                  className="field"
+                  value={senderAccountName}
+                  onChange={e => setSenderAccountName(e.target.value)}
+                />
               </label>
               <label>
                 <span className="field-label">{t("senderAccountNumber")}</span>
-                <input required className="field" inputMode="numeric" aria-invalid={Boolean(errors.senderAccountNumber)} value={senderAccountNumber} onChange={e => { setSenderAccountNumber(e.target.value); setErrors(current => ({ ...current, senderAccountNumber: undefined })); }} />
+                <input
+                  required
+                  className="field"
+                  inputMode="numeric"
+                  aria-invalid={Boolean(errors.senderAccountNumber)}
+                  value={senderAccountNumber}
+                  onChange={e => {
+                    setSenderAccountNumber(e.target.value);
+                    setErrors(current => ({
+                      ...current,
+                      senderAccountNumber: undefined,
+                    }));
+                  }}
+                />
                 <FieldError>{errors.senderAccountNumber}</FieldError>
               </label>
               <label>
                 <span className="field-label">{t("transactionId")}</span>
-                <input required className="field" aria-invalid={Boolean(errors.transactionId)} value={transactionId} onChange={e => { setTransactionId(e.target.value); setErrors(current => ({ ...current, transactionId: undefined })); }} />
+                <input
+                  required
+                  className="field"
+                  aria-invalid={Boolean(errors.transactionId)}
+                  value={transactionId}
+                  onChange={e => {
+                    setTransactionId(e.target.value);
+                    setErrors(current => ({
+                      ...current,
+                      transactionId: undefined,
+                    }));
+                  }}
+                />
                 <FieldError>{errors.transactionId}</FieldError>
               </label>
               <label>
                 <span className="field-label">{t("requestedPackage")}</span>
-                <select className="field" value={requestedPackageId} onChange={e => setRequestedPackageId(e.target.value)}>
+                <select
+                  className="field"
+                  value={requestedPackageId}
+                  onChange={e => setRequestedPackageId(e.target.value)}
+                >
                   <option value="">{t("walletDeposit")}</option>
-                  {packages.map((plan: any) => <option key={plan.id} value={plan.id}>{plan.name} · {coins(plan.priceCoins ?? plan.pricePkr * 100)}</option>)}
+                  {packages.map((plan: any) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.name} ·{" "}
+                      {coins(plan.priceCoins ?? plan.pricePkr * 100)}
+                    </option>
+                  ))}
                 </select>
               </label>
             </div>
@@ -2054,7 +2420,16 @@ function Deposit({ t, settings, packages, onDone, initialRequestedPackageId = ""
           </form>
         </div>
       </div>
-      {showHistory && <div className="panel mt-5"><p className="eyebrow">{t("viewDepositHistory")}</p>{list.data?.length ? <GroupedFinancialHistory rows={list.data} t={t} kind="deposit" /> : <Empty text={t("noTransactions")} />}</div>}
+      {showHistory && (
+        <div className="panel mt-5">
+          <p className="eyebrow">{t("viewDepositHistory")}</p>
+          {list.data?.length ? (
+            <GroupedFinancialHistory rows={list.data} t={t} kind="deposit" />
+          ) : (
+            <Empty text={t("noTransactions")} />
+          )}
+        </div>
+      )}
     </>
   );
 }
@@ -2079,12 +2454,22 @@ function CurrencyTabs({ value, onChange, t }: any) {
   );
 }
 
-function Withdrawal({ t, profile, showRewardWithdrawalPrompt, activePackage, hasPendingChannelReward, rewardWithdrawalCompleted, onRewardWithdrawalSubmitted, onDone }: any) {
+function Withdrawal({
+  t,
+  profile,
+  showRewardWithdrawalPrompt,
+  activePackage,
+  hasPendingChannelReward,
+  rewardWithdrawalCompleted,
+  onRewardWithdrawalSubmitted,
+  onDone,
+}: any) {
   const [currency, setCurrency] = useState<"PKR" | "USD">("PKR");
   const [walletType, setWalletType] = useState("");
-  const walletTypes = currency === "PKR"
-    ? ["JazzCash", "Easypaisa", "SadaPay", "NayaPay", "Other"]
-    : ["Skrill", "Payoneer", "Binance", "Other"];
+  const walletTypes =
+    currency === "PKR"
+      ? ["JazzCash", "Easypaisa", "SadaPay", "NayaPay", "Other"]
+      : ["Skrill", "Payoneer", "Binance", "Other"];
   const [amount, setAmount] = useState("");
   const [accountName, setAccountName] = useState("");
   const [accountDetails, setAccountDetails] = useState("");
@@ -2104,7 +2489,8 @@ function Withdrawal({ t, profile, showRewardWithdrawalPrompt, activePackage, has
     },
     onError: error => {
       const serverErrors = friendlyServerError(error, "amount");
-      const firstMessage = Object.values(serverErrors)[0] ?? friendlyMessages.requestFailed;
+      const firstMessage =
+        Object.values(serverErrors)[0] ?? friendlyMessages.requestFailed;
       setErrors(serverErrors);
       toast.error(firstMessage);
     },
@@ -2116,7 +2502,14 @@ function Withdrawal({ t, profile, showRewardWithdrawalPrompt, activePackage, has
         eyebrow={t("withdrawal")}
         title={t("requestWithdrawal")}
         description={t("withdrawalNote")}
-        action={<button onClick={() => setShowHistory(!showHistory)} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-amber-300">{showHistory ? t("hideHistory") : t("viewWithdrawalHistory")}</button>}
+        action={
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-amber-300"
+          >
+            {showHistory ? t("hideHistory") : t("viewWithdrawalHistory")}
+          </button>
+        }
       />
       <div className="max-w-2xl panel">
         {rewardWithdrawalCompleted && !activePackage ? (
@@ -2129,137 +2522,183 @@ function Withdrawal({ t, profile, showRewardWithdrawalPrompt, activePackage, has
           </p>
         ) : (
           <>
-        {activePackage && (
-          <div className="mb-5 flex items-center justify-between gap-4 rounded-xl border border-amber-300/30 bg-amber-300/10 p-4">
-            <p className="text-sm font-bold text-amber-100">{t("yourWithdrawalLimit")}</p>
-            <strong className="text-lg font-black text-amber-300">{coins(profile.earningWalletBalance ?? 0)}</strong>
-          </div>
-        )}
-        {showRewardWithdrawalPrompt && (
-          <p className="mb-5 flex items-center gap-2 rounded-xl border border-emerald-300/25 bg-emerald-300/10 p-3 text-sm font-semibold text-emerald-50">
-            <Gift className="size-4 shrink-0 text-amber-300" />
-            {t("whatsappWithdrawalPrompt")}
-          </p>
-        )}
-        {showWithdrawalRule && !showRewardWithdrawalPrompt && (
-          <div className="withdrawal-invite-ticker mb-5 rounded-xl border border-emerald-300/25 bg-emerald-300/10 py-3 text-sm font-semibold text-emerald-50" role="status">
-            <p className="withdrawal-invite-ticker__text">{t("withdrawalInviteRule")}</p>
-          </div>
-        )}
-          <form
-            onSubmit={event => {
-              event.preventDefault();
-              if (activePackage && (profile.earningWalletBalance ?? 0) <= 0) {
-                setShowWithdrawalRule(true);
-              }
-              const failure = firstWithdrawalFailure({
-                amount,
-                currency,
-                withdrawalLimitPkr: Math.floor((profile.earningWalletBalance ?? 0) / 100),
-                activePackage: Boolean(activePackage),
-                pendingChannelReward: Boolean(hasPendingChannelReward),
-                freeWithdrawalCompleted: Boolean(rewardWithdrawalCompleted),
-                walletType,
-                accountName,
-                accountDetails,
-              });
-              if (failure) {
-                setErrors({ [failure.field]: failure.message });
-                toast.error(failure.message);
-                return;
-              }
-              setErrors({});
-              const numeric = Number(amount);
-              create.mutate({
-                currency,
-                amount: numeric,
-                walletType: walletType as "JazzCash" | "Easypaisa" | "SadaPay" | "NayaPay" | "Other",
-                accountName,
-                accountDetails,
-              });
-            }}
-          >
-            <div className="mb-4">
-              <CurrencyTabs value={currency} onChange={(nextCurrency: "PKR" | "USD") => {
-                setCurrency(nextCurrency);
-                setWalletType("");
-                setErrors(current => ({ ...current, walletType: undefined, accountDetails: undefined }));
-              }} t={t} />
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <label>
-                <span className="field-label">{t("walletType")}</span>
-                <select
-                  className="field"
-                  value={walletType}
-                  aria-invalid={Boolean(errors.walletType)}
-                  onChange={e => {
-                    setWalletType(e.target.value);
-                    setErrors(current => ({ ...current, walletType: undefined }));
-                  }}
-                >
-                  <option value="">{t("selectWalletType")}</option>
-                  {walletTypes.map(type => <option key={type} value={type}>{type}</option>)}
-                </select>
-                <FieldError>{errors.walletType}</FieldError>
-              </label>
-              <label>
-                <span className="field-label">{t("walletAccountName")}</span>
-                <input
-                  className="field"
-                  value={accountName}
-                  aria-invalid={Boolean(errors.accountName)}
-                  onChange={e => {
-                    setAccountName(e.target.value);
-                    setErrors(current => ({ ...current, accountName: undefined }));
-                  }}
-                />
-                <FieldError>{errors.accountName}</FieldError>
-              </label>
-              <label>
-                <span className="field-label">{t("walletNumber")}</span>
-                <input
-                  className="field"
-                  value={accountDetails}
-                  inputMode={currency === "PKR" ? "numeric" : undefined}
-                  aria-invalid={Boolean(errors.accountDetails)}
-                  onChange={e => {
-                    setAccountDetails(e.target.value);
-                    setErrors(current => ({ ...current, accountDetails: undefined }));
-                  }}
-                />
-                <FieldError>{errors.accountDetails}</FieldError>
-              </label>
-              <label>
-                <span className="field-label">
-                  {t("amount")} ({currency})
-                </span>
-                <input
-                  className="field"
-                  type="number"
-                  step="0.01"
-                  value={amount}
-                  aria-invalid={Boolean(errors.amount)}
-                  onChange={e => {
-                    setAmount(e.target.value);
-                    setErrors(current => ({ ...current, amount: undefined }));
-                  }}
-                />
-                <FieldError>{errors.amount}</FieldError>
-              </label>
-            </div>
-            <button
-              disabled={create.isPending}
-              className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-60"
+            {activePackage && (
+              <div className="mb-5 flex items-center justify-between gap-4 rounded-xl border border-amber-300/30 bg-amber-300/10 p-4">
+                <p className="text-sm font-bold text-amber-100">
+                  {t("yourWithdrawalLimit")}
+                </p>
+                <strong className="text-lg font-black text-amber-300">
+                  {coins(profile.earningWalletBalance ?? 0)}
+                </strong>
+              </div>
+            )}
+            {showRewardWithdrawalPrompt && (
+              <p className="mb-5 flex items-center gap-2 rounded-xl border border-emerald-300/25 bg-emerald-300/10 p-3 text-sm font-semibold text-emerald-50">
+                <Gift className="size-4 shrink-0 text-amber-300" />
+                {t("whatsappWithdrawalPrompt")}
+              </p>
+            )}
+            {showWithdrawalRule && !showRewardWithdrawalPrompt && (
+              <div
+                className="withdrawal-invite-ticker mb-5 rounded-xl border border-emerald-300/25 bg-emerald-300/10 py-3 text-sm font-semibold text-emerald-50"
+                role="status"
+              >
+                <p className="withdrawal-invite-ticker__text">
+                  {t("withdrawalInviteRule")}
+                </p>
+              </div>
+            )}
+            <form
+              onSubmit={event => {
+                event.preventDefault();
+                if (activePackage && (profile.earningWalletBalance ?? 0) <= 0) {
+                  setShowWithdrawalRule(true);
+                }
+                const failure = firstWithdrawalFailure({
+                  amount,
+                  currency,
+                  withdrawalLimitPkr: Math.floor(
+                    (profile.earningWalletBalance ?? 0) / 100
+                  ),
+                  activePackage: Boolean(activePackage),
+                  pendingChannelReward: Boolean(hasPendingChannelReward),
+                  freeWithdrawalCompleted: Boolean(rewardWithdrawalCompleted),
+                  walletType,
+                  accountName,
+                  accountDetails,
+                });
+                if (failure) {
+                  setErrors({ [failure.field]: failure.message });
+                  toast.error(failure.message);
+                  return;
+                }
+                setErrors({});
+                const numeric = Number(amount);
+                create.mutate({
+                  currency,
+                  amount: numeric,
+                  walletType: walletType as
+                    | "JazzCash"
+                    | "Easypaisa"
+                    | "SadaPay"
+                    | "NayaPay"
+                    | "Other",
+                  accountName,
+                  accountDetails,
+                });
+              }}
             >
-              <ArrowUpRight className="size-4" />
-              {t("submitWithdrawal")}
-            </button>
-          </form>
+              <div className="mb-4">
+                <CurrencyTabs
+                  value={currency}
+                  onChange={(nextCurrency: "PKR" | "USD") => {
+                    setCurrency(nextCurrency);
+                    setWalletType("");
+                    setErrors(current => ({
+                      ...current,
+                      walletType: undefined,
+                      accountDetails: undefined,
+                    }));
+                  }}
+                  t={t}
+                />
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label>
+                  <span className="field-label">{t("walletType")}</span>
+                  <select
+                    className="field"
+                    value={walletType}
+                    aria-invalid={Boolean(errors.walletType)}
+                    onChange={e => {
+                      setWalletType(e.target.value);
+                      setErrors(current => ({
+                        ...current,
+                        walletType: undefined,
+                      }));
+                    }}
+                  >
+                    <option value="">{t("selectWalletType")}</option>
+                    {walletTypes.map(type => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </select>
+                  <FieldError>{errors.walletType}</FieldError>
+                </label>
+                <label>
+                  <span className="field-label">{t("walletAccountName")}</span>
+                  <input
+                    className="field"
+                    value={accountName}
+                    aria-invalid={Boolean(errors.accountName)}
+                    onChange={e => {
+                      setAccountName(e.target.value);
+                      setErrors(current => ({
+                        ...current,
+                        accountName: undefined,
+                      }));
+                    }}
+                  />
+                  <FieldError>{errors.accountName}</FieldError>
+                </label>
+                <label>
+                  <span className="field-label">{t("walletNumber")}</span>
+                  <input
+                    className="field"
+                    value={accountDetails}
+                    inputMode={currency === "PKR" ? "numeric" : undefined}
+                    aria-invalid={Boolean(errors.accountDetails)}
+                    onChange={e => {
+                      setAccountDetails(e.target.value);
+                      setErrors(current => ({
+                        ...current,
+                        accountDetails: undefined,
+                      }));
+                    }}
+                  />
+                  <FieldError>{errors.accountDetails}</FieldError>
+                </label>
+                <label>
+                  <span className="field-label">
+                    {t("amount")} ({currency})
+                  </span>
+                  <input
+                    className="field"
+                    type="number"
+                    step="0.01"
+                    value={amount}
+                    aria-invalid={Boolean(errors.amount)}
+                    onChange={e => {
+                      setAmount(e.target.value);
+                      setErrors(current => ({ ...current, amount: undefined }));
+                    }}
+                  />
+                  <FieldError>{errors.amount}</FieldError>
+                </label>
+              </div>
+              <button
+                disabled={create.isPending}
+                className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-300 text-sm font-bold text-slate-950 disabled:opacity-60"
+              >
+                <ArrowUpRight className="size-4" />
+                {t("submitWithdrawal")}
+              </button>
+            </form>
           </>
         )}
       </div>
-      {showHistory && <div className="panel mt-5"><p className="eyebrow">{t("viewWithdrawalHistory")}</p>{list.data?.length ? <GroupedFinancialHistory rows={list.data} t={t} kind="withdrawal" /> : <Empty text={t("noTransactions")} />}</div>}
+      {showHistory && (
+        <div className="panel mt-5">
+          <p className="eyebrow">{t("viewWithdrawalHistory")}</p>
+          {list.data?.length ? (
+            <GroupedFinancialHistory rows={list.data} t={t} kind="withdrawal" />
+          ) : (
+            <Empty text={t("noTransactions")} />
+          )}
+        </div>
+      )}
     </>
   );
 }
@@ -2323,6 +2762,7 @@ function Referral({ t }: any) {
   if (!referral.data) return <LoadingScreen text={t("loading")} />;
   const invite = buildInviteSummary(referral.data, window.location.origin);
   const link = invite.link;
+  const shareMessage = `Join PixEarn and start earning with me. Referral link: ${link}`;
   const copy = async () => {
     await navigator.clipboard.writeText(link);
     setCopied(true);
@@ -2331,34 +2771,55 @@ function Referral({ t }: any) {
   };
   return (
     <>
-      <PageHeading
-        eyebrow={t("invite")}
-        title={t("invite")}
-      />
+      <PageHeading eyebrow={t("invite")} title={t("invite")} />
       <div className="panel">
-          <p className="eyebrow">{t("yourLink")}</p>
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-            <input
-              readOnly
-              className="field flex-1 font-mono text-xs"
-              value={link}
-            />
-            <button
-              onClick={copy}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-bold"
-            >
-              <Copy className="size-4" />
-              {copied ? "✓" : t("copy")}
-            </button>
-          </div>
+        <p className="eyebrow">{t("yourLink")}</p>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+          <input
+            readOnly
+            className="field flex-1 font-mono text-xs"
+            value={link}
+          />
+          <button
+            onClick={copy}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-bold"
+          >
+            <Copy className="size-4" />
+            {copied ? "✓" : t("copy")}
+          </button>
+          <a
+            href={`https://wa.me/?text=${encodeURIComponent(shareMessage)}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-11 items-center justify-center rounded-xl bg-emerald-500 px-4 text-sm font-bold text-slate-950"
+          >
+            WhatsApp
+          </a>
+          <a
+            href={`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent("Join PixEarn and start earning")}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-11 items-center justify-center rounded-xl bg-sky-400 px-4 text-sm font-bold text-slate-950"
+          >
+            Telegram
+          </a>
         </div>
+        <p className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-xs leading-5 text-amber-100">
+          Share your personal link with friends. Referral rewards are credited
+          automatically when eligible referred activity is approved, subject to
+          the platform limits shown in your account.
+        </p>
+      </div>
       <div className="panel mt-5 overflow-hidden">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="eyebrow">{t("invite")}</p>
             <h2 className="mt-1 text-xl font-bold">My Invited Users</h2>
           </div>
-          <p className="text-xs text-slate-400">{referral.data.referrals.length} invited user{referral.data.referrals.length === 1 ? "" : "s"}</p>
+          <p className="text-xs text-slate-400">
+            {referral.data.referrals.length} invited user
+            {referral.data.referrals.length === 1 ? "" : "s"}
+          </p>
         </div>
         {referral.data.referrals.length ? (
           <div className="mt-4 overflow-x-auto">
@@ -2377,30 +2838,52 @@ function Referral({ t }: any) {
               <tbody className="divide-y divide-white/5">
                 {referral.data.referrals.map((invited: any) => (
                   <tr key={invited.userId} className="text-slate-200">
-                    <td className="px-3 py-3 font-semibold">{invited.username}</td>
-                    <td className="px-3 py-3 text-slate-400">{invited.email ?? "—"}</td>
-                    <td className="px-3 py-3 whitespace-nowrap text-slate-400">{dateTime(invited.registeredAt)}</td>
+                    <td className="px-3 py-3 font-semibold">
+                      {invited.username}
+                    </td>
+                    <td className="px-3 py-3 text-slate-400">
+                      {invited.email ?? "—"}
+                    </td>
+                    <td className="px-3 py-3 whitespace-nowrap text-slate-400">
+                      {dateTime(invited.registeredAt)}
+                    </td>
                     <td className="px-3 py-3">
-                      <span className={`inline-flex items-center gap-1.5 font-semibold ${invited.depositStatus === "approved" ? "text-emerald-300" : "text-amber-200"}`}>
-                        <span className={`size-2 rounded-full ${invited.depositStatus === "approved" ? "bg-emerald-400" : "bg-amber-300"}`} />
-                        {invited.depositStatus === "approved" ? "Approved" : "Pending"}
+                      <span
+                        className={`inline-flex items-center gap-1.5 font-semibold ${invited.depositStatus === "approved" ? "text-emerald-300" : "text-amber-200"}`}
+                      >
+                        <span
+                          className={`size-2 rounded-full ${invited.depositStatus === "approved" ? "bg-emerald-400" : "bg-amber-300"}`}
+                        />
+                        {invited.depositStatus === "approved"
+                          ? "Approved"
+                          : "Pending"}
                       </span>
                     </td>
                     <td className="px-3 py-3">
-                      <span className={`inline-flex items-center gap-1.5 ${invited.packageActive ? "text-emerald-300" : "text-red-300"}`}>
-                        <span className={`size-2 rounded-full ${invited.packageActive ? "bg-emerald-400" : "bg-red-400"}`} />
+                      <span
+                        className={`inline-flex items-center gap-1.5 ${invited.packageActive ? "text-emerald-300" : "text-red-300"}`}
+                      >
+                        <span
+                          className={`size-2 rounded-full ${invited.packageActive ? "bg-emerald-400" : "bg-red-400"}`}
+                        />
                         {invited.packageActive ? invited.packageName : "No"}
                       </span>
                     </td>
-                    <td className="px-3 py-3 text-right font-bold text-amber-300">{money(invited.taskRewardPkr ?? 0)}</td>
-                    <td className="px-3 py-3 text-right font-bold text-emerald-300">{money(invited.withdrawCommissionPkr ?? 0)}</td>
+                    <td className="px-3 py-3 text-right font-bold text-amber-300">
+                      {money(invited.taskRewardPkr ?? 0)}
+                    </td>
+                    <td className="px-3 py-3 text-right font-bold text-emerald-300">
+                      {money(invited.withdrawCommissionPkr ?? 0)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         ) : (
-          <p className="mt-5 rounded-xl border border-white/10 bg-white/5 p-5 text-sm text-slate-400">No invited users yet.</p>
+          <p className="mt-5 rounded-xl border border-white/10 bg-white/5 p-5 text-sm text-slate-400">
+            No invited users yet.
+          </p>
         )}
       </div>
     </>

@@ -40,7 +40,11 @@ type Tab =
 const tabItems: Array<{ id: Tab; label: string; icon: typeof ClipboardCheck }> =
   [
     { id: "depositHistory", label: "depositHistory", icon: CreditCard },
-    { id: "withdrawalHistory", label: "withdrawalHistory", icon: ClipboardCheck },
+    {
+      id: "withdrawalHistory",
+      label: "withdrawalHistory",
+      icon: ClipboardCheck,
+    },
     { id: "ads", label: "adSettings", icon: PlaySquare },
     { id: "packages", label: "packages", icon: ClipboardCheck },
     { id: "tasks", label: "adSettings", icon: PlaySquare },
@@ -182,10 +186,18 @@ export function AdminPanel({ t }: { t: (key: any) => string }) {
         </aside>
         <section className="min-w-0">
           {activeTab === "depositHistory" && (
-            <Approvals t={t} mode="deposits" onChange={() => dashboard.refetch()} />
+            <Approvals
+              t={t}
+              mode="deposits"
+              onChange={() => dashboard.refetch()}
+            />
           )}
           {activeTab === "withdrawalHistory" && (
-            <Approvals t={t} mode="withdrawals" onChange={() => dashboard.refetch()} />
+            <Approvals
+              t={t}
+              mode="withdrawals"
+              onChange={() => dashboard.refetch()}
+            />
           )}
           {activeTab === "ads" && <Ads t={t} />}
           {activeTab === "packages" && <PackageCatalog t={t} />}
@@ -206,7 +218,9 @@ export function AdminPanel({ t }: { t: (key: any) => string }) {
 
 function PackageCatalog({ t }: any) {
   const list = trpc.package.list.useQuery();
-  const packages = [...(list.data ?? [])].sort((a, b) => a.pricePkr - b.pricePkr);
+  const packages = [...(list.data ?? [])].sort(
+    (a, b) => a.pricePkr - b.pricePkr
+  );
   return (
     <>
       <Heading title={t("packages")} description={t("packageSubtitle")} />
@@ -214,12 +228,16 @@ function PackageCatalog({ t }: any) {
         {packages.map(plan => (
           <div key={plan.id} className="panel border-t-4 border-cyan-400 p-4">
             <p className="text-sm font-bold">{plan.name}</p>
-            <p className="mt-2 text-2xl font-black text-cyan-200">{money(plan.pricePkr)}</p>
+            <p className="mt-2 text-2xl font-black text-cyan-200">
+              {money(plan.pricePkr)}
+            </p>
             <p className="mt-3 text-sm font-bold">
-              {plan.dailyAds} {plan.dailyAds === 1 ? t("ad") : t("ads")} · {money(plan.adRewardPkr)} / {t("ad")}
+              {plan.dailyAds} {plan.dailyAds === 1 ? t("ad") : t("ads")} ·{" "}
+              {money(plan.adRewardPkr)} / {t("ad")}
             </p>
             <p className="mt-1 text-xs text-slate-400">
-              {t("totalDailyEarning")}: {money(plan.dailyAds * plan.adRewardPkr)}
+              {t("totalDailyEarning")}:{" "}
+              {money(plan.dailyAds * plan.adRewardPkr)}
             </p>
           </div>
         ))}
@@ -249,7 +267,13 @@ function Empty({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
-function CopyRecordValue({ label, value }: { label: string; value?: string | null }) {
+function CopyRecordValue({
+  label,
+  value,
+}: {
+  label: string;
+  value?: string | null;
+}) {
   if (!value) return null;
   return (
     <button
@@ -354,24 +378,49 @@ function Approvals({ t, onChange, mode }: any) {
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
-      return (statusFilter === "all" || row.status === statusFilter) &&
-        (!query || searchable.includes(query));
+      return (
+        (statusFilter === "all" || row.status === statusFilter) &&
+        (!query || searchable.includes(query))
+      );
     });
   };
-  const rows = mode === "deposits"
-    ? filteredRows(data.data?.deposits ?? [])
-    : filteredRows(data.data?.withdrawals ?? []);
+  const rows =
+    mode === "deposits"
+      ? filteredRows(data.data?.deposits ?? [])
+      : filteredRows(data.data?.withdrawals ?? []);
   return (
     <>
       <Heading
-        title={mode === "deposits" ? t("depositHistory") : t("withdrawalHistory")}
-        description={mode === "deposits" ? t("depositHistoryText") : t("withdrawalHistoryText")}
+        title={
+          mode === "deposits" ? t("depositHistory") : t("withdrawalHistory")
+        }
+        description={
+          mode === "deposits"
+            ? t("depositHistoryText")
+            : t("withdrawalHistoryText")
+        }
       />
       <div className="space-y-5">
         <div className="panel flex flex-col gap-3 sm:flex-row">
-          <input className="field" value={search} onChange={event => setSearch(event.target.value)} placeholder={mode === "deposits" ? "Search username, phone, or transaction ID" : "Search username or wallet number"} />
-          <select className="field sm:max-w-44" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
-            <option value="all">All statuses</option><option value="pending">{t("pending")}</option><option value="approved">{t("approved")}</option><option value="rejected">{t("rejected")}</option>
+          <input
+            className="field"
+            value={search}
+            onChange={event => setSearch(event.target.value)}
+            placeholder={
+              mode === "deposits"
+                ? "Search username, phone, or transaction ID"
+                : "Search username or wallet number"
+            }
+          />
+          <select
+            className="field sm:max-w-44"
+            value={statusFilter}
+            onChange={event => setStatusFilter(event.target.value)}
+          >
+            <option value="all">All statuses</option>
+            <option value="pending">{t("pending")}</option>
+            <option value="approved">{t("approved")}</option>
+            <option value="rejected">{t("rejected")}</option>
           </select>
         </div>
         <div className={mode === "deposits" ? "panel" : "hidden"}>
@@ -389,17 +438,35 @@ function Approvals({ t, onChange, mode }: any) {
                         {money(row.amountPkr)} · {row.method}
                       </p>
                       <p className="mt-1 text-xs text-slate-400">
-                        {row.member?.username ?? t("member")} · {row.member?.email ?? `#${row.userId}`} · {dateTime(row.createdAt)}
+                        {row.member?.username ?? t("member")} ·{" "}
+                        {row.member?.email ?? `#${row.userId}`} ·{" "}
+                        {dateTime(row.createdAt)}
                       </p>
                       <p className="mt-2 text-xs leading-5 text-slate-300">
-                        {t("senderAccountName")}: {row.senderAccountName ?? "—"} · {t("senderAccountNumber")}: {row.senderAccountNumber ?? "—"}<br />
-                        {t("transactionId")}: {row.transactionId ?? "—"} · {t("requestedPackage")}: {row.requestedPackageName ?? t("walletDeposit")}<br />
-                        {t("activePackage")}: {row.member?.activePackageName ?? t("noPackage")}
+                        {t("senderAccountName")}: {row.senderAccountName ?? "—"}{" "}
+                        · {t("senderAccountNumber")}:{" "}
+                        {row.senderAccountNumber ?? "—"}
+                        <br />
+                        {t("transactionId")}: {row.transactionId ?? "—"} ·{" "}
+                        {t("requestedPackage")}:{" "}
+                        {row.requestedPackageName ?? t("walletDeposit")}
+                        <br />
+                        {t("activePackage")}:{" "}
+                        {row.member?.activePackageName ?? t("noPackage")}
                       </p>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <CopyRecordValue label={t("senderAccountName")} value={row.senderAccountName} />
-                        <CopyRecordValue label={t("senderAccountNumber")} value={row.senderAccountNumber} />
-                        <CopyRecordValue label={t("transactionId")} value={row.transactionId} />
+                        <CopyRecordValue
+                          label={t("senderAccountName")}
+                          value={row.senderAccountName}
+                        />
+                        <CopyRecordValue
+                          label={t("senderAccountNumber")}
+                          value={row.senderAccountNumber}
+                        />
+                        <CopyRecordValue
+                          label={t("transactionId")}
+                          value={row.transactionId}
+                        />
                       </div>
                     </div>
                     <Pill status={row.status}>{row.status}</Pill>
@@ -429,7 +496,13 @@ function Approvals({ t, onChange, mode }: any) {
                         <Button
                           danger
                           onClick={() =>
-                            deposit.mutate({ id: row.id, approved: false, rejectionReason: window.prompt("Reason for rejection") || undefined })
+                            deposit.mutate({
+                              id: row.id,
+                              approved: false,
+                              rejectionReason:
+                                window.prompt("Reason for rejection") ||
+                                undefined,
+                            })
                           }
                         >
                           <X className="size-3.5" />
@@ -473,19 +546,43 @@ function Approvals({ t, onChange, mode }: any) {
                         {money(row.amountPkr)} · {row.currency}
                       </p>
                       <p className="mt-1 text-xs text-slate-400">
-                        {row.member?.username ?? t("member")} · {row.member?.email ?? `#${row.userId}`} · {t("paymentMethod")}: {row.currency} · {dateTime(row.createdAt)}
+                        {row.member?.username ?? t("member")} ·{" "}
+                        {row.member?.email ?? `#${row.userId}`} ·{" "}
+                        {t("paymentMethod")}: {row.currency} ·{" "}
+                        {dateTime(row.createdAt)}
                       </p>
                       <p className="mt-2 text-xs leading-5 text-slate-300">
-                        {t("walletType")}: {row.walletType} · {t("walletAccountName")}: {row.accountName} · {t("walletNumber")}: {row.accountDetails}<br />
-                        {t("balance")}: {money(row.member?.balancePkr ?? 0)} · {t("referralCount")}: {row.member?.referralCount ?? 0}<br />
-                        {t("withdrawalLimit")}: {money(row.member?.withdrawalLimitPkr ?? 0)} · {t("activePackage")}: {row.member?.activePackageName ?? t("noPackage")}
+                        {t("walletType")}: {row.walletType} ·{" "}
+                        {t("walletAccountName")}: {row.accountName} ·{" "}
+                        {t("walletNumber")}: {row.accountDetails}
+                        <br />
+                        {t("balance")}: {money(row.member?.balancePkr ?? 0)} ·{" "}
+                        {t("referralCount")}: {row.member?.referralCount ?? 0}
+                        <br />
+                        {t("withdrawalLimit")}:{" "}
+                        {money(row.member?.withdrawalLimitPkr ?? 0)} ·{" "}
+                        {t("activePackage")}:{" "}
+                        {row.member?.activePackageName ?? t("noPackage")}
                       </p>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <CopyRecordValue label={t("walletAccountName")} value={row.accountName} />
-                        <CopyRecordValue label={t("copyNumber")} value={row.accountDetails} />
+                        <CopyRecordValue
+                          label={t("walletAccountName")}
+                          value={row.accountName}
+                        />
+                        <CopyRecordValue
+                          label={t("copyNumber")}
+                          value={row.accountDetails}
+                        />
                         <CopyRecordValue
                           label={t("copyDetails")}
-                          value={[row.walletType, row.accountName, row.accountDetails, `${row.amountPkr} ${row.currency}`].filter(Boolean).join("\n")}
+                          value={[
+                            row.walletType,
+                            row.accountName,
+                            row.accountDetails,
+                            `${row.amountPkr} ${row.currency}`,
+                          ]
+                            .filter(Boolean)
+                            .join("\n")}
                         />
                       </div>
                     </div>
@@ -504,7 +601,13 @@ function Approvals({ t, onChange, mode }: any) {
                       <Button
                         danger
                         onClick={() =>
-                          withdrawal.mutate({ id: row.id, approved: false, rejectionReason: window.prompt("Reason for rejection") || undefined })
+                          withdrawal.mutate({
+                            id: row.id,
+                            approved: false,
+                            rejectionReason:
+                              window.prompt("Reason for rejection") ||
+                              undefined,
+                          })
                         }
                       >
                         <X className="size-3.5" />
@@ -544,15 +647,14 @@ function Ads({ t }: any) {
     <>
       <Heading
         title={t("adSettings")}
-        description={t("adsterraCodeNote")}
+        description="Manage the earning experience for members."
       />
       <div className="panel">
-          <p className="font-bold">{t("adsterraCodes")}</p>
-          <p className="mt-2 text-xs leading-5 text-slate-400">{t("adsterraCodeNote")}</p>
-          <div className="mt-4 space-y-2 text-xs text-slate-300">
-            <code className="block break-all rounded-xl bg-slate-950/35 p-3">pl31018972.profitableratecpmnetwork.com/c3/93/94/c39394501da20cecb09000e829b5b01d.js</code>
-            <code className="block break-all rounded-xl bg-slate-950/35 p-3">pl31018973.profitableratecpmnetwork.com/b0/f7/85/b0f7854db95a963d43c8aa42ca3332f3.js</code>
-          </div>
+        <p className="font-bold">Automatic earning tasks</p>
+        <p className="mt-2 text-sm leading-6 text-slate-300">
+          Advertising and offerwall integrations are active in the member
+          workspace. Technical implementation details are kept private.
+        </p>
       </div>
     </>
   );
@@ -707,7 +809,10 @@ function Payments({ t }: any) {
 
 function Broadcasts({ t }: any) {
   const list = trpc.admin.broadcasts.useQuery();
-  const remove = trpc.admin.deleteBroadcast.useMutation({ onSuccess: () => list.refetch(), onError: e => toast.error(e.message) });
+  const remove = trpc.admin.deleteBroadcast.useMutation({
+    onSuccess: () => list.refetch(),
+    onError: e => toast.error(e.message),
+  });
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [mediaUrl, setMediaUrl] = useState("");
@@ -729,7 +834,12 @@ function Broadcasts({ t }: any) {
           className="panel space-y-3"
           onSubmit={e => {
             e.preventDefault();
-            send.mutate({ title, body, mediaUrl: mediaUrl || undefined, type: "info" });
+            send.mutate({
+              title,
+              body,
+              mediaUrl: mediaUrl || undefined,
+              type: "info",
+            });
           }}
         >
           <Field label={t("title")}>
@@ -776,7 +886,14 @@ function Broadcasts({ t }: any) {
                   <p className="mt-3 text-xs text-slate-500">
                     {dateTime(row.createdAt)}
                   </p>
-                  <div className="mt-3"><Button danger onClick={() => remove.mutate({ id: row.id })}>{t("delete")}</Button></div>
+                  <div className="mt-3">
+                    <Button
+                      danger
+                      onClick={() => remove.mutate({ id: row.id })}
+                    >
+                      {t("delete")}
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -801,13 +918,20 @@ function UserManagement({ t }: any) {
     onSuccess: () => list.refetch(),
     onError: e => toast.error(e.message),
   });
-  const sendNotification = trpc.admin.sendNotification.useMutation({ onSuccess: () => toast.success(t("saved")), onError: e => toast.error(e.message) });
+  const sendNotification = trpc.admin.sendNotification.useMutation({
+    onSuccess: () => toast.success(t("saved")),
+    onError: e => toast.error(e.message),
+  });
   const promptNotification = (userId: number) => {
     const title = window.prompt("Notification title");
     if (!title?.trim()) return;
     const message = window.prompt("Notification message");
     if (!message?.trim()) return;
-    sendNotification.mutate({ userId, title: title.trim(), message: message.trim() });
+    sendNotification.mutate({
+      userId,
+      title: title.trim(),
+      message: message.trim(),
+    });
   };
   const filteredUsers = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -866,9 +990,21 @@ function UserManagement({ t }: any) {
                 </td>
                 <td className="text-right">
                   <div className="flex justify-end gap-2">
-                    <Button onClick={() => setSelectedUserId(row.id)}>{t("viewDetails")}</Button>
-                    <Button onClick={() => promptNotification(row.id)}>{t("sendNotification")}</Button>
-                    <Button danger={!row.profile.isBlocked} onClick={() => block.mutate({ userId: row.id, blocked: !row.profile.isBlocked })}>
+                    <Button onClick={() => setSelectedUserId(row.id)}>
+                      {t("viewDetails")}
+                    </Button>
+                    <Button onClick={() => promptNotification(row.id)}>
+                      {t("sendNotification")}
+                    </Button>
+                    <Button
+                      danger={!row.profile.isBlocked}
+                      onClick={() =>
+                        block.mutate({
+                          userId: row.id,
+                          blocked: !row.profile.isBlocked,
+                        })
+                      }
+                    >
                       {row.profile.isBlocked ? t("unblock") : t("block")}
                     </Button>
                   </div>
@@ -878,19 +1014,120 @@ function UserManagement({ t }: any) {
           </tbody>
         </table>
       </div>
-      {selectedUserId && <div className="panel mt-5">
-        {detail.isLoading ? <Loader2 className="animate-spin text-amber-300" /> : detail.data ? <>
-          <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eyebrow">{t("viewDetails")}</p><h3 className="mt-1 text-xl font-bold">{detail.data.member.profile.username}</h3><p className="mt-1 text-sm text-slate-400">{detail.data.member.email ?? "—"}</p></div><Button onClick={() => setSelectedUserId(null)}>{t("close")}</Button></div>
-          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4"><div className="rounded-xl bg-slate-950/15 p-3 text-sm"><p className="text-xs text-slate-400">{t("balance")}</p><p className="mt-1 font-bold">{money(detail.data.member.profile.balancePkr)}</p></div><div className="rounded-xl bg-slate-950/15 p-3 text-sm"><p className="text-xs text-slate-400">{t("accountPasswordStatus")}</p><p className="mt-1 font-bold">{detail.data.member.passwordStatus === "set" ? t("setPassword") : "—"}</p></div><div className="rounded-xl bg-slate-950/15 p-3 text-sm"><p className="text-xs text-slate-400">{t("activePackage")}</p><p className="mt-1 font-bold">{detail.data.activePackage?.name ?? t("noPackage")}</p></div><div className="rounded-xl bg-slate-950/15 p-3 text-sm"><p className="text-xs text-slate-400">{t("referralCount")}</p><p className="mt-1 font-bold">{detail.data.totals.referralCount}</p></div></div>
-          <div className="mt-5 grid gap-4 lg:grid-cols-3"><HistorySummary title={t("totalDeposits")} amount={detail.data.totals.depositAmountPkr} count={detail.data.totals.depositCount} rows={detail.data.deposits} /><HistorySummary title={t("totalWithdrawals")} amount={detail.data.totals.withdrawalAmountPkr} count={detail.data.totals.withdrawalCount} rows={detail.data.withdrawals} /><HistorySummary title={t("referral")} amount={detail.data.referralEarnings.reduce((sum: number, row: any) => sum + row.amountPkr, 0)} count={detail.data.referralEarnings.length} rows={detail.data.referralEarnings} /></div>
-        </> : <Empty>{t("noTransactions")}</Empty>}
-      </div>}
+      {selectedUserId && (
+        <div className="panel mt-5">
+          {detail.isLoading ? (
+            <Loader2 className="animate-spin text-amber-300" />
+          ) : detail.data ? (
+            <>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="eyebrow">{t("viewDetails")}</p>
+                  <h3 className="mt-1 text-xl font-bold">
+                    {detail.data.member.profile.username}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {detail.data.member.email ?? "—"}
+                  </p>
+                </div>
+                <Button onClick={() => setSelectedUserId(null)}>
+                  {t("close")}
+                </Button>
+              </div>
+              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-xl bg-slate-950/15 p-3 text-sm">
+                  <p className="text-xs text-slate-400">{t("balance")}</p>
+                  <p className="mt-1 font-bold">
+                    {money(detail.data.member.profile.balancePkr)}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-slate-950/15 p-3 text-sm">
+                  <p className="text-xs text-slate-400">
+                    {t("accountPasswordStatus")}
+                  </p>
+                  <p className="mt-1 font-bold">
+                    {detail.data.member.passwordStatus === "set"
+                      ? t("setPassword")
+                      : "—"}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-slate-950/15 p-3 text-sm">
+                  <p className="text-xs text-slate-400">{t("activePackage")}</p>
+                  <p className="mt-1 font-bold">
+                    {detail.data.activePackage?.name ?? t("noPackage")}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-slate-950/15 p-3 text-sm">
+                  <p className="text-xs text-slate-400">{t("referralCount")}</p>
+                  <p className="mt-1 font-bold">
+                    {detail.data.totals.referralCount}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5 grid gap-4 lg:grid-cols-3">
+                <HistorySummary
+                  title={t("totalDeposits")}
+                  amount={detail.data.totals.depositAmountPkr}
+                  count={detail.data.totals.depositCount}
+                  rows={detail.data.deposits}
+                />
+                <HistorySummary
+                  title={t("totalWithdrawals")}
+                  amount={detail.data.totals.withdrawalAmountPkr}
+                  count={detail.data.totals.withdrawalCount}
+                  rows={detail.data.withdrawals}
+                />
+                <HistorySummary
+                  title={t("referral")}
+                  amount={detail.data.referralEarnings.reduce(
+                    (sum: number, row: any) => sum + row.amountPkr,
+                    0
+                  )}
+                  count={detail.data.referralEarnings.length}
+                  rows={detail.data.referralEarnings}
+                />
+              </div>
+            </>
+          ) : (
+            <Empty>{t("noTransactions")}</Empty>
+          )}
+        </div>
+      )}
     </>
   );
 }
 
-function HistorySummary({ title, amount, count, rows }: { title: string; amount: number; count: number; rows: any[] }) {
-  return <div className="rounded-2xl border border-white/10 bg-slate-950/15 p-4"><p className="text-xs text-slate-400">{title}</p><p className="mt-1 text-lg font-bold">{money(amount)} · {count}</p><div className="mt-3 max-h-36 space-y-2 overflow-y-auto text-xs text-slate-300">{rows.length ? rows.map((row: any) => <p key={row.id}>{money(row.amountPkr)} · {dateTime(row.createdAt)} · {row.status ?? row.type}</p>) : <p className="text-slate-500">—</p>}</div></div>;
+function HistorySummary({
+  title,
+  amount,
+  count,
+  rows,
+}: {
+  title: string;
+  amount: number;
+  count: number;
+  rows: any[];
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-950/15 p-4">
+      <p className="text-xs text-slate-400">{title}</p>
+      <p className="mt-1 text-lg font-bold">
+        {money(amount)} · {count}
+      </p>
+      <div className="mt-3 max-h-36 space-y-2 overflow-y-auto text-xs text-slate-300">
+        {rows.length ? (
+          rows.map((row: any) => (
+            <p key={row.id}>
+              {money(row.amountPkr)} · {dateTime(row.createdAt)} ·{" "}
+              {row.status ?? row.type}
+            </p>
+          ))
+        ) : (
+          <p className="text-slate-500">—</p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function GlobalSettings({ t }: any) {
@@ -946,10 +1183,22 @@ function GlobalSettings({ t }: any) {
           <p className="font-bold">{t("websiteSettings")}</p>
           <div className="mt-3 grid gap-4 md:grid-cols-2">
             <Field label={t("websiteName")}>
-              <input className="field" value={values.websiteName ?? "Ads Earning"} onChange={e => setForm({ ...values, websiteName: e.target.value })} />
+              <input
+                className="field"
+                value={values.websiteName ?? "Ads Earning"}
+                onChange={e =>
+                  setForm({ ...values, websiteName: e.target.value })
+                }
+              />
             </Field>
             <Field label={t("themeSettings")}>
-              <select className="field" value={values.themeName ?? "green"} onChange={e => setForm({ ...values, themeName: e.target.value })}>
+              <select
+                className="field"
+                value={values.themeName ?? "green"}
+                onChange={e =>
+                  setForm({ ...values, themeName: e.target.value })
+                }
+              >
                 <option value="green">{t("greenTheme")}</option>
                 <option value="blue">{t("blueTheme")}</option>
                 <option value="dark">{t("darkTheme")}</option>
@@ -964,9 +1213,34 @@ function GlobalSettings({ t }: any) {
         <div className="mb-5 rounded-2xl border border-white/10 bg-slate-950/15 p-4">
           <p className="font-bold">{t("websiteLogo")}</p>
           <div className="mt-3 flex flex-wrap items-end gap-3">
-            <input className="field h-auto max-w-md py-2" type="file" accept="image/*" onChange={async e => { const file = e.target.files?.[0]; if (file) setLogoData(await toDataUrl(file)); }} />
-            <button type="button" disabled={!logoData || saveLogo.isPending} onClick={() => saveLogo.mutate({ logoData })} className="inline-flex h-10 items-center gap-2 rounded-xl bg-amber-300 px-4 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"><Settings2 className="size-4" />{t("save")}</button>
-            {(values.logoData || values.logoUrl) && <a className="self-end pb-2 text-sm font-bold text-amber-300" href={values.logoData || values.logoUrl} target="_blank" rel="noreferrer">{t("viewProof")}</a>}
+            <input
+              className="field h-auto max-w-md py-2"
+              type="file"
+              accept="image/*"
+              onChange={async e => {
+                const file = e.target.files?.[0];
+                if (file) setLogoData(await toDataUrl(file));
+              }}
+            />
+            <button
+              type="button"
+              disabled={!logoData || saveLogo.isPending}
+              onClick={() => saveLogo.mutate({ logoData })}
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-amber-300 px-4 text-sm font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Settings2 className="size-4" />
+              {t("save")}
+            </button>
+            {(values.logoData || values.logoUrl) && (
+              <a
+                className="self-end pb-2 text-sm font-bold text-amber-300"
+                href={values.logoData || values.logoUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {t("viewProof")}
+              </a>
+            )}
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
@@ -1093,15 +1367,102 @@ function SupportRules({ t }: any) {
   const [keyword, setKeyword] = useState("");
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState<any>(null);
-  const save = trpc.admin.saveSupportReplyRule.useMutation({ onSuccess: () => { toast.success(t("saved")); list.refetch(); setKeyword(""); setMessage(""); setEditing(null); }, onError: e => toast.error(e.message) });
-  const remove = trpc.admin.deleteSupportReplyRule.useMutation({ onSuccess: () => list.refetch(), onError: e => toast.error(e.message) });
-  return <><Heading title={t("supportReplyRules")} description={t("supportReplyRulesText")} /><div className="grid gap-5 xl:grid-cols-[.75fr_1.25fr]"><form className="panel space-y-3" onSubmit={e => { e.preventDefault(); save.mutate({ ...(editing ? { id: editing.id } : {}), keyword, message }); }}><Field label={t("questionKeyword")}><input className="field" value={keyword} onChange={e => setKeyword(e.target.value)} required /></Field><Field label={t("autoReplyMessage")}><textarea className="field min-h-36 py-3" value={message} onChange={e => setMessage(e.target.value)} required /></Field><button className="h-9 rounded-lg bg-amber-300 px-3 text-xs font-bold text-slate-950" disabled={save.isPending}>{editing ? t("update") : t("save")}</button></form><div className="panel space-y-3">{list.data?.length ? list.data.map(rule => <div key={rule.id} className="rounded-xl border border-white/10 bg-white/5 p-3"><p className="font-bold">{rule.keyword}</p><p className="mt-1 text-sm text-slate-300">{rule.message}</p><div className="mt-3 flex gap-2"><Button onClick={() => { setEditing(rule); setKeyword(rule.keyword); setMessage(rule.message); }}>{t("edit")}</Button><Button danger onClick={() => remove.mutate({ id: rule.id })}>{t("delete")}</Button></div></div>) : <Empty>{t("noSupportReplyRules")}</Empty>}</div></div></>;
+  const save = trpc.admin.saveSupportReplyRule.useMutation({
+    onSuccess: () => {
+      toast.success(t("saved"));
+      list.refetch();
+      setKeyword("");
+      setMessage("");
+      setEditing(null);
+    },
+    onError: e => toast.error(e.message),
+  });
+  const remove = trpc.admin.deleteSupportReplyRule.useMutation({
+    onSuccess: () => list.refetch(),
+    onError: e => toast.error(e.message),
+  });
+  return (
+    <>
+      <Heading
+        title={t("supportReplyRules")}
+        description={t("supportReplyRulesText")}
+      />
+      <div className="grid gap-5 xl:grid-cols-[.75fr_1.25fr]">
+        <form
+          className="panel space-y-3"
+          onSubmit={e => {
+            e.preventDefault();
+            save.mutate({
+              ...(editing ? { id: editing.id } : {}),
+              keyword,
+              message,
+            });
+          }}
+        >
+          <Field label={t("questionKeyword")}>
+            <input
+              className="field"
+              value={keyword}
+              onChange={e => setKeyword(e.target.value)}
+              required
+            />
+          </Field>
+          <Field label={t("autoReplyMessage")}>
+            <textarea
+              className="field min-h-36 py-3"
+              value={message}
+              onChange={e => setMessage(e.target.value)}
+              required
+            />
+          </Field>
+          <button
+            className="h-9 rounded-lg bg-amber-300 px-3 text-xs font-bold text-slate-950"
+            disabled={save.isPending}
+          >
+            {editing ? t("update") : t("save")}
+          </button>
+        </form>
+        <div className="panel space-y-3">
+          {list.data?.length ? (
+            list.data.map(rule => (
+              <div
+                key={rule.id}
+                className="rounded-xl border border-white/10 bg-white/5 p-3"
+              >
+                <p className="font-bold">{rule.keyword}</p>
+                <p className="mt-1 text-sm text-slate-300">{rule.message}</p>
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    onClick={() => {
+                      setEditing(rule);
+                      setKeyword(rule.keyword);
+                      setMessage(rule.message);
+                    }}
+                  >
+                    {t("edit")}
+                  </Button>
+                  <Button danger onClick={() => remove.mutate({ id: rule.id })}>
+                    {t("delete")}
+                  </Button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <Empty>{t("noSupportReplyRules")}</Empty>
+          )}
+        </div>
+      </div>
+    </>
+  );
 }
 function SupportChats({ t }: any) {
   const [search, setSearch] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [reply, setReply] = useState("");
-  const queryInput = useMemo(() => ({ search: search.trim() || undefined }), [search]);
+  const queryInput = useMemo(
+    () => ({ search: search.trim() || undefined }),
+    [search]
+  );
   const list = trpc.admin.supportChats.useQuery(queryInput);
   const send = trpc.admin.supportChatReply.useMutation({
     onSuccess: () => {
@@ -1111,28 +1472,118 @@ function SupportChats({ t }: any) {
     },
     onError: () => toast.error(t("operationFailed")),
   });
-  const selected = list.data?.find((chat: any) => chat.userId === selectedUserId) ?? list.data?.[0];
+  const selected =
+    list.data?.find((chat: any) => chat.userId === selectedUserId) ??
+    list.data?.[0];
   return (
     <>
       <Heading title={t("supportChats")} description={t("supportChatsText")} />
       <div className="mb-4 flex gap-2">
-        <input className="field" value={search} onChange={e => setSearch(e.target.value)} placeholder={t("searchSupportChats")} aria-label={t("searchSupportChats")} />
+        <input
+          className="field"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder={t("searchSupportChats")}
+          aria-label={t("searchSupportChats")}
+        />
       </div>
       <div className="grid gap-4 xl:grid-cols-[.75fr_1.25fr]">
         <div className="panel space-y-2">
-          {list.isLoading ? <Loader2 className="size-5 animate-spin text-amber-300" /> : list.data?.length ? list.data.map((chat: any) => {
-            const last = chat.messages[chat.messages.length - 1];
-            return <button type="button" key={chat.userId} onClick={() => setSelectedUserId(chat.userId)} className={`w-full rounded-xl border p-3 text-left transition ${selected?.userId === chat.userId ? "border-red-400/60 bg-red-400/10" : "border-white/10 bg-white/5 hover:border-red-400/30"}`}>
-              <div className="flex items-center justify-between gap-2"><span className="font-bold">{chat.username ?? chat.email ?? `User ${chat.userId}`}</span><span className="text-[10px] text-slate-400">{chat.messages.length}</span></div>
-              <p className="mt-1 truncate text-xs text-slate-400">{last?.content}</p>
-            </button>;
-          }) : <Empty>{t("noSupportChats")}</Empty>}
+          {list.isLoading ? (
+            <Loader2 className="size-5 animate-spin text-amber-300" />
+          ) : list.data?.length ? (
+            list.data.map((chat: any) => {
+              const last = chat.messages[chat.messages.length - 1];
+              return (
+                <button
+                  type="button"
+                  key={chat.userId}
+                  onClick={() => setSelectedUserId(chat.userId)}
+                  className={`w-full rounded-xl border p-3 text-left transition ${selected?.userId === chat.userId ? "border-red-400/60 bg-red-400/10" : "border-white/10 bg-white/5 hover:border-red-400/30"}`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold">
+                      {chat.username ?? chat.email ?? `User ${chat.userId}`}
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      {chat.messages.length}
+                    </span>
+                  </div>
+                  <p className="mt-1 truncate text-xs text-slate-400">
+                    {last?.content}
+                  </p>
+                </button>
+              );
+            })
+          ) : (
+            <Empty>{t("noSupportChats")}</Empty>
+          )}
         </div>
-        {selected ? <div className="panel">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3"><div><p className="font-bold">{selected.username ?? selected.email}</p><p className="text-xs text-slate-400">{selected.email ?? ""}</p></div><div className="text-right text-xs text-slate-300"><p>{t("balance")}: {money(selected.balancePkr)}</p><p>{t("activePackage")}: {selected.activePackage ?? t("noPackage")}</p></div></div>
-          <div className="mt-4 max-h-[420px] space-y-3 overflow-y-auto pr-1">{selected.messages.map((message: any) => <div key={message.id} className={`rounded-xl p-3 text-sm ${message.role === "user" ? "ml-6 bg-red-600/20 text-red-50" : message.role === "admin" ? "mr-6 bg-amber-300/10 text-amber-50" : "mr-6 bg-white/10 text-slate-100"}`}><p className="mb-1 text-[10px] font-bold uppercase text-slate-400">{message.role === "user" ? t("member") : message.role === "admin" ? t("administrator") : "AI Support"}</p>{message.content}</div>)}</div>
-          <form className="mt-4 flex gap-2" onSubmit={e => { e.preventDefault(); if (reply.trim()) send.mutate({ userId: selected.userId, content: reply.trim() }); }}><input className="field" value={reply} onChange={e => setReply(e.target.value)} placeholder={t("adminSupportReply")} /><button type="submit" disabled={send.isPending || !reply.trim()} className="rounded-xl bg-red-600 px-4 text-sm font-bold text-white disabled:opacity-50">{t("sendReply")}</button></form>
-        </div> : <Empty>{t("selectSupportChat")}</Empty>}
+        {selected ? (
+          <div className="panel">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
+              <div>
+                <p className="font-bold">
+                  {selected.username ?? selected.email}
+                </p>
+                <p className="text-xs text-slate-400">{selected.email ?? ""}</p>
+              </div>
+              <div className="text-right text-xs text-slate-300">
+                <p>
+                  {t("balance")}: {money(selected.balancePkr)}
+                </p>
+                <p>
+                  {t("activePackage")}:{" "}
+                  {selected.activePackage ?? t("noPackage")}
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 max-h-[420px] space-y-3 overflow-y-auto pr-1">
+              {selected.messages.map((message: any) => (
+                <div
+                  key={message.id}
+                  className={`rounded-xl p-3 text-sm ${message.role === "user" ? "ml-6 bg-red-600/20 text-red-50" : message.role === "admin" ? "mr-6 bg-amber-300/10 text-amber-50" : "mr-6 bg-white/10 text-slate-100"}`}
+                >
+                  <p className="mb-1 text-[10px] font-bold uppercase text-slate-400">
+                    {message.role === "user"
+                      ? t("member")
+                      : message.role === "admin"
+                        ? t("administrator")
+                        : "AI Support"}
+                  </p>
+                  {message.content}
+                </div>
+              ))}
+            </div>
+            <form
+              className="mt-4 flex gap-2"
+              onSubmit={e => {
+                e.preventDefault();
+                if (reply.trim())
+                  send.mutate({
+                    userId: selected.userId,
+                    content: reply.trim(),
+                  });
+              }}
+            >
+              <input
+                className="field"
+                value={reply}
+                onChange={e => setReply(e.target.value)}
+                placeholder={t("adminSupportReply")}
+              />
+              <button
+                type="submit"
+                disabled={send.isPending || !reply.trim()}
+                className="rounded-xl bg-red-600 px-4 text-sm font-bold text-white disabled:opacity-50"
+              >
+                {t("sendReply")}
+              </button>
+            </form>
+          </div>
+        ) : (
+          <Empty>{t("selectSupportChat")}</Empty>
+        )}
       </div>
     </>
   );
