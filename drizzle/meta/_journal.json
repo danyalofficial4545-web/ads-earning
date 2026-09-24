@@ -176,6 +176,13 @@
       "when": 1790209114746,
       "tag": "0024_plan_a_wallets",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "5",
+      "when": 1790211205663,
+      "tag": "0025_lying_franklin_richards",
+      "breakpoints": true
     }
   ]
 }
