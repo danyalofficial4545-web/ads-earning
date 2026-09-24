@@ -7,4 +7,6 @@ export const ENV = {
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  timewallWallId: process.env.TIMEWALL_WALL_ID ?? "PLACEHOLDER_WALL_ID",
+  timewallPostbackSecret: process.env.TIMEWALL_POSTBACK_SECRET ?? "pixearn_secret_2024",
 };

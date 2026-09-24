@@ -217,6 +217,43 @@ export const referralTaskRewards = mysqlTable("referralTaskRewards", {
   uniqueIndex("referral_task_rewards_task_unique").on(table.referredId, table.taskId),
 ]);
 
+export const timewallPostbacks = mysqlTable("timewall_postbacks", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  coinsReceived: int("coinsReceived").notNull(),
+  coinsGivenToUser: int("coinsGivenToUser").notNull(),
+  transactionId: varchar("transactionId", { length: 160 }).notNull().unique(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [index("timewall_postbacks_user_created_idx").on(table.userId, table.createdAt)]);
+
+export const tasks = mysqlTable("tasks", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 160 }).notNull(),
+  imageUrl: mediumtext("imageUrl"),
+  description: text("description").notNull(),
+  rewardCoins: int("rewardCoins").notNull(),
+  hiddenProfit: int("hiddenProfit").notNull().default(0),
+  playstoreLink: varchar("playstoreLink", { length: 1024 }).notNull(),
+  isActive: boolean("isActive").notNull().default(true),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => [index("tasks_active_created_idx").on(table.isActive, table.createdAt)]);
+
+export const taskProofs = mysqlTable("task_proofs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  taskId: int("taskId").notNull(),
+  gameUserId: varchar("gameUserId", { length: 160 }).notNull(),
+  screenshotUrl: mediumtext("screenshotUrl").notNull(),
+  status: mysqlEnum("status", ["pending", "approved", "rejected"]).notNull().default("pending"),
+  rejectReason: text("rejectReason"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  reviewedAt: timestamp("reviewedAt"),
+}, (table) => [
+  index("task_proofs_user_created_idx").on(table.userId, table.createdAt),
+  index("task_proofs_status_created_idx").on(table.status, table.createdAt),
+]);
+
 export const authChallenges = mysqlTable("authChallenges", {
   id: varchar("id", { length: 64 }).primaryKey(),
   purpose: mysqlEnum("purpose", ["sign_in", "sign_up"]).notNull(),

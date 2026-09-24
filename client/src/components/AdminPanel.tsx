@@ -1,6 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { translate, type Language, type TranslationKey } from "@/lib/i18n";
 import { toast } from "sonner";
+import { AdminTaskProofs, AdminTasks } from "@/components/Phase3Admin";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import {
@@ -33,13 +34,17 @@ type Tab =
   | "settings"
   | "tickets"
   | "supportChats"
-  | "supportRules";
+  | "supportRules"
+  | "tasks"
+  | "taskProofs";
 const tabItems: Array<{ id: Tab; label: string; icon: typeof ClipboardCheck }> =
   [
     { id: "depositHistory", label: "depositHistory", icon: CreditCard },
     { id: "withdrawalHistory", label: "withdrawalHistory", icon: ClipboardCheck },
     { id: "ads", label: "adSettings", icon: PlaySquare },
     { id: "packages", label: "packages", icon: ClipboardCheck },
+    { id: "tasks", label: "adSettings", icon: PlaySquare },
+    { id: "taskProofs", label: "viewProof", icon: FileText },
     { id: "payments", label: "paymentAccounts", icon: CreditCard },
     { id: "broadcasts", label: "broadcast", icon: Megaphone },
     { id: "users", label: "users", icon: Users },
@@ -54,6 +59,8 @@ const adminRoutes: Record<Tab, string> = {
   withdrawalHistory: "/admin/withdraws",
   ads: "/admin/ads",
   packages: "/admin/packages",
+  tasks: "/admin/tasks",
+  taskProofs: "/admin/task-proofs",
   payments: "/admin/payments",
   broadcasts: "/admin/broadcasts",
   settings: "/admin/settings",
@@ -68,6 +75,8 @@ const routeTabs: Record<string, Tab> = {
   "/admin/withdrawals": "withdrawalHistory",
   "/admin/ads": "ads",
   "/admin/packages": "packages",
+  "/admin/tasks": "tasks",
+  "/admin/task-proofs": "taskProofs",
   "/admin/payments": "payments",
   "/admin/broadcasts": "broadcasts",
   "/admin/settings": "settings",
@@ -180,6 +189,8 @@ export function AdminPanel({ t }: { t: (key: any) => string }) {
           )}
           {activeTab === "ads" && <Ads t={t} />}
           {activeTab === "packages" && <PackageCatalog t={t} />}
+          {activeTab === "tasks" && <AdminTasks t={t} />}
+          {activeTab === "taskProofs" && <AdminTaskProofs />}
           {activeTab === "payments" && <Payments t={t} />}
           {activeTab === "broadcasts" && <Broadcasts t={t} />}
           {activeTab === "users" && <UserManagement t={t} />}

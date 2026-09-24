@@ -2,7 +2,7 @@ import express from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./_core/oauth";
 import { registerStorageProxy } from "./_core/storageProxy";
-import { appRouter } from "./routers";
+import { appRouter, processTimewallPostback } from "./routers";
 import { createContext } from "./_core/context";
 
 /** Builds the shared Express application for local hosting and Vercel Functions. */
@@ -13,6 +13,20 @@ export function createApp() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  app.get("/api/postback", async (req, res) => {
+    try {
+      const result = await processTimewallPostback({
+        userId: String(req.query.userId ?? ""),
+        coins: String(req.query.coins ?? ""),
+        secret: String(req.query.secret ?? ""),
+        transactionId: String(req.query.transactionId ?? ""),
+      });
+      res.status(result.status).type("text/plain").send(result.body);
+    } catch (error) {
+      console.error("[Timewall] postback failed", error);
+      res.status(500).type("text/plain").send("ERROR");
+    }
+  });
   app.use(
     "/api/trpc",
     createExpressMiddleware({

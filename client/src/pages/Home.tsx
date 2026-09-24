@@ -5,6 +5,7 @@ import { AdminPanel } from "@/components/AdminPanel";
 import { GoogleOnboarding, PublicAuth } from "@/components/PublicAuth";
 import { WorkspaceAccessGate } from "@/components/WorkspaceAccessGate";
 import { AdsTasks } from "@/components/AdsTasks";
+import { ManualTasksPage, TaskDetailPage, TimewallPage } from "@/pages/Phase3Tasks";
 import { SupportChat } from "@/components/SupportChat";
 import { BrandLogo } from "@/components/BrandLogo";
 import { trpc } from "@/lib/trpc";
@@ -84,6 +85,9 @@ type Page =
   | "deposit"
   | "withdrawal"
   | "earn"
+  | "earnCoins"
+  | "tasks"
+  | "taskDetail"
   | "history"
   | "invite"
   | "support"
@@ -100,6 +104,8 @@ const nav: Array<{
   { id: "profile", icon: WalletCards, label: "profile" },
   { id: "invite", icon: Users, label: "invite" },
   { id: "earn", icon: Play, label: "earn" },
+  { id: "earnCoins", icon: Gem, label: "earn" },
+  { id: "tasks", icon: ClipboardList, label: "adSettings" },
   { id: "history", icon: History, label: "history" },
   { id: "support", icon: CircleHelp, label: "support" },
 ];
@@ -125,6 +131,10 @@ const typeLabels: Record<string, TranslationKey> = {
   deposit: "deposit",
   package: "packages",
   ad_reward: "adRewardMessage",
+  timewall_earning: "adRewardMessage",
+  manual_task_reward: "adRewardMessage",
+  referral_task_reward: "referralEarnings",
+  referral_withdraw_commission: "referralEarnings",
   withdrawal: "withdrawal",
   referral_limit: "withdrawalLimit",
   adjustment: "settings",
@@ -205,6 +215,9 @@ export default function Home() {
   useEffect(() => {
     if (location === "/admin" || location.startsWith("/admin/")) setPage("admin");
     else if (location === "/support") setPage("support");
+    else if (location === "/earn-coins") setPage("earnCoins");
+    else if (location === "/tasks") setPage("tasks");
+    else if (location.startsWith("/task/")) setPage("taskDetail");
   }, [location]);
 
   if (loading || (isAuthenticated && session.isLoading))
@@ -245,7 +258,9 @@ export default function Home() {
     setPage(next);
     if (next === "admin" && !location.startsWith("/admin")) navigate("/admin");
     else if (next === "support" && location !== "/support") navigate("/support");
-    else if (next !== "admin" && next !== "support" && (location.startsWith("/admin") || location === "/support")) navigate("/");
+    else if (next === "earnCoins" && location !== "/earn-coins") navigate("/earn-coins");
+    else if (next === "tasks" && location !== "/tasks") navigate("/tasks");
+    else if (next !== "admin" && next !== "support" && (location.startsWith("/admin") || location === "/support" || location === "/earn-coins" || location === "/tasks" || location.startsWith("/task/"))) navigate("/");
     setMobileNavOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -358,6 +373,7 @@ export default function Home() {
                 settings={overview.data?.settings}
                 announcements={announcements.data ?? []}
                 wallet={wallet.data}
+                location={location}
                 invalidateCore={invalidateCore}
               />
             }
@@ -1074,6 +1090,7 @@ function Workspace({
   settings,
   announcements,
   wallet,
+  location,
   invalidateCore,
 }: any) {
   const [depositPackageId, setDepositPackageId] = useState("");
@@ -1196,6 +1213,9 @@ function Workspace({
       />
     ),
     earn: <AdsTasks t={t} onDone={invalidateCore} language={language} onGoDeposit={() => setPage("deposit")} />,
+    earnCoins: <TimewallPage onGoTasks={() => setPage("tasks")} />,
+    tasks: <ManualTasksPage />,
+    taskDetail: <TaskDetailPage taskId={Number(location.split("/").pop())} onBack={() => setPage("tasks")} />,
     history: <TransactionHistory t={t} />,
     invite: <Referral t={t} />,
     support: <SupportChat t={t} onOpenTickets={() => setPage("ticketSupport")} />,

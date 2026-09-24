@@ -14,6 +14,9 @@ import {
   profiles,
   referrals,
   referralTaskRewards,
+  timewallPostbacks,
+  tasks,
+  taskProofs,
   supportTickets,
   supportChatMessages,
   transactions,
@@ -65,11 +68,11 @@ import {
   WITHDRAWAL_WALLET_TYPE_MESSAGE,
   REWARDED_AD_TIMER_SECONDS,
 } from "./rules";
-import {
-  getDailyAdRewardPkr,
+import { getDailyAdRewardPkr,
   getDailyAdQuota,
   getNextPakistanMidnight,
 } from "../shared/adRules";
+import { ENV } from "./_core/env";
 
 function fail(message: string, code: TRPCError["code"] = "BAD_REQUEST"): never {
   throw new TRPCError({ code, message });
@@ -114,6 +117,46 @@ async function awardTaskReferralReward(db: any, referredId: number, taskId: numb
   await db.update(referrals).set({ totalTasksRewarded: relation.totalTasksRewarded + 1, totalTaskEarnings: relation.totalTaskEarnings + rewardCoins }).where(eq(referrals.id, relation.id));
   await db.insert(referralTaskRewards).values({ referrerId: relation.referrerId, referredId, taskId, rewardCoins });
   await db.insert(transactions).values({ userId: relation.referrerId, type: "referral_task_reward", direction: "credit", amountPkr: 1, status: "completed", note: "Referral Task Reward: 1 PKR from referred user task", referenceType: "referral_task_reward", referenceId: String(taskId) });
+}
+
+export async function processTimewallPostback(input: {
+  userId: string;
+  coins: string;
+  secret: string;
+  transactionId: string;
+}): Promise<{ status: number; body: string }> {
+  if (input.secret !== ENV.timewallPostbackSecret) return { status: 403, body: "FORBIDDEN" };
+  const userId = Number(input.userId);
+  const coinsReceived = Number(input.coins);
+  const transactionId = input.transactionId.trim();
+  if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(coinsReceived) || coinsReceived <= 0 || !transactionId || transactionId.length > 160)
+    return { status: 400, body: "INVALID" };
+  const db = await getDb();
+  if (!db) return { status: 503, body: "UNAVAILABLE" };
+  const duplicate = (await db.select({ id: timewallPostbacks.id }).from(timewallPostbacks).where(eq(timewallPostbacks.transactionId, transactionId)).limit(1))[0];
+  if (duplicate) return { status: 200, body: "OK" };
+  const coinsGivenToUser = Math.floor(coinsReceived * 0.10);
+  if (coinsGivenToUser <= 0) return { status: 400, body: "INVALID" };
+  await withDbTransaction(db, async tx => {
+    const duplicateInside = (await tx.select({ id: timewallPostbacks.id }).from(timewallPostbacks).where(eq(timewallPostbacks.transactionId, transactionId)).limit(1))[0];
+    if (duplicateInside) return;
+    const profile = (await tx.select().from(profiles).where(eq(profiles.userId, userId)).limit(1))[0];
+    if (!profile) fail("User was not found.", "NOT_FOUND");
+    await tx.insert(timewallPostbacks).values({ userId, coinsReceived, coinsGivenToUser, transactionId });
+    await tx.update(profiles).set({ earningWalletBalance: (profile.earningWalletBalance ?? 0) + coinsGivenToUser }).where(eq(profiles.userId, userId));
+    await tx.insert(transactions).values({ userId, type: "timewall_earning", direction: "credit", amountPkr: Math.floor(coinsGivenToUser / 100), status: "completed", note: `Timewall earning: ${coinsGivenToUser} coins (10% of ${coinsReceived})`, referenceType: "timewall_postback", referenceId: transactionId });
+    const relation = (await tx.select().from(referrals).where(eq(referrals.referredId, userId)).limit(1))[0];
+    if (relation && relation.totalTasksRewarded < relation.maxTaskReward) {
+      const referrer = (await tx.select().from(profiles).where(eq(profiles.userId, relation.referrerId)).limit(1))[0];
+      if (referrer) {
+        await tx.update(profiles).set({ earningWalletBalance: (referrer.earningWalletBalance ?? 0) + 100 }).where(eq(profiles.userId, relation.referrerId));
+        await tx.update(referrals).set({ totalTasksRewarded: relation.totalTasksRewarded + 1, totalTaskEarnings: relation.totalTaskEarnings + 100 }).where(eq(referrals.id, relation.id));
+        await tx.insert(referralTaskRewards).values({ referrerId: relation.referrerId, referredId: userId, taskId: null, rewardCoins: 100 });
+        await tx.insert(transactions).values({ userId: relation.referrerId, type: "referral_task_reward", direction: "credit", amountPkr: 1, status: "completed", note: "Referral Task Reward: 1 PKR from Timewall completion", referenceType: "timewall_postback", referenceId: transactionId });
+      }
+    }
+  });
+  return { status: 200, body: "OK" };
 }
 
 const SUPPORT_KNOWLEDGE_BASE = `You are AdEarn AI Support. Answer in the user's language, usually Urdu/Roman Urdu. Be concise, respectful, and never promise admin approval or guaranteed earnings. Knowledge base:
@@ -848,6 +891,55 @@ export const appRouter = router({
             (input.status === "all" || row.status === input.status)
         );
       }),
+  }),
+  timewall: router({
+    config: protectedProcedure.query(async ({ ctx }) => {
+      const { user, profile } = await getActor(ctx);
+      return {
+        userId: user.id,
+        earningWalletBalance: profile.earningWalletBalance ?? 0,
+        wallId: ENV.timewallWallId,
+        hasActivePackage: Boolean(await getActivePackageForUser(user.id)),
+      };
+    }),
+    postback: publicProcedure
+      .input(z.object({ userId: z.coerce.string(), coins: z.coerce.string(), secret: z.string(), transactionId: z.string() }))
+      .query(({ input }) => processTimewallPostback(input)),
+  }),
+  task: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      await getActor(ctx);
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      return db.select().from(tasks).where(eq(tasks.isActive, true)).orderBy(desc(tasks.createdAt));
+    }),
+    get: protectedProcedure.input(z.object({ id: z.number().int().positive() })).query(async ({ ctx, input }) => {
+      await getActor(ctx);
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const task = (await db.select().from(tasks).where(eq(tasks.id, input.id)).limit(1))[0];
+      if (!task) fail("Task was not found.", "NOT_FOUND");
+      return task;
+    }),
+    submitProof: protectedProcedure.input(z.object({ taskId: z.number().int().positive(), gameUserId: z.string().trim().min(2).max(160), screenshotData: z.string().min(24).max(3_000_000) })).mutation(async ({ ctx, input }) => {
+      const { user } = await getActor(ctx);
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const task = (await db.select().from(tasks).where(and(eq(tasks.id, input.taskId), eq(tasks.isActive, true))).limit(1))[0];
+      if (!task) fail("This task is no longer available.", "NOT_FOUND");
+      const pending = (await db.select({ id: taskProofs.id }).from(taskProofs).where(and(eq(taskProofs.userId, user.id), eq(taskProofs.taskId, input.taskId), eq(taskProofs.status, "pending"))).limit(1))[0];
+      if (pending) fail("You already have a proof pending for this task.", "CONFLICT");
+      const screenshotUrl = validateInlineUpload(input.screenshotData, { label: "screenshot", maxBytes: 2 * 1024 * 1024, acceptedType: type => type.startsWith("image/") });
+      await db.insert(taskProofs).values({ userId: user.id, taskId: input.taskId, gameUserId: input.gameUserId, screenshotUrl, status: "pending" });
+      return { success: true };
+    }),
+    myProofs: protectedProcedure.query(async ({ ctx }) => {
+      const { user } = await getActor(ctx);
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const proofs = await db.select().from(taskProofs).where(eq(taskProofs.userId, user.id)).orderBy(desc(taskProofs.createdAt));
+      return Promise.all(proofs.map(async proof => ({ ...proof, task: (await db.select({ title: tasks.title, rewardCoins: tasks.rewardCoins }).from(tasks).where(eq(tasks.id, proof.taskId)).limit(1))[0] ?? null })));
+    }),
   }),
   earning: router({
     ads: protectedProcedure.query(async ({ ctx }) => {
@@ -1918,6 +2010,66 @@ export const appRouter = router({
       const db = await getDb();
       if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
       await db.delete(supportReplyRules).where(eq(supportReplyRules.id, input.id));
+      return { success: true };
+    }),
+    tasks: protectedProcedure.query(async ({ ctx }) => {
+      await getAdmin(ctx);
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const rows = await db.select().from(tasks).orderBy(desc(tasks.createdAt));
+      return rows.map(row => ({ ...row, profitCoins: Math.max(0, row.hiddenProfit - row.rewardCoins) }));
+    }),
+    saveTask: protectedProcedure.input(z.object({ id: z.number().int().positive().optional(), title: z.string().trim().min(2).max(160), imageData: z.string().max(3_000_000).optional(), description: z.string().trim().min(5).max(10000), rewardCoins: z.number().int().positive(), hiddenProfit: z.number().int().nonnegative(), playstoreLink: z.string().url().max(1024), isActive: z.boolean() })).mutation(async ({ ctx, input }) => {
+      await getAdmin(ctx);
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const imageUrl = input.imageData ? validateInlineUpload(input.imageData, { label: "task image", maxBytes: 2 * 1024 * 1024, acceptedType: type => type.startsWith("image/") }) : undefined;
+      const values = { title: input.title, description: input.description, rewardCoins: input.rewardCoins, hiddenProfit: input.hiddenProfit, playstoreLink: input.playstoreLink, isActive: input.isActive, ...(imageUrl !== undefined ? { imageUrl } : {}) };
+      if (input.id) await db.update(tasks).set(values).where(eq(tasks.id, input.id));
+      else await db.insert(tasks).values({ ...values, imageUrl: imageUrl ?? null });
+      return { success: true };
+    }),
+    deleteTask: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      await getAdmin(ctx);
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      await db.update(tasks).set({ isActive: false }).where(eq(tasks.id, input.id));
+      return { success: true };
+    }),
+    taskProofs: protectedProcedure.query(async ({ ctx }) => {
+      await getAdmin(ctx);
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const proofs = await db.select().from(taskProofs).orderBy(desc(taskProofs.createdAt));
+      return Promise.all(proofs.map(async proof => {
+        const task = (await db.select({ title: tasks.title, rewardCoins: tasks.rewardCoins }).from(tasks).where(eq(tasks.id, proof.taskId)).limit(1))[0];
+        const member = (await db.select({ username: profiles.username, email: users.email }).from(profiles).innerJoin(users, eq(users.id, profiles.userId)).where(eq(profiles.userId, proof.userId)).limit(1))[0];
+        return { ...proof, task, member };
+      }));
+    }),
+    reviewTaskProof: protectedProcedure.input(z.object({ id: z.number().int().positive(), approved: z.boolean(), rejectReason: z.string().trim().min(3).max(1000).optional() })).mutation(async ({ ctx, input }) => {
+      await getAdmin(ctx);
+      if (!input.approved && !input.rejectReason) fail("A rejection reason is required.");
+      const db = await getDb();
+      if (!db) fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
+      const proof = (await db.select().from(taskProofs).where(eq(taskProofs.id, input.id)).limit(1))[0];
+      if (!proof) fail("Task proof was not found.", "NOT_FOUND");
+      if (proof.status !== "pending") fail("This task proof has already been reviewed.");
+      const task = (await db.select().from(tasks).where(eq(tasks.id, proof.taskId)).limit(1))[0];
+      if (!task) fail("Task was not found.", "NOT_FOUND");
+      await withDbTransaction(db, async tx => {
+        if (input.approved) {
+          const profile = (await tx.select().from(profiles).where(eq(profiles.userId, proof.userId)).limit(1))[0];
+          if (!profile) fail("The user's profile was not found.", "NOT_FOUND");
+          await tx.update(profiles).set({ earningWalletBalance: (profile.earningWalletBalance ?? 0) + task.rewardCoins }).where(eq(profiles.userId, proof.userId));
+          await tx.insert(transactions).values({ userId: proof.userId, type: "manual_task_reward", direction: "credit", amountPkr: Math.floor(task.rewardCoins / 100), status: "completed", note: `Manual task reward: ${task.rewardCoins} coins`, referenceType: "task_proof", referenceId: String(proof.id) });
+          await tx.update(taskProofs).set({ status: "approved", rejectReason: null, reviewedAt: new Date() }).where(eq(taskProofs.id, proof.id));
+          await awardTaskReferralReward(tx, proof.userId, proof.taskId);
+        } else {
+          await tx.update(taskProofs).set({ status: "rejected", rejectReason: input.rejectReason, reviewedAt: new Date() }).where(eq(taskProofs.id, proof.id));
+        }
+      });
+      await notifyUser(db, proof.userId, input.approved ? "Task proof approved" : "Task proof rejected", input.approved ? `Your task proof was approved and ${task.rewardCoins} coins were added.` : `Your task proof was rejected. Reason: ${input.rejectReason}`);
       return { success: true };
     }),
     sendNotification: protectedProcedure.input(z.object({ userId: z.number().int().positive(), title: z.string().trim().min(2).max(140), message: z.string().trim().min(2).max(5000) })).mutation(async ({ ctx, input }) => {

@@ -14,6 +14,9 @@ function Router() {
       <Route path={"/admin"} component={Home} />
       <Route path={"/admin/:section"} component={Home} />
       <Route path={"/support"} component={Home} />
+      <Route path={"/earn-coins"} component={Home} />
+      <Route path={"/tasks"} component={Home} />
+      <Route path={"/task/:id"} component={Home} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />
