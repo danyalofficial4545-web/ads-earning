@@ -17,9 +17,10 @@ describe("historical 10 PKR reward withdrawal guidance", () => {
     expect(historyQuery).not.toContain("withdrawals.status");
   });
 
-  it("credits referral rewards to the Earning Wallet", () => {
+  it("credits task and withdrawal referral rewards to the Earning Wallet", () => {
     expect(source).toContain("earningWalletBalance");
-    expect(source).toContain("commission * 100");
+    expect(source).toContain("awardTaskReferralReward");
+    expect(source).toContain("commissionCoins");
     expect(source).not.toContain("referrer.withdrawalLimitPkr + credit");
   });
 });

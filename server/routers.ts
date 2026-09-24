@@ -12,7 +12,8 @@ import {
   packages,
   paymentAccounts,
   profiles,
-  referralRewards,
+  referrals,
+  referralTaskRewards,
   supportTickets,
   supportChatMessages,
   transactions,
@@ -37,11 +38,6 @@ import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { systemRouter } from "./_core/systemRouter";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
-import { getDiscountedPackagePrice } from "../shared/packagePricing";
-import {
-  calculateDepositorBonus,
-  calculateInviterReward,
-} from "./depositService";
 import {
   createLocalSession,
   hashPassword,
@@ -98,6 +94,26 @@ async function notifyUser(db: any, userId: number, title: string, message: strin
 
 async function withDbTransaction<T>(db: any, work: (tx: any) => Promise<T>) {
   return typeof db?.transaction === "function" ? db.transaction(work) : work(db);
+}
+
+async function ensureReferralRecord(db: any, referrerId: number | null, referredId: number) {
+  if (!referrerId || referrerId === referredId) return;
+  const existing = await db.select({ id: referrals.id }).from(referrals).where(eq(referrals.referredId, referredId)).limit(1);
+  if (!existing[0]) await db.insert(referrals).values({ referrerId, referredId });
+}
+
+async function awardTaskReferralReward(db: any, referredId: number, taskId: number) {
+  const relation = (await db.select().from(referrals).where(eq(referrals.referredId, referredId)).limit(1))[0];
+  if (!relation || relation.totalTasksRewarded >= relation.maxTaskReward) return;
+  const alreadyRewarded = (await db.select({ id: referralTaskRewards.id }).from(referralTaskRewards).where(and(eq(referralTaskRewards.referredId, referredId), eq(referralTaskRewards.taskId, taskId))).limit(1))[0];
+  if (alreadyRewarded) return;
+  const referrer = (await db.select().from(profiles).where(eq(profiles.userId, relation.referrerId)).limit(1))[0];
+  if (!referrer) return;
+  const rewardCoins = 100;
+  await db.update(profiles).set({ earningWalletBalance: (referrer.earningWalletBalance ?? 0) + rewardCoins }).where(eq(profiles.userId, relation.referrerId));
+  await db.update(referrals).set({ totalTasksRewarded: relation.totalTasksRewarded + 1, totalTaskEarnings: relation.totalTaskEarnings + rewardCoins }).where(eq(referrals.id, relation.id));
+  await db.insert(referralTaskRewards).values({ referrerId: relation.referrerId, referredId, taskId, rewardCoins });
+  await db.insert(transactions).values({ userId: relation.referrerId, type: "referral_task_reward", direction: "credit", amountPkr: 1, status: "completed", note: "Referral Task Reward: 1 PKR from referred user task", referenceType: "referral_task_reward", referenceId: String(taskId) });
 }
 
 const SUPPORT_KNOWLEDGE_BASE = `You are AdEarn AI Support. Answer in the user's language, usually Urdu/Roman Urdu. Be concise, respectful, and never promise admin approval or guaranteed earnings. Knowledge base:
@@ -435,6 +451,7 @@ export const appRouter = router({
           preferredCurrency: "PKR",
           whatsappRewardEligible: true,
         });
+        await ensureReferralRecord(db, referredByUserId, userId);
         const user = (
           await db.select().from(users).where(eq(users.id, userId)).limit(1)
         )[0];
@@ -608,6 +625,7 @@ export const appRouter = router({
             referredByUserId,
           })
           .where(eq(profiles.userId, user.id));
+        await ensureReferralRecord(db, referredByUserId, user.id);
         return { success: true };
       }),
   }),
@@ -960,6 +978,7 @@ export const appRouter = router({
         await db.update(adSessions).set({ claimedAt: new Date() }).where(eq(adSessions.id, session.id));
         await db.update(profiles).set({ earningWalletBalance: (profile.earningWalletBalance ?? 0) + session.rewardPkr * 100 }).where(eq(profiles.userId, user.id));
         await db.insert(transactions).values({ userId: user.id, type: "ad_reward", direction: "credit", amountPkr: session.rewardPkr, status: "completed", note: "Daily ad reward claimed" });
+        await awardTaskReferralReward(db, user.id, session.id);
         return {
           success: true,
           rewardPkr: session.rewardPkr,
@@ -1120,37 +1139,31 @@ export const appRouter = router({
           input.currency,
           settings.exchangeRatePkrPerUsd
         );
-        const activePackage = Boolean(await getActivePackageForUser(user.id));
-        const hasPendingChannelReward =
-          profile.whatsappRewardEligible &&
-          profile.whatsappBonusClaimed &&
-          !profile.whatsappRewardWithdrawn;
-        if (
-          !activePackage &&
-          hasPendingChannelReward &&
-          amountPkr !== WHATSAPP_JOIN_REWARD_PKR
-        )
-          fail(WITHDRAWAL_NO_PACKAGE_MESSAGE);
-        if (!activePackage && !hasPendingChannelReward)
-          fail("Please purchase an active package before withdrawing.");
+        const activePackage = await getActivePackageForUser(user.id);
+        const fixedAmounts = activePackage?.plan?.tier === "pkr_500"
+          ? [600, 1000, 3000, 10000]
+          : activePackage?.plan?.tier === "pkr_200"
+            ? [300, 500, 1000]
+            : [500, 1000];
+        if (input.currency !== "PKR" || !fixedAmounts.includes(amountPkr))
+          fail(`Select one of the fixed withdrawal amounts: ${fixedAmounts.join(", ")} PKR.`);
         if ((profile.earningWalletBalance ?? 0) < amountPkr * 100)
           fail("Insufficient Balance");
         if (
-          !["JazzCash", "Easypaisa", "SadaPay", "NayaPay", "Skrill", "Payoneer", "Binance", "Other"].includes(input.walletType)
+          !["JazzCash", "Easypaisa", "USDT", "SadaPay", "NayaPay", "Other"].includes(input.walletType)
         )
           fail(WITHDRAWAL_WALLET_TYPE_MESSAGE);
         if (!input.accountName) fail(WITHDRAWAL_ACCOUNT_NAME_MESSAGE);
         if (!input.accountDetails) fail(WITHDRAWAL_WALLET_NUMBER_MESSAGE);
         if (
           input.currency === "PKR" &&
+          input.walletType !== "USDT" &&
           !isValidPakistanMobileNumber(input.accountDetails)
         )
           fail(WITHDRAWAL_WALLET_NUMBER_MESSAGE);
         const db = await getDb();
         if (!db)
           fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-        const completedChannelRewardWithdrawal =
-          hasPendingChannelReward && amountPkr === WHATSAPP_JOIN_REWARD_PKR;
         await withDbTransaction(db, async (tx) => {
           const result = await tx.insert(withdrawals).values({
             userId: user.id,
@@ -1167,9 +1180,6 @@ export const appRouter = router({
             .set({
               earningWalletBalance:
                 (profile.earningWalletBalance ?? 0) - amountPkr * 100,
-              ...(completedChannelRewardWithdrawal
-                ? { whatsappRewardWithdrawn: true }
-                : {}),
             })
             .where(eq(profiles.userId, user.id));
           await tx.insert(transactions).values({
@@ -1193,7 +1203,7 @@ export const appRouter = router({
         );
         return {
           success: true,
-          rewardWithdrawalSubmitted: completedChannelRewardWithdrawal,
+          rewardWithdrawalSubmitted: false,
         };
       }),
     list: protectedProcedure.query(async ({ ctx }) => {
@@ -1215,47 +1225,29 @@ export const appRouter = router({
       const db = await getDb();
       if (!db)
         fail("Database is temporarily unavailable.", "INTERNAL_SERVER_ERROR");
-      const referrals = await db
-        .select({
-          userId: profiles.userId,
-          username: profiles.username,
-          createdAt: profiles.createdAt,
-          email: users.email,
-        })
-        .from(profiles)
-        .innerJoin(users, eq(users.id, profiles.userId))
-        .where(eq(profiles.referredByUserId, user.id));
-      const invitedUsers = await Promise.all(referrals.map(async referral => {
-        const latestDeposit = (await db
-          .select({ status: deposits.status })
-          .from(deposits)
-          .where(eq(deposits.userId, referral.userId))
-          .orderBy(desc(deposits.createdAt))
-          .limit(1))[0];
-        const rewards = await db
-          .select({ total: sql<number>`coalesce(sum(${referralRewards.amountPkr}), 0)` })
-          .from(referralRewards)
-          .where(eq(referralRewards.invitedUserId, referral.userId));
-        const activePackage = await getActivePackageForUser(referral.userId);
+      const relationRows = await db.select().from(referrals).where(eq(referrals.referrerId, user.id));
+      const invitedUsers = await Promise.all(relationRows.map(async relation => {
+        const referred = (await db.select({ userId: profiles.userId, username: profiles.username, createdAt: profiles.createdAt, email: users.email }).from(profiles).innerJoin(users, eq(users.id, profiles.userId)).where(eq(profiles.userId, relation.referredId)).limit(1))[0];
         return {
-          userId: referral.userId,
-          username: referral.username,
-          email: referral.email,
-          registeredAt: referral.createdAt,
-          depositStatus: latestDeposit?.status ?? "pending",
-          packageActive: Boolean(activePackage),
-          packageName: activePackage?.plan.name ?? null,
-          rewardPkr: Number(rewards[0]?.total ?? 0),
+          userId: relation.referredId,
+          username: referred?.username ?? `User #${relation.referredId}`,
+          email: referred?.email ?? null,
+          registeredAt: referred?.createdAt ?? relation.createdAt,
+          tasksCompleted: relation.totalTasksRewarded,
+          maxTaskReward: relation.maxTaskReward,
+          pendingTasks: Math.max(0, relation.maxTaskReward - relation.totalTasksRewarded),
+          taskRewardPkr: relation.totalTaskEarnings / 100,
+          withdrawCommissionPkr: relation.totalWithdrawCommission / 100,
         };
       }));
-      const purchasers = invitedUsers.filter(invitedUser => invitedUser.packageActive);
       return {
         username: profile.username,
         referralCode: profile.referralCode,
-        totalReferrals: referrals.length,
-        purchasedReferrals: purchasers.length,
-        withdrawalLimitPkr: profile.withdrawalLimitPkr,
-        referralEarningsPkr: invitedUsers.reduce((total, invitedUser) => total + invitedUser.rewardPkr, 0),
+        totalReferrals: relationRows.length,
+        withdrawalLimitPkr: 0,
+        totalTaskRewardsPkr: relationRows.reduce((total, row) => total + row.totalTaskEarnings, 0) / 100,
+        totalWithdrawCommissionPkr: relationRows.reduce((total, row) => total + row.totalWithdrawCommission, 0) / 100,
+        referralEarningsPkr: relationRows.reduce((total, row) => total + row.totalTaskEarnings + row.totalWithdrawCommission, 0) / 100,
         referrals: invitedUsers,
       };
     }),
@@ -1490,7 +1482,6 @@ export const appRouter = router({
         if (deposit.status !== "pending")
           fail("This deposit request has already been reviewed.");
         if (input.approved) {
-          let referralNotification: { userId: number; commission: number } | null = null;
           await withDbTransaction(db, async (tx) => {
             const depositSelection = tx
               .select()
@@ -1516,99 +1507,9 @@ export const appRouter = router({
             if (!profile) fail("The user's profile was not found.", "NOT_FOUND");
 
             const depositReferenceId = String(lockedDeposit.id);
-            const existingDepositBonus = (
-              await tx
-                .select({ id: transactions.id })
-                .from(transactions)
-                .where(
-                  and(
-                    eq(transactions.userId, lockedDeposit.userId),
-                    eq(transactions.referenceType, "deposit_bonus"),
-                    eq(transactions.referenceId, depositReferenceId)
-                  )
-                )
-                .limit(1)
-            )[0];
-            const depositBonusPkr = calculateDepositorBonus(lockedDeposit.amountPkr);
-            if (!existingDepositBonus) {
-              await tx
-                .update(profiles)
-                .set({
-                  depositWalletBalance:
-                    (profile.depositWalletBalance ?? 0) +
-                    (lockedDeposit.amountPkr + depositBonusPkr) * 100,
-                })
-                .where(eq(profiles.userId, lockedDeposit.userId));
-              await tx.insert(transactions).values({
-                userId: lockedDeposit.userId,
-                type: "deposit_bonus",
-                direction: "credit",
-                amountPkr: depositBonusPkr,
-                status: "completed",
-                note: `Deposit Bonus 10% +PKR ${depositBonusPkr}`,
-                referenceType: "deposit_bonus",
-                referenceId: depositReferenceId,
-              });
-            }
-
-            if (profile.referredByUserId) {
-              const existingReferralTransaction = (
-                await tx
-                  .select({ id: transactions.id })
-                  .from(transactions)
-                  .where(
-                    and(
-                      eq(transactions.userId, profile.referredByUserId),
-                      eq(transactions.referenceType, "referral_reward"),
-                      eq(transactions.referenceId, depositReferenceId)
-                    )
-                  )
-                  .limit(1)
-              )[0];
-              const existingReward = (
-                await tx
-                  .select({ id: referralRewards.id })
-                  .from(referralRewards)
-                  .where(eq(referralRewards.depositId, lockedDeposit.id))
-                  .limit(1)
-              )[0];
-              if (!existingReferralTransaction && !existingReward) {
-                const commission = calculateInviterReward(lockedDeposit.amountPkr);
-                const inviter = (
-                  await tx
-                    .select()
-                    .from(profiles)
-                    .where(eq(profiles.userId, profile.referredByUserId))
-                    .limit(1)
-                )[0];
-                if (inviter) {
-                  await tx
-                    .update(profiles)
-                    .set({
-                      earningWalletBalance:
-                        (inviter.earningWalletBalance ?? 0) + commission * 100,
-                    })
-                    .where(eq(profiles.userId, inviter.userId));
-                  await tx.insert(referralRewards).values({
-                    depositId: lockedDeposit.id,
-                    inviterId: inviter.userId,
-                    invitedUserId: lockedDeposit.userId,
-                    amountPkr: commission,
-                  });
-                  await tx.insert(transactions).values({
-                    userId: inviter.userId,
-                    type: "referral_reward",
-                    direction: "credit",
-                    amountPkr: commission,
-                    status: "completed",
-                    note: `Referral Reward 40% +PKR ${commission} from Player ${profile.username}`,
-                    referenceType: "referral_reward",
-                    referenceId: depositReferenceId,
-                  });
-                  referralNotification = { userId: inviter.userId, commission };
-                }
-              }
-            }
+            await tx.update(profiles)
+              .set({ depositWalletBalance: (profile.depositWalletBalance ?? 0) + lockedDeposit.amountPkr * 100 })
+              .where(eq(profiles.userId, lockedDeposit.userId));
 
             await tx
               .update(deposits)
@@ -1630,18 +1531,6 @@ export const appRouter = router({
                 )
               );
           });
-          const committedReferralNotification = referralNotification as {
-            userId: number;
-            commission: number;
-          } | null;
-          if (committedReferralNotification) {
-            await notifyUser(
-              db,
-              committedReferralNotification.userId,
-              "🎉 Mubarak Ho! Referral Reward Mil Gaya!",
-              `Wah! Aap ne jis dost ko invite kiya tha us ne Rs ${deposit.amountPkr} ka deposit kiya hai. Aap ko Rs ${committedReferralNotification.commission} (40%) ka withdrawal reward mil gaya hai! Shukriya!`
-            );
-          }
         } else {
           await withDbTransaction(db, async (tx) => {
             await tx
@@ -1731,6 +1620,17 @@ export const appRouter = router({
                   (profile.earningWalletBalance ?? 0) + request.amountPkr * 100,
               })
               .where(eq(profiles.userId, request.userId));
+          } else {
+            const relation = (await tx.select().from(referrals).where(eq(referrals.referredId, request.userId)).limit(1))[0];
+            if (relation?.referrerId && relation.referrerId !== request.userId) {
+              const commissionCoins = request.amountPkr * 10;
+              const referrer = (await tx.select().from(profiles).where(eq(profiles.userId, relation.referrerId)).limit(1))[0];
+              if (referrer) {
+                await tx.update(profiles).set({ earningWalletBalance: (referrer.earningWalletBalance ?? 0) + commissionCoins }).where(eq(profiles.userId, relation.referrerId));
+                await tx.update(referrals).set({ totalWithdrawCommission: relation.totalWithdrawCommission + commissionCoins }).where(eq(referrals.id, relation.id));
+                await tx.insert(transactions).values({ userId: relation.referrerId, type: "referral_withdraw_commission", direction: "credit", amountPkr: request.amountPkr / 10, status: "completed", note: `Referral Withdraw Commission 10%: ${request.amountPkr / 10} PKR from referred withdrawal`, referenceType: "referral_withdraw_commission", referenceId: String(request.id) });
+              }
+            }
           }
           await tx
             .update(withdrawals)

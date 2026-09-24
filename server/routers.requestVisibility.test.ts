@@ -11,11 +11,9 @@ describe("administrator request visibility and reward completion", () => {
     expect(source).toContain("withdrawalRows.filter(remainsVisibleInActiveRequests)");
   });
 
-  it("treats a matching submitted 10 PKR request as completed before review and retains an exact approval fallback", () => {
-    expect(source).toContain("rewardWithdrawalSubmitted: completedChannelRewardWithdrawal");
-    expect(source).toContain("amountPkr === WHATSAPP_JOIN_REWARD_PKR");
-    expect(source).toContain('request.currency === "PKR"');
-    expect(source).toContain("request.amountPkr === WHATSAPP_JOIN_REWARD_PKR");
-    expect(source).toContain("whatsappRewardWithdrawn: true");
+  it("uses fixed withdrawal options and applies referral commission only after approval", () => {
+    expect(source).toContain("fixedAmounts");
+    expect(source).toContain("commissionCoins");
+    expect(source).toContain('input.approved ? "approved" : "rejected"');
   });
 });

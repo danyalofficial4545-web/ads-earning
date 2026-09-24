@@ -30,7 +30,7 @@ describe("router accounting flows", () => {
     mocks.sendTelegramAlert.mockResolvedValue(true);
   });
 
-  it("deducts wallet balance immediately and reserves only the requested withdrawal limit", async () => {
+  it("deducts the selected fixed withdrawal amount from Earning Wallet", async () => {
     mocks.ensureProfile.mockResolvedValue({ ...memberProfile, earningWalletBalance: 600000 });
     mocks.getActivePackageForUser.mockResolvedValue({ id: 1 });
     const updates: Array<{ table: unknown; values: any }> = [];
@@ -41,10 +41,10 @@ describe("router accounting flows", () => {
     };
     mocks.getDb.mockResolvedValue(db);
 
-    await appRouter.createCaller(context()).withdrawal.create({ currency: "PKR", amount: 100, walletType: "JazzCash", accountName: "Test Account", accountDetails: "03001234567" });
+    await appRouter.createCaller(context()).withdrawal.create({ currency: "PKR", amount: 1000, walletType: "JazzCash", accountName: "Test Account", accountDetails: "03001234567" });
 
-    expect(updates[0]?.values).toEqual({ earningWalletBalance: 590000 });
-    expect(inserts[1]?.values).toMatchObject({ direction: "debit", status: "pending", amountPkr: 100, referenceId: "44" });
+    expect(updates[0]?.values).toEqual({ earningWalletBalance: 500000 });
+    expect(inserts[1]?.values).toMatchObject({ direction: "debit", status: "pending", amountPkr: 1000, referenceId: "44" });
     expect(inserts[0]?.values).toMatchObject({ walletType: "JazzCash", accountName: "Test Account", accountDetails: "03001234567" });
     expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("💸 WITHDRAW REQUEST"));
     expect(mocks.sendTelegramAlert).toHaveBeenCalledWith(expect.stringContaining("03001234567"));
@@ -188,10 +188,10 @@ describe("router accounting flows", () => {
     expect(insert).not.toHaveBeenCalled();
   });
 
-  it("removes the pending new-user reward prompt when its exact reward withdrawal is submitted", async () => {
+  it("uses fixed withdrawal amounts even for a legacy reward-eligible profile", async () => {
     mocks.ensureProfile.mockResolvedValue({
       ...memberProfile,
-      earningWalletBalance: 1000,
+      earningWalletBalance: 100000,
       whatsappRewardEligible: true,
       whatsappJoined: true,
       whatsappBonusClaimed: true,
@@ -207,18 +207,15 @@ describe("router accounting flows", () => {
 
     const result = await appRouter.createCaller(context()).withdrawal.create({
       currency: "PKR",
-      amount: 10,
+      amount: 1000,
       walletType: "JazzCash",
       accountName: "New Reward Member",
       accountDetails: "03001234567",
     });
 
-    expect(result).toMatchObject({ success: true, rewardWithdrawalSubmitted: true });
-    expect(updates[0]?.values).toEqual({
-      earningWalletBalance: 0,
-      whatsappRewardWithdrawn: true,
-    });
-    expect(inserts[0]).toMatchObject({ amountPkr: 10, status: "pending" });
+    expect(result).toMatchObject({ success: true, rewardWithdrawalSubmitted: false });
+    expect(updates[0]?.values).toEqual({ earningWalletBalance: 0 });
+    expect(inserts[0]).toMatchObject({ amountPkr: 1000, status: "pending" });
   });
 
   it("does not credit referral commission for a wallet package purchase", async () => {

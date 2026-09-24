@@ -63,7 +63,7 @@ describe("admin financial review procedures", () => {
     await appRouter.createCaller(adminContext()).admin.reviewDeposit({ id: 57, approved: true });
 
     const profileUpdate = updates.find(update => update.table === profiles);
-    expect(profileUpdate?.values).toEqual({ depositWalletBalance: 95000 });
+    expect(profileUpdate?.values).toEqual({ depositWalletBalance: 90000 });
     const transactionUpdate = updates.find(update => update.table === transactions);
     expect(transactionUpdate?.values).toMatchObject({ status: "approved" });
     expect(matchedTransactionReferences).toEqual([57]);

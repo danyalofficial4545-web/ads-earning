@@ -9,9 +9,9 @@ describe("attached payment and reward safeguards", () => {
     expect(source).toContain("eq(paymentAccounts.currency, input.currency)");
   });
 
-  it("limits the package exception to the exact one-time channel reward amount", () => {
-    expect(source).toContain("amountPkr !== WHATSAPP_JOIN_REWARD_PKR");
-    expect(source).toContain("!activePackage && !hasPendingChannelReward");
+  it("limits withdrawals to the package-specific fixed amount sets", () => {
+    expect(source).toContain("const fixedAmounts");
+    expect(source).toContain("fixedAmounts.includes(amountPkr)");
     expect(source).toContain("profile.earningWalletBalance");
   });
 });

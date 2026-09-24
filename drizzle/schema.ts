@@ -192,6 +192,31 @@ export const referralRewards = mysqlTable("referralRewards", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+export const referrals = mysqlTable("referrals", {
+  id: int("id").autoincrement().primaryKey(),
+  referrerId: int("referrerId").notNull(),
+  referredId: int("referredId").notNull().unique(),
+  totalTasksRewarded: int("totalTasksRewarded").notNull().default(0),
+  maxTaskReward: int("maxTaskReward").notNull().default(50),
+  totalTaskEarnings: int("totalTaskEarnings").notNull().default(0),
+  totalWithdrawCommission: int("totalWithdrawCommission").notNull().default(0),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [
+  index("referrals_referrer_idx").on(table.referrerId),
+]);
+
+export const referralTaskRewards = mysqlTable("referralTaskRewards", {
+  id: int("id").autoincrement().primaryKey(),
+  referrerId: int("referrerId").notNull(),
+  referredId: int("referredId").notNull(),
+  taskId: int("taskId"),
+  rewardCoins: int("rewardCoins").notNull().default(100),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [
+  index("referral_task_rewards_referrer_idx").on(table.referrerId, table.createdAt),
+  uniqueIndex("referral_task_rewards_task_unique").on(table.referredId, table.taskId),
+]);
+
 export const authChallenges = mysqlTable("authChallenges", {
   id: varchar("id", { length: 64 }).primaryKey(),
   purpose: mysqlEnum("purpose", ["sign_in", "sign_up"]).notNull(),

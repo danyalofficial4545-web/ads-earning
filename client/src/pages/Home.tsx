@@ -1195,7 +1195,7 @@ function Workspace({
         onDone={invalidateCore}
       />
     ),
-    earn: <AdsTasks t={t} onDone={invalidateCore} language={language} />,
+    earn: <AdsTasks t={t} onDone={invalidateCore} language={language} onGoDeposit={() => setPage("deposit")} />,
     history: <TransactionHistory t={t} />,
     invite: <Referral t={t} />,
     support: <SupportChat t={t} onOpenTickets={() => setPage("ticketSupport")} />,
@@ -1392,13 +1392,10 @@ function Dashboard({ t, overview, announcements, setPage, onRequestWithdrawal }:
               </button>
             </>
           ) : (
-            <button
-              onClick={() => setPage("packages")}
-              className="mt-6 inline-flex h-11 items-center gap-2 rounded-xl bg-amber-300 px-4 text-sm font-bold text-slate-950 transition active:scale-[.97]"
-            >
-              <Boxes className="size-4" />
-              {t("viewPackages")}
-            </button>
+            <div className="mt-5 rounded-2xl border border-amber-300/25 bg-amber-300/10 p-4">
+              <p className="text-sm font-bold text-amber-100">Please Deposit &amp; Buy Package to Unlock Tasks</p>
+              <button onClick={() => setPage("deposit")} className="mt-4 inline-flex h-11 items-center gap-2 rounded-xl bg-amber-300 px-4 text-sm font-bold text-slate-950 transition active:scale-[.97]"><CreditCard className="size-4" />Deposit &amp; Buy Package</button>
+            </div>
           )}
         </div>
         <div className="panel">
@@ -2353,7 +2350,8 @@ function Referral({ t }: any) {
                   <th className="px-3 py-3">Registered</th>
                   <th className="px-3 py-3">Deposit</th>
                   <th className="px-3 py-3">Package</th>
-                  <th className="px-3 py-3 text-right">Reward</th>
+                  <th className="px-3 py-3 text-right">Task Reward</th>
+                  <th className="px-3 py-3 text-right">Withdraw Commission</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
@@ -2374,7 +2372,8 @@ function Referral({ t }: any) {
                         {invited.packageActive ? invited.packageName : "No"}
                       </span>
                     </td>
-                    <td className="px-3 py-3 text-right font-bold text-amber-300">{money(invited.rewardPkr)}</td>
+                    <td className="px-3 py-3 text-right font-bold text-amber-300">{money(invited.taskRewardPkr ?? 0)}</td>
+                    <td className="px-3 py-3 text-right font-bold text-emerald-300">{money(invited.withdrawCommissionPkr ?? 0)}</td>
                   </tr>
                 ))}
               </tbody>
